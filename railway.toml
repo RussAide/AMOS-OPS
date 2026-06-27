@@ -1,0 +1,15 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "node dist/boot.js"
+healthcheckPath = "/api/trpc/ping"
+healthcheckTimeout = 10
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[deploy.mounts]
+# Persistent SQLite database storage
+"/app/data" = { path = "/app/data", type = "volume" }
+"/app/uploads" = { path = "/app/uploads", type = "volume" }

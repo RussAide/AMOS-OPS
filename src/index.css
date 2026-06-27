@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ─── AMOS-OPS Enterprise Design System ─── */
+
+    /* Sidebar */
+    --sidebar-bg: #1A3B3A;
+    --sidebar-bg-end: #142E2D;
+    --sidebar-active: #245C5A;
+    --sidebar-active-border: #7EC8CA;
+    --sidebar-text: #E8F0EF;
+    --sidebar-text-muted: #8CB5B3;
+    --sidebar-section: #5A9E9C;
+    --sidebar-hover: rgba(255,255,255,0.05);
+
+    /* Hero Banner */
+    --hero-gradient-start: #1B4D4F;
+    --hero-gradient-mid: #2A6B6E;
+    --hero-gradient-end: #245C5A;
+    --hero-label: #7EC8CA;
+    --hero-title: #FFFFFF;
+    --hero-subtitle: #C8E0E1;
+
+    /* Top Bar */
+    --topbar-bg: #FFFFFF;
+    --topbar-border: #E2E8F0;
+    --topbar-title: #0F172A;
+    --topbar-subtitle: #64748B;
+
+    /* Content */
+    --content-bg: #F8FAFB;
+    --card-bg: #FFFFFF;
+    --card-border: #E2E8F0;
+
+    /* Breadcrumb */
+    --breadcrumb-text: #64748B;
+    --breadcrumb-active: #1A3B3A;
+
+    /* Search */
+    --search-bg: #F1F5F9;
+    --search-text: #94A3B8;
+
+    /* shadcn overrides */
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 175 48% 20%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 20% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 175 48% 20%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 175 48% 20%;
+    --radius: 0.625rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-[var(--content-bg)] text-foreground antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+}
+
+/* ─── Scrollbar Styling ─── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.25);
+}
