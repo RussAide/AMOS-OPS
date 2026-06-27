@@ -5,6 +5,9 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
+# Upgrade npm to fix "Exit handler never called!" bug in npm 10.8.2
+RUN npm install -g npm@10.9.2
+
 # Install all dependencies (including devDependencies for build)
 COPY package.json package-lock.json* ./
 RUN npm ci
@@ -18,6 +21,9 @@ RUN npm run build
 FROM node:20-slim
 
 WORKDIR /app
+
+# Upgrade npm to fix "Exit handler never called!" bug in npm 10.8.2
+RUN npm install -g npm@10.9.2
 
 # Install production dependencies only
 COPY package.json package-lock.json* ./
