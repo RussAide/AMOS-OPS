@@ -5,7 +5,6 @@ import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 
 const SALT = 10;
-
 function hash(pwd: string) { return bcrypt.hashSync(pwd, SALT); }
 
 export const appRouter = createRouter({
