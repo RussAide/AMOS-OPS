@@ -1,28 +1,35 @@
-import { Routes, Route, Navigate } from "react-router-dom";
-import { LoginPage } from "@/pages/LoginPage";
-import { DashboardPage } from "@/pages/DashboardPage";
-import { ProtectedRoute } from "@/components/shell/ProtectedRoute";
+import { HashRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import type React from "react";
+import { OnboardingProvider } from "@/context/OnboardingContext";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { NotificationProvider } from "@/context/NotificationContext";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppShell } from "@/components/shell/AppShell";
-import { TopBar } from "@/components/shell/TopBar";
-import { AnalyticsPage } from "@/pages/AnalyticsPage";
-import { CredentialTrackingPage } from "@/pages/CredentialTrackingPage";
-import { SeparationManagementPage } from "@/pages/SeparationManagementPage";
-import { EmailOutreachPage } from "@/pages/EmailOutreachPage";
+import { DashboardPage } from "@/pages/DashboardPage";
+import { OnboardingLayout } from "@/pages/onboarding/OnboardingLayout";
+import { OnboardingHomePage } from "@/pages/onboarding/OnboardingHomePage";
+import { SupervisorPage } from "@/pages/onboarding/SupervisorPage";
+import { ManagementPage } from "@/pages/onboarding/ManagementPage";
+import { TrackPage } from "@/pages/onboarding/TrackPage";
+import { TrainingPage } from "@/pages/onboarding/TrainingPage";
+import { EvidencePage } from "@/pages/onboarding/EvidencePage";
+import { ModulePage } from "@/pages/onboarding/ModulePage";
+import { EmployeePage } from "@/pages/onboarding/EmployeePage";
+import { HRLayout } from "@/pages/hr/HRLayout";
 import { HRCommandCenterPage } from "@/pages/hr/HRCommandCenterPage";
-import { OnboardingAcademyPage } from "@/pages/hr/OnboardingAcademyPage";
-import { OnboardingTrackPage } from "@/pages/hr/OnboardingTrackPage";
+import { HRModulePage } from "@/pages/hr/HRModulePage";
 import { HRPersonProfilePage } from "@/pages/hr/HRPersonProfilePage";
-import { DocumentStudioPage } from "@/pages/hr/DocumentStudioPage";
-import { AuditPage } from "@/pages/AuditPage";
-import { KnowledgePage } from "@/pages/KnowledgePage";
-import { UniversalOrientationPage } from "@/pages/UniversalOrientationPage";
-import { MarketingSiteReviewPage } from "@/pages/MarketingSiteReviewPage";
+import { LoginPage } from "@/pages/LoginPage";
+import { AnalyticsPage } from "@/pages/AnalyticsPage";
 import { ClinicalDashboardPage } from "@/pages/clinical/ClinicalDashboardPage";
+import { PatientListPage } from "@/pages/clinical/PatientListPage";
 import { PatientProfilePage } from "@/pages/clinical/PatientProfilePage";
 import { TreatmentPlanPage } from "@/pages/clinical/TreatmentPlanPage";
-import { ClaimSubmissionPage } from "@/pages/revenue/ClaimSubmissionPage";
 import { RevenueDashboardPage } from "@/pages/revenue/RevenueDashboardPage";
+import { ClaimsListPage } from "@/pages/revenue/ClaimsListPage";
+import { ClaimSubmissionPage } from "@/pages/revenue/ClaimSubmissionPage";
 import { QADashboardPage } from "@/pages/qa/QADashboardPage";
+import { QAListPage } from "@/pages/qa/QAListPage";
 import { GRODashboardPage } from "@/pages/gro/GRODashboardPage";
 import { GADDashboardPage } from "@/pages/gad/GADDashboardPage";
 import { ExecutiveDashboardPage } from "@/pages/executive/ExecutiveDashboardPage";
@@ -30,75 +37,142 @@ import { NILGraphPage } from "@/pages/NILGraphPage";
 import { EntraIDPage } from "@/pages/admin/EntraIDPage";
 import { WorkflowPage } from "@/pages/admin/WorkflowPage";
 import { SettingsPage } from "@/pages/admin/SettingsPage";
+import { CredentialTrackingPage } from "@/pages/CredentialTrackingPage";
+import { SeparationManagementPage } from "@/pages/SeparationManagementPage";
+import { EmailOutreachPage } from "@/pages/EmailOutreachPage";
+import { OnboardingAcademyPage } from "@/pages/OnboardingAcademyPage";
+import { OnboardingTrackPage } from "@/pages/OnboardingTrackPage";
+import { DocumentStudioPage } from "@/pages/DocumentStudioPage";
+import { AuditPage } from "@/pages/AuditPage";
+import { KnowledgePage } from "@/pages/KnowledgePage";
+import { UniversalOrientationPage } from "@/pages/UniversalOrientationPage";
+import { MarketingSiteReviewPage } from "@/pages/MarketingSiteReviewPage";
 
-function RouteShell({ children }: { children: React.ReactNode }) {
+function AppShellWrapper() {
   return (
     <AppShell>
-      <TopBar />
-      {children}
+      <Outlet />
     </AppShell>
   );
 }
 
-export function App() {
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)" }}>
+        <div className="text-center">
+          <div className="w-12 h-12 rounded-2xl mx-auto mb-4 animate-pulse" style={{ backgroundColor: "rgba(233,196,106,0.15)" }} />
+          <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.5)" }}>Loading AMOS-OPS...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function App() {
   return (
-    <Routes>
-      {/* Public Routes */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/marketing/review" element={<MarketingSiteReviewPage />} />
+    <AuthProvider>
+    <NotificationProvider>
+    <OnboardingProvider>
+      <ErrorBoundary>
+        <HashRouter>
+          <Routes>
+            {/* All authenticated routes wrapped in AppShell + auth guard */}
+            <Route element={<ProtectedRoute><AppShellWrapper /></ProtectedRoute>}>
+              {/* Dashboard */}
+              <Route path="/" element={<DashboardPage />} />
 
-      {/* Protected Routes */}
-      <Route element={<ProtectedRoute />}>
-        <Route path="/" element={<RouteShell><DashboardPage /></RouteShell>} />
-        <Route path="/analytics" element={<RouteShell><AnalyticsPage /></RouteShell>} />
-        <Route path="/credentials" element={<RouteShell><CredentialTrackingPage /></RouteShell>} />
-        <Route path="/separation" element={<RouteShell><SeparationManagementPage /></RouteShell>} />
-        <Route path="/email" element={<RouteShell><EmailOutreachPage /></RouteShell>} />
-        <Route path="/hr" element={<RouteShell><HRCommandCenterPage /></RouteShell>} />
-        <Route path="/hr/person/:personId" element={<RouteShell><HRPersonProfilePage /></RouteShell>} />
-        <Route path="/onboarding" element={<RouteShell><OnboardingAcademyPage /></RouteShell>} />
-        <Route path="/onboarding/track/:trackId" element={<RouteShell><OnboardingTrackPage /></RouteShell>} />
-        <Route path="/documents" element={<RouteShell><DocumentStudioPage /></RouteShell>} />
-        <Route path="/audit" element={<RouteShell><AuditPage /></RouteShell>} />
-        <Route path="/knowledge" element={<RouteShell><KnowledgePage /></RouteShell>} />
-        <Route path="/onboarding/track/universal-orientation" element={<RouteShell><UniversalOrientationPage /></RouteShell>} />
+              {/* Onboarding routes (legacy, preserved) */}
+              <Route element={<OnboardingLayout />}>
+                <Route path="/onboarding" element={<OnboardingHomePage />} />
+                <Route path="/onboarding/supervisor" element={<SupervisorPage />} />
+                <Route path="/onboarding/management" element={<ManagementPage />} />
+                <Route path="/onboarding/track/:trackId" element={<TrackPage />} />
+                <Route path="/onboarding/training" element={<TrainingPage />} />
+                <Route path="/onboarding/evidence" element={<EvidencePage />} />
+                <Route path="/onboarding/module/:moduleId" element={<ModulePage />} />
+                <Route path="/onboarding/employee/:id" element={<EmployeePage />} />
+              </Route>
 
-        {/* Clinical (BHC) */}
-        <Route path="/clinical" element={<RouteShell><ClinicalDashboardPage /></RouteShell>} />
-        <Route path="/clinical/patient/:patientId" element={<RouteShell><PatientProfilePage /></RouteShell>} />
-        <Route path="/clinical/plan/:planId" element={<RouteShell><TreatmentPlanPage /></RouteShell>} />
+              {/* HR Lifecycle routes */}
+              <Route element={<HRLayout />}>
+                <Route path="/hr" element={<HRCommandCenterPage />} />
+                <Route path="/hr/:moduleId" element={<HRModulePage />} />
+                <Route path="/hr/person/:personId" element={<HRPersonProfilePage />} />
+              </Route>
 
-        {/* Revenue */}
-        <Route path="/revenue" element={<RouteShell><RevenueDashboardPage /></RouteShell>} />
-        <Route path="/revenue/claims" element={<RouteShell><ClaimSubmissionPage /></RouteShell>} />
+              {/* Analytics */}
+              <Route path="/analytics" element={<AnalyticsPage />} />
 
-        {/* QA & Compliance */}
-        <Route path="/qa" element={<RouteShell><QADashboardPage /></RouteShell>} />
+              {/* Revenue Cycle */}
+              <Route path="/revenue" element={<RevenueDashboardPage />} />
+              <Route path="/revenue/claims" element={<ClaimsListPage />} />
+              <Route path="/revenue/claim-submission" element={<ClaimSubmissionPage />} />
 
-        {/* Growth & Outreach */}
-        <Route path="/gro" element={<RouteShell><GRODashboardPage /></RouteShell>} />
+              {/* QA & Compliance */}
+              <Route path="/qa" element={<QADashboardPage />} />
+              <Route path="/qa/registry" element={<QAListPage />} />
 
-        {/* GAD Operations */}
-        <Route path="/gad" element={<RouteShell><GADDashboardPage /></RouteShell>} />
+              {/* Growth & Outreach */}
+              <Route path="/gro" element={<GRODashboardPage />} />
 
-        {/* Executive Intelligence */}
-        <Route path="/executive" element={<RouteShell><ExecutiveDashboardPage /></RouteShell>} />
+              {/* General Administration */}
+              <Route path="/gad" element={<GADDashboardPage />} />
 
-        {/* NIL Knowledge Graph */}
-        <Route path="/nil" element={<RouteShell><NILGraphPage /></RouteShell>} />
+              {/* Executive Intelligence */}
+              <Route path="/executive" element={<ExecutiveDashboardPage />} />
 
-        {/* Admin: Settings */}
-        <Route path="/admin/settings" element={<RouteShell><SettingsPage /></RouteShell>} />
+              {/* NIL Knowledge Graph */}
+              <Route path="/nil" element={<NILGraphPage />} />
 
-        {/* Admin: Microsoft Entra ID */}
-        <Route path="/admin/entra-id" element={<RouteShell><EntraIDPage /></RouteShell>} />
+              {/* Admin: Microsoft Entra ID */}
+              <Route path="/admin/entra-id" element={<EntraIDPage />} />
 
-        {/* Admin: Workflow Engine */}
-        <Route path="/admin/workflows" element={<RouteShell><WorkflowPage /></RouteShell>} />
-      </Route>
+              {/* Admin: Workflow Engine */}
+              <Route path="/admin/workflows" element={<WorkflowPage />} />
 
-      {/* Fallback */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+              {/* Admin: Settings */}
+              <Route path="/admin/settings" element={<SettingsPage />} />
+
+              {/* BHC Clinical routes */}
+              <Route path="/clinical" element={<ClinicalDashboardPage />} />
+              <Route path="/clinical/patients" element={<PatientListPage />} />
+              <Route path="/clinical/patients/:id" element={<PatientProfilePage />} />
+              <Route path="/clinical/treatment-plans" element={<TreatmentPlanPage />} />
+
+              {/* Additional module pages */}
+              <Route path="/hr/credentials" element={<CredentialTrackingPage />} />
+              <Route path="/hr/separation" element={<SeparationManagementPage />} />
+              <Route path="/email-outreach" element={<EmailOutreachPage />} />
+              <Route path="/onboarding-academy" element={<OnboardingAcademyPage />} />
+              <Route path="/onboarding-track" element={<OnboardingTrackPage />} />
+              <Route path="/documents" element={<DocumentStudioPage />} />
+              <Route path="/audit" element={<AuditPage />} />
+              <Route path="/knowledge" element={<KnowledgePage />} />
+              <Route path="/onboarding/track/universal-orientation" element={<UniversalOrientationPage />} />
+              <Route path="/marketing-review" element={<MarketingSiteReviewPage />} />
+            </Route>
+
+            {/* Login page (standalone, no AppShell) */}
+            <Route path="/login" element={<LoginPage />} />
+
+            {/* Legacy redirect */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </HashRouter>
+      </ErrorBoundary>
+    </OnboardingProvider>
+    </NotificationProvider>
+    </AuthProvider>
   );
 }
+
+export default App;

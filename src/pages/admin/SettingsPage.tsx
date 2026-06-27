@@ -18,9 +18,9 @@ const PERM_LABELS: Record<string, string> = {
 export function SettingsPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"users" | "roles" | "access">("users");
-  const { data: users, refetch } = trpc.auth.listUsers.useQuery();
-  const updateMutation = trpc.auth.updateUser.useMutation({ onSuccess: () => refetch() });
-  const deleteMutation = trpc.auth.deleteUser.useMutation({ onSuccess: () => refetch() });
+  const { data: users, refetch } = trpc.user.list.useQuery();
+  const updateMutation = trpc.user.update.useMutation({ onSuccess: () => refetch() });
+  const deleteMutation = trpc.user.delete.useMutation({ onSuccess: () => refetch() });
 
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ role: "", department: "" });
@@ -108,7 +108,7 @@ export function SettingsPage() {
                             ))}
                           </select>
                         ) : (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: (ROLE_DEFINITIONS.find(r => r.id === u.role)?.badgeColor ?? "#6B7280") + "20", color: ROLE_DEFINITIONS.find(r => r.id === u.role)?.badgeColor ?? "#6B7280" }}>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: ROLE_DEFINITIONS.find(r => r.id === u.role)?.badgeColor + "20" ?? "#F3F4F6", color: ROLE_DEFINITIONS.find(r => r.id === u.role)?.badgeColor ?? "#6B7280" }}>
                             {ROLE_DEFINITIONS.find(r => r.id === u.role)?.label ?? u.role}
                           </span>
                         )}
@@ -184,16 +184,32 @@ export function SettingsPage() {
           <div className="rounded-lg border p-4" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)" }}>
             <h3 className="text-[15px] font-semibold mb-1" style={{ color: "var(--topbar-title)" }}>Permission Matrix</h3>
             <p className="text-[12px] mb-4" style={{ color: "var(--topbar-subtitle)" }}>Read-only view of permissions per role. To modify, contact Super Admin.</p>
-            <div className="space-y-4">
-              {ROLE_DEFINITIONS.slice(0, 10).map((role) => (
-                <div key={role.id} className="flex items-start gap-3 p-3 rounded-lg border" style={{ borderColor: "var(--card-border)" }}>
-                  <div className="w-3 h-3 rounded-full mt-1 flex-shrink-0" style={{ backgroundColor: role.badgeColor }} />
-                  <div>
-                    <p className="text-[13px] font-medium" style={{ color: "var(--topbar-title)" }}>{role.label}</p>
-                    <p className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>Department: {role.department}</p>
-                  </div>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-[10px]">
+                <thead>
+                  <tr style={{ borderBottom: "2px solid var(--card-border)" }}>
+                    <th className="text-left py-1 px-1 font-semibold sticky left-0 bg-white" style={{ color: "var(--topbar-subtitle)", minWidth: 120 }}>Role</th>
+                    {Object.values(PERM_LABELS).map((label) => (
+                      <th key={label} className="text-center py-1 px-1 font-semibold" style={{ color: "var(--topbar-subtitle)", minWidth: 50, writingMode: "vertical-rl", transform: "rotate(180deg)" }}>{label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ROLE_DEFINITIONS.slice(0, 12).map((role) => {
+                    const perms = (user as any)?.permissions ?? {};
+                    return (
+                      <tr key={role.id} className="border-b" style={{ borderColor: "var(--card-border)" }}>
+                        <td className="py-1 px-1 font-medium sticky left-0 bg-white" style={{ color: "var(--topbar-title)", fontSize: 11 }}>{role.label}</td>
+                        {Object.keys(PERM_LABELS).map((key) => (
+                          <td key={key} className="text-center py-1 px-1">
+                            <div className="w-3 h-3 rounded-full mx-auto" style={{ backgroundColor: "#E5E7EB" }} />
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

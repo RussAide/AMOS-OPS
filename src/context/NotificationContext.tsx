@@ -17,50 +17,9 @@ export interface AppNotification {
   actionHref?: string;
 }
 
-// ─── Demo Notifications (fallback when not authenticated) ─────
+// ─── Notifications ────────────────────────────────────────────
 
-const DEMO_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: "notif-001", type: "status-change", title: "Status Updated",
-    message: "David Chen moved from Screening to Offers & Pre-Employment",
-    personName: "David Chen", moduleName: "Offers & Pre-Employment",
-    timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(), read: false, actionHref: "#/hr/offers",
-  },
-  {
-    id: "notif-002", type: "alert", title: "Active Without Clearance",
-    message: "6 employees are active but have not completed clearance review",
-    timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(), read: false, actionHref: "#/hr/clearance",
-  },
-  {
-    id: "notif-003", type: "document", title: "Credential Expiring",
-    message: "Aisha Johnson's CPR certification has expired (due: Jun 1, 2025)",
-    personName: "Aisha Johnson", moduleName: "Credentials & Training",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), read: false, actionHref: "#/hr/credentials",
-  },
-  {
-    id: "notif-004", type: "training", title: "Supervisor Competency Pending",
-    message: "James Park's 90-day review is ready for supervisor sign-off",
-    personName: "James Park", moduleName: "Performance & Corrective Action",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(), read: true, actionHref: "#/hr/performance",
-  },
-  {
-    id: "notif-005", type: "system", title: "Training Module Added",
-    message: "New module 'Youth Supervision, Rights, Dignity & Boundaries' is now available in GRO Residential Track",
-    moduleName: "Onboarding Academy",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(), read: true, actionHref: "#/onboarding",
-  },
-  {
-    id: "notif-006", type: "status-change", title: "Offer Accepted",
-    message: "Christopher Lee has signed and returned the offer acceptance letter",
-    personName: "Christopher Lee", moduleName: "Offers & Pre-Employment",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), read: true, actionHref: "#/hr/offers",
-  },
-  {
-    id: "notif-007", type: "alert", title: "Missing Documents",
-    message: "3 employees are missing required personnel file documents",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(), read: true, actionHref: "#/hr/personnel-files",
-  },
-];
+const INITIAL_NOTIFICATIONS: AppNotification[] = [];
 
 // ─── Context ──────────────────────────────────────────────────
 
@@ -75,13 +34,12 @@ interface NotificationState {
 const NotificationContext = createContext<NotificationState | null>(null);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const [localNotifications, setLocalNotifications] = useState<AppNotification[]>(DEMO_NOTIFICATIONS);
+  const [localNotifications, setLocalNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
 
-  // Try to fetch from API - use a fixed demo user ID for now
-  // In production, this would use the authenticated user's ID
+  // Fetch notifications from API when authenticated
   const { data: apiNotifications } = trpc.notifications.list.useQuery(
-    { userId: "demo-user" },
-    { enabled: false } // Disabled by default - use demo data until auth is fully wired
+    { userId: "current" },
+    { enabled: false }
   );
 
   const markAsReadMutation = trpc.notifications.markAsRead.useMutation();
@@ -128,7 +86,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const markAllAsRead = useCallback(async () => {
     setLocalNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     try {
-      await markAllAsReadMutation.mutateAsync({ userId: "demo-user" });
+      await markAllAsReadMutation.mutateAsync({ userId: "current" });
       utils.notifications.list.invalidate();
     } catch {
       // Local update already applied
@@ -147,7 +105,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
       try {
         await createMutation.mutateAsync({
-          userId: "demo-user",
+          userId: "current",
           type: notif.type,
           title: notif.title,
           message: notif.message,

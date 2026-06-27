@@ -1,0 +1,4 @@
+import { AppShell } from "@/components/shell/AppShell";
+import { TopBar } from "@/components/shell/TopBar";
+import { Mail } from "lucide-react";
+export function EmailOutreachPage() { return (<AppShell><TopBar /><div className="px-6 pt-4"><div className="flex items-center gap-3 mb-6"><div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{backgroundColor:"#2563EB"}}><Mail size={20} color="white"/></div><div><h1 className="text-[22px] font-bold" style={{color:"var(--topbar-title)"}}>Email Outreach</h1><p className="text-[13px]" style={{color:"var(--topbar-subtitle)"}}>Communication templates and outreach</p></div></div><div className="rounded-lg border p-6 text-center" style={{borderColor:"var(--card-border)",backgroundColor:"var(--card-bg)"}}><p style={{color:"var(--topbar-subtitle)"}}>Email outreach module coming soon.</p></div></div></AppShell>); }

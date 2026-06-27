@@ -1,22 +1,21 @@
 import { useState } from "react";
-import { useAuth, ROLE_DEFINITIONS } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { Shield, LogIn, UserPlus, AlertCircle } from "lucide-react";
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { login, register, seedAdmin, isAuthenticated } = useAuth();
+  const { login, register, isAuthenticated } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [seeded, setSeeded] = useState(false);
 
   const [form, setForm] = useState({
     email: "",
     password: "",
     firstName: "",
     lastName: "",
-    role: "",
+    role: "staff",
     department: "",
   });
 
@@ -43,10 +42,6 @@ export function LoginPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!form.role) {
-      setError("Please select a role");
-      return;
-    }
     setLoading(true);
     try {
       await register({
@@ -65,25 +60,7 @@ export function LoginPage() {
     }
   };
 
-  const handleSeed = async () => {
-    setError("");
-    try {
-      const result = await seedAdmin();
-      if (result.created) {
-        setSeeded(true);
-        setForm({ ...form, email: result.email ?? "admin@adolbi.com", password: result.password ?? "admin123" });
-      } else {
-        setForm({ ...form, email: "admin@adolbi.com", password: "admin123" });
-      }
-    } catch (err: any) {
-      const msg = err.message ?? "";
-      if (msg.includes("Unexpected token") || msg.includes("DOCTYPE")) {
-        setError("API server not available. Run 'npm start' locally to enable full functionality.");
-      } else {
-        setError(msg || "Failed to seed admin");
-      }
-    }
-  };
+
 
   return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)" }}>
@@ -124,11 +101,7 @@ export function LoginPage() {
             </div>
           )}
 
-          {seeded && (
-            <div className="p-3 rounded-lg mb-4 text-[12px]" style={{ backgroundColor: "rgba(5,150,105,0.15)", color: "#6EE7B7" }}>
-              Admin account created. Email and password pre-filled.
-            </div>
-          )}
+
 
           <form onSubmit={mode === "login" ? handleLogin : handleRegister} className="space-y-4">
             <div>
@@ -174,10 +147,28 @@ export function LoginPage() {
                   <div>
                     <label className="text-[11px] font-medium mb-1 block" style={{ color: "rgba(255,255,255,0.5)" }}>Role</label>
                     <select className="w-full rounded-lg px-3 py-2.5 text-[13px] outline-none" style={{ backgroundColor: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                      <option value="" style={{ color: "#333" }}>Select Role</option>
-                      {ROLE_DEFINITIONS.map((role) => (
-                        <option key={role.id} value={role.id} style={{ color: "#333" }}>{role.label}</option>
-                      ))}
+                      <option value="residential-care-specialist">Residential Care Specialist</option>
+                      <option value="rcs-lead">RCS Lead</option>
+                      <option value="rcs-night">RCS Night Shift</option>
+                      <option value="rcs-prn">RCS PRN</option>
+                      <option value="behavioral-support-specialist">Behavioral Support Specialist</option>
+                      <option value="recreation-coordinator">Recreation Coordinator</option>
+                      <option value="medication-aide">Medication Aide</option>
+                      <option value="qmhp-cs">QMHP-CS / Case Manager</option>
+                      <option value="ccmg-clinical-director">CCMG Clinical Director</option>
+                      <option value="treatment-director-lpha">Treatment Director / LPHA</option>
+                      <option value="pmhnp-fnp">PMHNP-FNP</option>
+                      <option value="hr-director">HR Director</option>
+                      <option value="hr-compliance-officer">HR / Compliance Officer</option>
+                      <option value="administrator-lcca">Administrator / LCCA</option>
+                      <option value="gro-administrator">GRO Administrator</option>
+                      <option value="it-administrator">IT Administrator</option>
+                      <option value="accountant">Accountant</option>
+                      <option value="contract-manager">Contract Manager</option>
+                      <option value="compliance-officer">Compliance Officer</option>
+                      <option value="qa-coordinator">QA Coordinator</option>
+                      <option value="utilization-review">Utilization Review</option>
+                      <option value="super-admin">Super Admin</option>
                     </select>
                   </div>
                   <div>
@@ -199,16 +190,7 @@ export function LoginPage() {
             </button>
           </form>
 
-          {/* Seed admin button */}
-          {!seeded && mode === "login" && (
-            <button
-              onClick={handleSeed}
-              className="w-full mt-3 py-2 rounded-lg text-[12px] font-medium transition-all"
-              style={{ backgroundColor: "rgba(233,196,106,0.1)", color: "#e9c46a", border: "1px solid rgba(233,196,106,0.2)" }}
-            >
-              Create Default Admin Account
-            </button>
-          )}
+
         </div>
 
         <p className="text-center text-[11px] mt-6" style={{ color: "rgba(255,255,255,0.3)" }}>

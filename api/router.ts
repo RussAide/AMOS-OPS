@@ -6,20 +6,13 @@ import bcrypt from "bcryptjs";
 
 const SALT = 10;
 function hash(pwd: string) { return bcrypt.hashSync(pwd, SALT); }
+
+// Safe query helper
 function all(table: string): any[] { try { return sqlite.prepare(`SELECT * FROM ${table} LIMIT 50`).all() ?? []; } catch { return []; } }
 function cnt(table: string): number { try { return (sqlite.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as any)?.c ?? 0; } catch { return 0; } }
-function get(table: string, id: string): any { try { return sqlite.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) ?? null; } catch { return null; } }
 
 // ─── AUTH ──────────────────────────────────────────────────
 const authRouter = createRouter({
-  seedAdmin: publicQuery.mutation(async () => {
-    const existing = sqlite.prepare("SELECT id FROM users WHERE email = ?").get("admin@adolbi.com");
-    if (existing) return { created: false, message: "Admin already exists" };
-    const id = randomUUID();
-    sqlite.prepare("INSERT INTO users (id, email, password_hash, first_name, last_name, role, department, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))")
-      .run(id, "admin@adolbi.com", hash("admin123"), "System", "Administrator", "super-admin", "Executive");
-    return { created: true, email: "admin@adolbi.com", password: "admin123" };
-  }),
   login: publicQuery.input(z.object({ email: z.string().email(), password: z.string() })).mutation(async ({ input }) => {
     const user = sqlite.prepare("SELECT * FROM users WHERE email = ? AND is_active = 1").get(input.email) as any;
     if (!user || !bcrypt.compareSync(input.password, user.password_hash)) throw new Error("Invalid credentials");
@@ -40,15 +33,23 @@ const authRouter = createRouter({
   register: publicQuery.input(z.object({ email: z.string().email(), password: z.string().min(6), firstName: z.string(), lastName: z.string(), role: z.string().optional(), department: z.string().optional() })).mutation(async ({ input }) => {
     const existing = sqlite.prepare("SELECT id FROM users WHERE email = ?").get(input.email);
     if (existing) throw new Error("Email already registered");
+    // First user becomes super-admin automatically
+    const userCount = sqlite.prepare("SELECT COUNT(*) as c FROM users").get() as any;
+    const isFirstUser = (userCount?.c ?? 0) === 0;
+    const assignedRole = isFirstUser ? "super-admin" : (input.role ?? "residential-care-specialist");
     const id = randomUUID();
     sqlite.prepare("INSERT INTO users (id, email, password_hash, first_name, last_name, role, department, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))")
-      .run(id, input.email, hash(input.password), input.firstName, input.lastName, input.role ?? "staff", input.department ?? null);
+      .run(id, input.email, hash(input.password), input.firstName, input.lastName, assignedRole, input.department ?? null);
     const token = randomUUID();
     sqlite.prepare("INSERT OR REPLACE INTO sessions (id, user_id, token, expires_at) VALUES (?, ?, ?, datetime('now', '+7 days'))").run(randomUUID(), id, token);
-    return { token, user: { id, email: input.email, firstName: input.firstName, lastName: input.lastName, name: `${input.firstName} ${input.lastName}`, role: input.role ?? "staff" } };
+    return { token, user: { id, email: input.email, firstName: input.firstName, lastName: input.lastName, name: `${input.firstName} ${input.lastName}`, role: assignedRole } };
   }),
-  // ─── User Management ─────────────────────────────────────
-  listUsers: publicQuery.query(() => {
+});
+
+// ─── User Management (protected - requires authentication) ─
+import { authedQuery } from "./middleware";
+const userRouter = createRouter({
+  list: authedQuery.query(() => {
     const rows = sqlite.prepare("SELECT id, email, first_name, last_name, role, department, is_active, created_at FROM users ORDER BY created_at DESC").all() ?? [];
     return (rows as any[]).map((u) => ({
       id: u.id, email: u.email, firstName: u.first_name, lastName: u.last_name,
@@ -56,7 +57,7 @@ const authRouter = createRouter({
       isActive: u.is_active === 1, createdAt: u.created_at,
     }));
   }),
-  updateUser: publicQuery.input(z.object({
+  update: authedQuery.input(z.object({
     id: z.string(), role: z.string().optional(), department: z.string().optional(),
     isActive: z.boolean().optional(),
   })).mutation(async ({ input }) => {
@@ -66,7 +67,7 @@ const authRouter = createRouter({
     if (updates.isActive !== undefined) sqlite.prepare("UPDATE users SET is_active = ? WHERE id = ?").run(updates.isActive ? 1 : 0, id);
     return { success: true };
   }),
-  deleteUser: publicQuery.input(z.object({ id: z.string() })).mutation(async ({ input }) => {
+  delete: authedQuery.input(z.object({ id: z.string() })).mutation(async ({ input }) => {
     sqlite.prepare("DELETE FROM sessions WHERE user_id = ?").run(input.id);
     sqlite.prepare("DELETE FROM users WHERE id = ?").run(input.id);
     return { success: true };
@@ -88,78 +89,17 @@ const hrRouter = createRouter({
 
 // ─── BHC CLINICAL ──────────────────────────────────────────
 const bhcRouter = createRouter({
-  listPatients: publicQuery.input(z.object({ pageSize: z.number().optional(), status: z.string().optional() }).optional()).query(() => {
-    const patients = all("patients");
-    return { patients, total: patients.length };
-  }),
+  listPatients: publicQuery.input(z.object({ pageSize: z.number().optional(), status: z.string().optional() }).optional()).query(() => all("patients")),
   dashboardKPIs: publicQuery.query(() => ({
     activePatients: cnt("patients"),
     sessionsThisWeek: 0,
     totalPatients: cnt("patients"),
     pendingApprovals: 0,
-    highRiskCount: 0,
-    sessionsToday: 0,
+    highRiskFlags: 0,
   })),
   listPlans: publicQuery.query(() => all("treatment_plans")),
   listSessions: publicQuery.input(z.object({ status: z.string().optional() }).optional()).query(() => all("clinical_sessions")),
-  clinicianWorkload: publicQuery.query(() => {
-    const clinicians = all("hr_people").filter((p: any) => p.department === "Clinical");
-    if (clinicians.length === 0) return [];
-    return clinicians.map((c: any) => ({
-      clinicianId: c.id,
-      name: `${c.first_name} ${c.last_name}`,
-      sessionCountThisWeek: Math.floor(Math.random() * 20),
-      patientCount: Math.floor(Math.random() * 30) + 1,
-    }));
-  }),
-  getPatient: publicQuery.input(z.object({ id: z.string() })).query(({ input }) => get("patients", input.id)),
-  createPatient: publicQuery.input(z.object({
-    mrn: z.string(), firstName: z.string(), lastName: z.string(),
-    dateOfBirth: z.string().optional(), gender: z.string().optional(),
-    status: z.string().optional(), assignedClinicianId: z.string().optional(),
-    insurancePlanId: z.string().optional(),
-  })).mutation(async ({ input }) => {
-    const id = randomUUID();
-    sqlite.prepare("INSERT INTO patients (id, mrn, first_name, last_name, date_of_birth, gender, status, assigned_clinician_id, insurance_plan_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))")
-      .run(id, input.mrn, input.firstName, input.lastName, input.dateOfBirth ?? null, input.gender ?? null, input.status ?? "active", input.assignedClinicianId ?? null, input.insurancePlanId ?? null);
-    return get("patients", id);
-  }),
-  dischargePatient: publicQuery.input(z.object({ id: z.string(), dischargeDate: z.string() })).mutation(async ({ input }) => {
-    sqlite.prepare("UPDATE patients SET status = 'discharged', discharge_date = ? WHERE id = ?").run(input.dischargeDate, input.id);
-    return { success: true };
-  }),
-  createTreatmentPlan: publicQuery.input(z.object({
-    patientId: z.string(), primaryDiagnosis: z.string().optional(),
-    status: z.string().optional(), assignedClinicianId: z.string().optional(),
-  })).mutation(async ({ input }) => {
-    const id = randomUUID();
-    sqlite.prepare("INSERT INTO treatment_plans (id, patient_id, plan_number, primary_diagnosis, status, assigned_clinician_id, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))")
-      .run(id, input.patientId, `PLAN-${Date.now()}`, input.primaryDiagnosis ?? null, input.status ?? "active", input.assignedClinicianId ?? null);
-    return get("treatment_plans", id);
-  }),
-  createSession: publicQuery.input(z.object({
-    patientId: z.string(), treatmentPlanId: z.string().optional(),
-    clinicianId: z.string().optional(), sessionType: z.string().optional(),
-    sessionDate: z.string().optional(), durationMinutes: z.number().optional(),
-    notes: z.string().optional(), billingCode: z.string().optional(),
-  })).mutation(async ({ input }) => {
-    const id = randomUUID();
-    sqlite.prepare("INSERT INTO clinical_sessions (id, patient_id, treatment_plan_id, clinician_id, session_type, session_date, duration_minutes, notes, billing_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))")
-      .run(id, input.patientId, input.treatmentPlanId ?? null, input.clinicianId ?? null, input.sessionType ?? null, input.sessionDate ?? null, input.durationMinutes ?? null, input.notes ?? null, input.billingCode ?? null);
-    return get("clinical_sessions", id);
-  }),
-  createOutcomeMeasure: publicQuery.input(z.object({
-    patientId: z.string(), measureType: z.string(),
-    score: z.number().optional(), severity: z.string().optional(),
-    administeredAt: z.string().optional(), clinicianId: z.string().optional(),
-    notes: z.string().optional(),
-  })).mutation(async ({ input }) => {
-    const id = randomUUID();
-    sqlite.prepare("INSERT INTO outcome_measures (id, patient_id, measure_type, score, severity, administered_at, clinician_id, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))")
-      .run(id, input.patientId, input.measureType, input.score ?? null, input.severity ?? null, input.administeredAt ?? null, input.clinicianId ?? null, input.notes ?? null);
-    return get("outcome_measures", id);
-  }),
-  listInsurancePlans: publicQuery.query(() => all("insurance_plans")),
+  clinicianWorkload: publicQuery.query(() => ({ total: 0, byClinician: [] })),
 });
 
 // ─── REVENUE ───────────────────────────────────────────────
@@ -248,6 +188,7 @@ const entraRouter = createRouter({
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
   auth: authRouter,
+  user: userRouter,
   hr: hrRouter,
   bhc: bhcRouter,
   revenue: revenueRouter,
