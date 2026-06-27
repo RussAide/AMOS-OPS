@@ -8,6 +8,7 @@ const SALT = 10;
 function hash(pwd: string) { return bcrypt.hashSync(pwd, SALT); }
 function all(table: string): any[] { try { return sqlite.prepare(`SELECT * FROM ${table} LIMIT 50`).all() ?? []; } catch { return []; } }
 function cnt(table: string): number { try { return (sqlite.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as any)?.c ?? 0; } catch { return 0; } }
+function get(table: string, id: string): any { try { return sqlite.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) ?? null; } catch { return null; } }
 
 // ─── AUTH ──────────────────────────────────────────────────
 const authRouter = createRouter({
@@ -74,6 +75,55 @@ const bhcRouter = createRouter({
   listPlans: publicQuery.query(() => all("treatment_plans")),
   listSessions: publicQuery.input(z.object({ status: z.string().optional() }).optional()).query(() => all("clinical_sessions")),
   clinicianWorkload: publicQuery.query(() => ({ total: 0, byClinician: [] })),
+  // Full CRUD for clinical pages
+  getPatient: publicQuery.input(z.object({ id: z.string() })).query(({ input }) => get("patients", input.id)),
+  createPatient: publicQuery.input(z.object({
+    mrn: z.string(), firstName: z.string(), lastName: z.string(),
+    dateOfBirth: z.string().optional(), gender: z.string().optional(),
+    status: z.string().optional(), assignedClinicianId: z.string().optional(),
+    insurancePlanId: z.string().optional(),
+  })).mutation(async ({ input }) => {
+    const id = randomUUID();
+    sqlite.prepare("INSERT INTO patients (id, mrn, first_name, last_name, date_of_birth, gender, status, assigned_clinician_id, insurance_plan_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))")
+      .run(id, input.mrn, input.firstName, input.lastName, input.dateOfBirth ?? null, input.gender ?? null, input.status ?? "active", input.assignedClinicianId ?? null, input.insurancePlanId ?? null);
+    return get("patients", id);
+  }),
+  dischargePatient: publicQuery.input(z.object({ id: z.string(), dischargeDate: z.string() })).mutation(async ({ input }) => {
+    sqlite.prepare("UPDATE patients SET status = 'discharged', discharge_date = ? WHERE id = ?").run(input.dischargeDate, input.id);
+    return { success: true };
+  }),
+  createTreatmentPlan: publicQuery.input(z.object({
+    patientId: z.string(), primaryDiagnosis: z.string().optional(),
+    status: z.string().optional(), assignedClinicianId: z.string().optional(),
+  })).mutation(async ({ input }) => {
+    const id = randomUUID();
+    sqlite.prepare("INSERT INTO treatment_plans (id, patient_id, plan_number, primary_diagnosis, status, assigned_clinician_id, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))")
+      .run(id, input.patientId, `PLAN-${Date.now()}`, input.primaryDiagnosis ?? null, input.status ?? "active", input.assignedClinicianId ?? null);
+    return get("treatment_plans", id);
+  }),
+  createSession: publicQuery.input(z.object({
+    patientId: z.string(), treatmentPlanId: z.string().optional(),
+    clinicianId: z.string().optional(), sessionType: z.string().optional(),
+    sessionDate: z.string().optional(), durationMinutes: z.number().optional(),
+    notes: z.string().optional(), billingCode: z.string().optional(),
+  })).mutation(async ({ input }) => {
+    const id = randomUUID();
+    sqlite.prepare("INSERT INTO clinical_sessions (id, patient_id, treatment_plan_id, clinician_id, session_type, session_date, duration_minutes, notes, billing_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))")
+      .run(id, input.patientId, input.treatmentPlanId ?? null, input.clinicianId ?? null, input.sessionType ?? null, input.sessionDate ?? null, input.durationMinutes ?? null, input.notes ?? null, input.billingCode ?? null);
+    return get("clinical_sessions", id);
+  }),
+  createOutcomeMeasure: publicQuery.input(z.object({
+    patientId: z.string(), measureType: z.string(),
+    score: z.number().optional(), severity: z.string().optional(),
+    administeredAt: z.string().optional(), clinicianId: z.string().optional(),
+    notes: z.string().optional(),
+  })).mutation(async ({ input }) => {
+    const id = randomUUID();
+    sqlite.prepare("INSERT INTO outcome_measures (id, patient_id, measure_type, score, severity, administered_at, clinician_id, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))")
+      .run(id, input.patientId, input.measureType, input.score ?? null, input.severity ?? null, input.administeredAt ?? null, input.clinicianId ?? null, input.notes ?? null);
+    return get("outcome_measures", id);
+  }),
+  listInsurancePlans: publicQuery.query(() => all("insurance_plans")),
 });
 
 // ─── REVENUE ───────────────────────────────────────────────
