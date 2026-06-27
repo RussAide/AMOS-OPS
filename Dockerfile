@@ -5,12 +5,10 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Fix npm "Exit handler never called!" bug in node:20-slim
-RUN npm install -g npm@10.9.2
-
 # Install all dependencies (including devDependencies for build)
+# Use npm i instead of npm ci to avoid "Exit handler never called!" bug
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm i --no-audit --no-fund
 
 # Copy source and build
 COPY . .
@@ -22,12 +20,9 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Fix npm "Exit handler never called!" bug in node:20-slim
-RUN npm install -g npm@10.9.2
-
 # Install production dependencies only
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev
+RUN npm i --omit=dev --no-audit --no-fund
 
 # Copy built artifacts from builder
 COPY --from=builder /app/dist ./dist
