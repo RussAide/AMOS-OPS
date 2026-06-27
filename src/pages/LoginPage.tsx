@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth, ROLE_DEFINITIONS } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { Shield, LogIn, UserPlus, AlertCircle } from "lucide-react";
 
@@ -16,7 +16,7 @@ export function LoginPage() {
     password: "",
     firstName: "",
     lastName: "",
-    role: "staff",
+    role: "",
     department: "",
   });
 
@@ -43,6 +43,10 @@ export function LoginPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    if (!form.role) {
+      setError("Please select a role");
+      return;
+    }
     setLoading(true);
     try {
       await register({
@@ -170,11 +174,10 @@ export function LoginPage() {
                   <div>
                     <label className="text-[11px] font-medium mb-1 block" style={{ color: "rgba(255,255,255,0.5)" }}>Role</label>
                     <select className="w-full rounded-lg px-3 py-2.5 text-[13px] outline-none" style={{ backgroundColor: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                      <option value="staff">Staff</option>
-                      <option value="clinician">Clinician</option>
-                      <option value="supervisor">Supervisor</option>
-                      <option value="hr_admin">HR Admin</option>
-                      <option value="admin">Administrator</option>
+                      <option value="" style={{ color: "#333" }}>Select Role</option>
+                      {ROLE_DEFINITIONS.map((role) => (
+                        <option key={role.id} value={role.id} style={{ color: "#333" }}>{role.label}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
