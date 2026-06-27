@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { AppSidebar } from "./AppSidebar";
-import { TopBar } from "./TopBar";
 
 interface AppShellProps {
   children: ReactNode;
@@ -11,7 +10,6 @@ export function AppShell({ children }: AppShellProps) {
     <div className="flex min-h-screen" style={{ backgroundColor: "var(--content-bg)" }}>
       <AppSidebar />
       <main className="flex-1 flex flex-col min-h-screen ml-[240px]">
-        <TopBar />
         <div className="flex-1">
           {children}
         </div>
