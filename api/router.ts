@@ -7,9 +7,8 @@ import bcrypt from "bcryptjs";
 const SALT = 10;
 function hash(pwd: string) { return bcrypt.hashSync(pwd, SALT); }
 
-export const appRouter = createRouter({
-  ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
-
+// Auth sub-router - all paths prefixed with "auth."
+const authRouter = createRouter({
   seedAdmin: publicQuery.mutation(async () => {
     const existing = sqlite.prepare("SELECT id FROM users WHERE email = ?").get("admin@adolbi.com");
     if (existing) return { created: false, message: "Admin already exists" };
@@ -42,6 +41,11 @@ export const appRouter = createRouter({
     sqlite.prepare("DELETE FROM sessions WHERE token = ?").run(input.token);
     return { success: true };
   }),
+});
+
+export const appRouter = createRouter({
+  ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
+  auth: authRouter,
 });
 
 export type AppRouter = typeof appRouter;
