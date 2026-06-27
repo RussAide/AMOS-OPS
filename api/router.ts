@@ -3,11 +3,20 @@ import { createRouter, publicQuery } from "./middleware";
 import { sqlite } from "./queries/connection";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
+import { hrRouter } from "./routers/hr";
+import { bhcRouter } from "./routers/bhc";
+import { revenueRouter } from "./routers/revenue";
+import { qaRouter } from "./routers/qa";
+import { gadRouter } from "./routers/gad";
+import { groRouter } from "./routers/gro";
+import { nilRouter } from "./routers/nil";
+import { msGraphRouter } from "./routers/msgraph";
+import { workflowRouter } from "./routers/workflow";
 
 const SALT = 10;
 function hash(pwd: string) { return bcrypt.hashSync(pwd, SALT); }
 
-// Auth sub-router - all paths prefixed with "auth."
+// Auth sub-router
 const authRouter = createRouter({
   seedAdmin: publicQuery.mutation(async () => {
     const existing = sqlite.prepare("SELECT id FROM users WHERE email = ?").get("admin@adolbi.com");
@@ -46,6 +55,15 @@ const authRouter = createRouter({
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
   auth: authRouter,
+  hr: hrRouter,
+  bhc: bhcRouter,
+  revenue: revenueRouter,
+  qa: qaRouter,
+  gad: gadRouter,
+  gro: groRouter,
+  nil: nilRouter,
+  msgraph: msGraphRouter,
+  workflow: workflowRouter,
 });
 
 export type AppRouter = typeof appRouter;
