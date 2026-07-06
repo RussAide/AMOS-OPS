@@ -6,7 +6,7 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Install build tools for native modules (better-sqlite3 needs these)
+# Install build tools for native modules
 RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
@@ -41,9 +41,6 @@ COPY --from=builder /app/postcss.config.js ./
 COPY --from=builder /app/vite.config.ts ./
 COPY --from=builder /app/components.json ./
 COPY --from=builder /app/index.html ./
-COPY --from=builder /app/netlify.toml ./
-COPY --from=builder /app/railway.toml ./
-COPY --from=builder /app/railway.json ./
 
 # Expose port
 EXPOSE 3000
