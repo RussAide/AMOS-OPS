@@ -1,9 +1,13 @@
 # AMOS-OPS Production Dockerfile
 # Railway-compatible — builds both frontend and backend
+# Uses node:20-slim (Debian) for better-sqlite3 compatibility
 
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
+
+# Install build tools for native modules (better-sqlite3 needs these)
+RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 COPY package*.json ./
@@ -16,15 +20,14 @@ COPY . .
 RUN npm run build
 
 # Production image
-FROM node:20-alpine AS production
+FROM node:20-slim AS production
 
 WORKDIR /app
 
-# Install production dependencies only
-COPY package*.json ./
-RUN npm install --legacy-peer-deps --omit=dev
+# Copy built node_modules from builder (already compiled)
+COPY --from=builder /app/node_modules ./node_modules
 
-# Copy built assets from builder
+# Copy built assets
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/dist-server ./dist-server
 COPY --from=builder /app/db ./db
@@ -32,13 +35,14 @@ COPY --from=builder /app/docs ./docs
 
 # Copy runtime files
 COPY --from=builder /app/package.json ./
+COPY --from=builder /app/tsconfig*.json ./
 
 # Expose port
 EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+  CMD node -e "fetch('http://localhost:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))" || exit 1
 
 # Start
 CMD ["npm", "start"]
