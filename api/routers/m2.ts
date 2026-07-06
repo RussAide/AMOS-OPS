@@ -1142,7 +1142,7 @@ export const m2Router = createRouter({
     .input(z.object({ documentId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
-      const actorName = `${ctx.user?.firstName ?? ""} ${ctx.user?.lastName ?? ""}`.trim() || ctx.user?.email ?? "unknown";
+      const actorName = (`${ctx.user?.firstName ?? ""} ${ctx.user?.lastName ?? ""}`.trim() || ctx.user?.email) ?? "unknown";
 
       await logDocumentAction(db, {
         documentId: input.documentId,
@@ -1160,7 +1160,7 @@ export const m2Router = createRouter({
     .input(z.object({ documentId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
-      const actorName = `${ctx.user?.firstName ?? ""} ${ctx.user?.lastName ?? ""}`.trim() || ctx.user?.email ?? "unknown";
+      const actorName = (`${ctx.user?.firstName ?? ""} ${ctx.user?.lastName ?? ""}`.trim() || ctx.user?.email) ?? "unknown";
 
       await logDocumentAction(db, {
         documentId: input.documentId,
@@ -1266,7 +1266,7 @@ export const m2Router = createRouter({
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       const db = getDb();
-      const actorName = `${ctx.user?.firstName ?? ""} ${ctx.user?.lastName ?? ""}`.trim() || ctx.user?.email ?? "unknown";
+      const actorName = (`${ctx.user?.firstName ?? ""} ${ctx.user?.lastName ?? ""}`.trim() || ctx.user?.email) ?? "unknown";
 
       const doc = await db.select().from(dmsDocuments).where(eq(dmsDocuments.id, input.id)).get();
       if (!doc) throw new Error("Document not found");
