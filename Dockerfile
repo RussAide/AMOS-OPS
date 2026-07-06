@@ -29,7 +29,7 @@ COPY --from=builder /app/node_modules ./node_modules
 
 # Copy built assets
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/dist-server ./dist-server
+CMD ["npm", "start"]
 COPY --from=builder /app/db ./db
 COPY --from=builder /app/docs ./docs
 
