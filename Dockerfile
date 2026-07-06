@@ -36,8 +36,8 @@ COPY --from=builder /app/docs ./docs
 # Copy ALL root-level config files
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/tsconfig*.json ./
-COPY --from=builder /app/tailwind.config.js ./
-COPY --from=builder /app/postcss.config.js ./
+COPY --from=builder /app/tailwind.config.cjs ./
+COPY --from=builder /app/postcss.config.cjs ./
 COPY --from=builder /app/vite.config.ts ./
 COPY --from=builder /app/components.json ./
 COPY --from=builder /app/index.html ./
