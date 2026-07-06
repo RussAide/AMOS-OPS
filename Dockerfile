@@ -33,9 +33,17 @@ COPY --from=builder /app/dist-server ./dist-server
 COPY --from=builder /app/db ./db
 COPY --from=builder /app/docs ./docs
 
-# Copy runtime files
+# Copy ALL root-level config files
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/tsconfig*.json ./
+COPY --from=builder /app/tailwind.config.js ./
+COPY --from=builder /app/postcss.config.js ./
+COPY --from=builder /app/vite.config.ts ./
+COPY --from=builder /app/components.json ./
+COPY --from=builder /app/index.html ./
+COPY --from=builder /app/netlify.toml ./
+COPY --from=builder /app/railway.toml ./
+COPY --from=builder /app/railway.json ./
 
 # Expose port
 EXPOSE 3000
