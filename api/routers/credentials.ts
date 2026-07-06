@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "../middleware";
+import { createRouter, publicQuery, authedQuery, auditLog } from "../middleware";
 import { getDb } from "../queries/connection";
-import { credentials } from "@db/schema";
+import { credentials, hrPeople } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -20,6 +20,16 @@ export const credentialsRouter = createRouter({
           .all();
       }
       return db.select().from(credentials).orderBy(desc(credentials.createdAt)).all();
+    }),
+
+  // ─── Get single credential ─────────────────────────────────
+  getById: publicQuery
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const cred = await db.select().from(credentials).where(eq(credentials.id, input.id)).get();
+      if (!cred) throw new Error("Credential not found");
+      return cred;
     }),
 
   // ─── Create credential ─────────────────────────────────────
@@ -90,6 +100,39 @@ export const credentialsRouter = createRouter({
       return db.select().from(credentials).where(eq(credentials.id, id)).get();
     }),
 
+  // ─── Verify credential ─────────────────────────────────────
+  verify: authedQuery
+    .input(
+      z.object({
+        id: z.string(),
+        verifiedBy: z.string().min(1),
+        notes: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = getDb();
+      const actor = ctx.user?.email ?? "unknown";
+
+      await db
+        .update(credentials)
+        .set({
+          verifiedBy: input.verifiedBy,
+          verifiedAt: new Date().toISOString(),
+          status: "valid",
+          notes: input.notes ?? null,
+        })
+        .where(eq(credentials.id, input.id));
+
+      auditLog({
+        action: "credentials:verify",
+        actor,
+        resource: `credential:${input.id}`,
+        details: `Credential verified by ${input.verifiedBy}`,
+      });
+
+      return db.select().from(credentials).where(eq(credentials.id, input.id)).get();
+    }),
+
   // ─── Delete credential ─────────────────────────────────────
   delete: publicQuery
     .input(z.object({ id: z.string() }))
@@ -112,6 +155,7 @@ export const credentialsRouter = createRouter({
       return c.status === "valid" && days <= 90;
     });
     const valid = all.filter((c) => c.status === "valid");
+    const pending = all.filter((c) => c.status === "pending");
 
     return {
       total: all.length,
@@ -119,7 +163,38 @@ export const credentialsRouter = createRouter({
       critical: critical.length,
       expiringSoon: expiring.length,
       valid: valid.length,
+      pending: pending.length,
       items: all,
     };
+  }),
+
+  // ─── People with credential issues ─────────────────────────
+  peopleWithIssues: publicQuery.query(async () => {
+    const db = getDb();
+    const allCreds = await db.select().from(credentials).all();
+    const allPeople = await db.select().from(hrPeople).all();
+
+    const expiredOrExpiring = allCreds.filter(
+      (c) => c.status === "expired" || c.status === "expiring"
+    );
+
+    const personIds = new Set(expiredOrExpiring.map((c) => c.personId));
+    const affectedPeople = allPeople
+      .filter((p) => personIds.has(p.id))
+      .map((p) => ({
+        personId: p.id,
+        name: `${p.firstName} ${p.lastName}`,
+        role: p.role,
+        issues: expiredOrExpiring
+          .filter((c) => c.personId === p.id)
+          .map((c) => ({
+            credentialId: c.id,
+            credentialType: c.credentialType,
+            status: c.status,
+            expiryDate: c.expiryDate,
+          })),
+      }));
+
+    return affectedPeople;
   }),
 });

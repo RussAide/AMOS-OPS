@@ -285,3 +285,5 @@ export function SupervisorPage() {
     </div>
   );
 }
+
+export default SupervisorPage;

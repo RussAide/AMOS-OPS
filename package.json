@@ -1,11 +1,14 @@
 {
-  "name": "my-app",
+  "name": "amos-ops",
   "private": true,
-  "version": "0.0.0",
-    "engines": {
-    "node": "20"
-  },
+  "version": "1.0.0",
+  "description": "AMOS-OPS Enterprise Intranet for Adolbi Care, Inc. — Behavioral Health Center at Cypress",
+  "author": "E. Russ Aideyan <admin@adolbi.com>",
+  "license": "UNLICENSED",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build && esbuild api/boot.ts --platform=node --bundle --format=esm --outdir=dist --external:better-sqlite3 --external:bcryptjs --external:@hono/node-server --banner:js=\"import { createRequire } from 'module';import { fileURLToPath } from 'url';const require = createRequire(import.meta.url);const __filename = fileURLToPath(import.meta.url);const __dirname = fileURLToPath(new URL('.', import.meta.url));\"",
@@ -49,9 +52,9 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-query": "^5.90.16",
-    "@trpc/client": "11.18.0",
-    "@trpc/react-query": "11.18.0",
-    "@trpc/server": "11.18.0",
+    "@trpc/client": "^11.18.0",
+    "@trpc/react-query": "^11.8.1",
+    "@trpc/server": "^11.18.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.11.1",
     "class-variance-authority": "^0.7.1",
@@ -61,6 +64,7 @@
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.2",
     "embla-carousel-react": "^8.6.0",
+    "framer-motion": "^12.42.2",
     "hono": "^4.12.26",
     "input-otp": "^1.4.2",
     "jose": "^6.2.3",
@@ -68,6 +72,7 @@
     "lucide-react": "^0.562.0",
     "mysql2": "^3.14.1",
     "next-themes": "^0.4.6",
+    "pg": "^8.22.0",
     "react": "^19.2.0",
     "react-day-picker": "^9.13.0",
     "react-dom": "^19.2.0",

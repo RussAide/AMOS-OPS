@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { AppShell } from "@/components/shell/AppShell";
-import { TopBar } from "@/components/shell/TopBar";
 import { trpc } from "@/providers/trpc";
 import { GitBranch, Play, CheckCircle, XCircle, Clock, AlertCircle, RefreshCw, Shield, FileText, Activity } from "lucide-react";
 
@@ -28,9 +26,8 @@ export function WorkflowPage() {
   });
 
   return (
-    <AppShell>
-      <TopBar />
-      <div className="px-6 pt-4">
+    
+      <div className="px-4 md:px-6 pt-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -227,6 +224,7 @@ export function WorkflowPage() {
           )}
         </div>
       </div>
-    </AppShell>
   );
 }
+
+export default WorkflowPage;

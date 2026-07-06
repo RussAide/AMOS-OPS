@@ -45,7 +45,8 @@ export function TrainingPage() {
   };
 
   return (
-    <div>
+    <>
+      <div>
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#ECFDF5" }}>
@@ -132,6 +133,7 @@ export function TrainingPage() {
         )}
       </div>
     </div>
+  </>
   );
 }
 
@@ -237,3 +239,5 @@ function ModuleCard({
     </div>
   );
 }
+
+export default TrainingPage;

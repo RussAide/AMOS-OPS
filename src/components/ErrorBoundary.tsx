@@ -29,6 +29,17 @@ export class ErrorBoundary extends Component<Props, State> {
     this.setState({ hasError: false, error: undefined });
   };
 
+  handleClearAndReload = () => {
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key) localStorage.removeItem(key);
+      }
+      sessionStorage.clear();
+    } catch { /* ignore */ }
+    window.location.reload();
+  };
+
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
@@ -57,14 +68,26 @@ export class ErrorBoundary extends Component<Props, State> {
                 </p>
               </div>
             )}
-            <button
-              onClick={this.handleReset}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-medium text-white transition-all hover:shadow-md"
-              style={{ backgroundColor: "#245C5A" }}
-            >
-              <RotateCcw size={14} />
-              Try Again
-            </button>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+              <button
+                onClick={this.handleClearAndReload}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-medium text-white transition-all hover:shadow-md"
+                style={{ backgroundColor: "#DC2626" }}
+              >
+                <RotateCcw size={14} />
+                Clear Data & Reload
+              </button>
+              <button
+                onClick={this.handleReset}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-medium transition-all hover:shadow-md"
+                style={{ backgroundColor: "transparent", border: "1px solid #2D5A58", color: "#B8D4D3" }}
+              >
+                Try Again
+              </button>
+            </div>
+            <p style={{ color: "#5A7A78", fontSize: 11, marginTop: 16, textAlign: "center" }}>
+              If this keeps happening, add <code style={{ background: "#1a3a38", padding: "2px 6px", borderRadius: 4, color: "#7EC8CA" }}>?resetamos=true</code> to the URL
+            </p>
           </div>
         </div>
       );

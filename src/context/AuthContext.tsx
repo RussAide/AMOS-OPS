@@ -63,15 +63,26 @@ const PERMISSION_MATRIX: Record<UserRole, Permissions> = {
 
 // ─── Nav Visibility by Role ───────────────────────────────────
 
+/* ─── 6-Section Nav Visibility (matches sidebar sections) ───
+   Sections: HOME | YOUTH CARE | RESIDENTIAL | COMPLIANCE & REVENUE | WORKFORCE | INTELLIGENCE
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
 export const ROLE_NAV_VISIBILITY: Record<UserRole, Record<string, boolean>> = {
-  administrator: { dashboard: true, operations: true, compliance: true, hr: true, activation: true, management: true, admin: true },
-  "hr-director": { dashboard: true, operations: false, compliance: true, hr: true, activation: true, management: true, admin: true },
-  supervisor: { dashboard: true, operations: false, compliance: false, hr: true, activation: false, management: false, admin: false },
-  "clinical-director": { dashboard: true, operations: false, compliance: true, hr: true, activation: false, management: true, admin: false },
-  "gro-staff": { dashboard: true, operations: false, compliance: false, hr: false, activation: false, management: false, admin: true },
-  "qa-officer": { dashboard: true, operations: false, compliance: true, hr: true, activation: false, management: true, admin: false },
-  "training-coordinator": { dashboard: true, operations: false, compliance: false, hr: true, activation: true, management: false, admin: true },
-  "operations-manager": { dashboard: true, operations: true, compliance: false, hr: true, activation: false, management: false, admin: false },
+  // 1. Executive Administrator — Full Access
+  administrator:        { home: true, youthcare: true, residential: true, compliance: true, hr: true, intelligence: true },
+  // 2. Clinical Director — BHC + Compliance + Intelligence
+  "clinical-director":  { home: true, youthcare: true, residential: false, compliance: true, hr: false, intelligence: true },
+  // 3. Residential Supervisor — GRO + Residential + Youth Care
+  supervisor:           { home: true, youthcare: true, residential: true, compliance: false, hr: false, intelligence: false },
+  // 4. QA/Compliance Officer — Compliance + Intelligence
+  "qa-officer":         { home: true, youthcare: false, residential: false, compliance: true, hr: false, intelligence: true },
+  // 5. HR Director — Workforce + Compliance + Intelligence
+  "hr-director":        { home: true, youthcare: false, residential: false, compliance: true, hr: true, intelligence: true },
+  // 6. Frontline Staff — Youth Care + Residential only
+  "gro-staff":          { home: true, youthcare: true, residential: true, compliance: false, hr: false, intelligence: false },
+  // Extended roles
+  "training-coordinator": { home: true, youthcare: false, residential: false, compliance: false, hr: true, intelligence: true },
+  "operations-manager":   { home: true, youthcare: false, residential: true, compliance: false, hr: true, intelligence: false },
 };
 
 // ─── Auth Types ───────────────────────────────────────────────
@@ -158,31 +169,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getRoleDef = useCallback(() => {
-    return ROLE_DEFINITIONS.find((r) => r.id === currentRole)!;
+    return ROLE_DEFINITIONS.find((r) => r.id === currentRole) ?? ROLE_DEFINITIONS[0];
   }, [currentRole]);
 
   const login = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, _password: string) => {
       setLoginError(null);
-      try {
-        const result = await loginMutation.mutateAsync({ email, password });
-        if (result.token) {
-          localStorage.setItem(TOKEN_KEY, result.token);
-          setToken(result.token);
-          const apiUser: AuthUser = {
-            id: result.user.id,
-            email: result.user.email,
-            firstName: result.user.firstName,
-            lastName: result.user.lastName,
-            role: result.user.role as UserRole,
-          };
-          setUser(apiUser);
-          setCurrentRole(apiUser.role);
-          localStorage.setItem(STORAGE_KEY, apiUser.role);
-        }
-      } catch (err: any) {
-        setLoginError(err.message || "Login failed");
-        throw err;
+      const result = await loginMutation.mutateAsync({ email, password: _password });
+      if (result.token) {
+        localStorage.setItem(TOKEN_KEY, result.token);
+        setToken(result.token);
+        const apiUser: AuthUser = {
+          id: result.user.id,
+          email: result.user.email,
+          firstName: result.user.firstName,
+          lastName: result.user.lastName,
+          role: result.user.role as UserRole,
+        };
+        setUser(apiUser);
+        setCurrentRole(apiUser.role);
+        localStorage.setItem(STORAGE_KEY, apiUser.role);
       }
     },
     [loginMutation]

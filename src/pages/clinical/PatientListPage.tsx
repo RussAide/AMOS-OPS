@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { AppShell } from "@/components/shell/AppShell";
-import { TopBar } from "@/components/shell/TopBar";
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
 import {
@@ -68,9 +66,8 @@ export function PatientListPage() {
   const totalPages = Math.ceil((data?.total ?? 0) / pageSize);
 
   return (
-    <AppShell>
-      <TopBar />
-      <div className="px-6 pt-4">
+    <>
+      <div className="px-4 md:px-6 pt-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -311,6 +308,8 @@ export function PatientListPage() {
           </div>
         </div>
       )}
-    </AppShell>
+    </>
   );
 }
+
+export default PatientListPage;

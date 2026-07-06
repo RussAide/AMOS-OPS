@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1783207132068,
+      "tag": "0000_concerned_kronos",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1783250000000,
+      "tag": "0001_boundary_enforcement",
+      "breakpoints": true
+    }
+  ]
+}

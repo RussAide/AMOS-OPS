@@ -1,0 +1,173 @@
+{
+  "pilot_case": "Case 2: Incomplete Referral",
+  "task_id": "D012-02",
+  "source_doc": "D-012 (Pilot Workflow Activation Pack)",
+  "acceptance": "Case 2 proves gap detection",
+  "timestamp": "2025-07-05T00:00:00.000Z",
+  "patient": {
+    "id": "patient-b-maya-thompson",
+    "mrn": "MRN-C2-20250705-001",
+    "name": "Maya Thompson",
+    "age": 14,
+    "gender": "female",
+    "date_of_birth": "2011-07-05",
+    "presenting_problem": "Behavioral: defiance at school, verbal aggression toward peers, declining academic performance, two disciplinary referrals in past 60 days",
+    "referral_source": {
+      "type": "school",
+      "name": "Austin Independent School District - Counseling Department",
+      "phone": "(512) 555-0200",
+      "referred_by": "Ms. Jennifer Walsh, School Counselor"
+    },
+    "guardians": [
+      {
+        "name": "Angela Thompson",
+        "relationship": "Mother",
+        "phone": "(512) 555-0142",
+        "email": "angela.thompson@email.com"
+      },
+      {
+        "name": "Marcus Thompson",
+        "relationship": "Father",
+        "phone": "(512) 555-0143"
+      }
+    ]
+  },
+  "workflow": {
+    "definition_id": "WF-001",
+    "definition_name": "Referral Intake",
+    "instance_id": "auto-increment",
+    "entity_type": "patient",
+    "current_status": "RECEIVED",
+    "assigned_to": "pilot-intake-coordinator@adolbi.com",
+    "escalation_level": 0
+  },
+  "intake_pipeline": {
+    "current_step": "disposition",
+    "overall_status": "in_progress",
+    "is_blocked": false,
+    "block_reason": null,
+    "referral_received_completed": true,
+    "screening_completed": true,
+    "screening_result": "pass",
+    "guardian_consent_obtained": true,
+    "youth_assent_obtained": true,
+    "hipaa_acknowledgment": true,
+    "rights_acknowledgment": true,
+    "consent_completed": true,
+    "benefits_verified": true,
+    "authorization_required": true,
+    "authorization_submitted": true,
+    "authorization_approved": false,
+    "payer_completed": true,
+    "disposition": "admit",
+    "bed_assigned": "Bed-3A",
+    "referral_elapsed_hours": 48,
+    "screening_elapsed_hours": 24,
+    "consent_elapsed_hours": 72,
+    "payer_elapsed_hours": 48
+  },
+  "referral_checklist": {
+    "items_total": 10,
+    "items_completed": 10,
+    "all_items_complete": true,
+    "items": [
+      { "item": 1, "name": "referral_form_received", "completed": true, "note": "Received Day 1 from school counselor" },
+      { "item": 2, "name": "demographics_complete", "completed": true, "note": "Verified Day 1" },
+      { "item": 3, "name": "insurance_verified", "completed": true, "note": "Initially expired, re-verified Day 7" },
+      { "item": 4, "name": "consent_for_release", "completed": true, "note": "Guardian consent received Day 3" },
+      { "item": 5, "name": "psychiatric_history", "completed": true, "note": "Obtained with records" },
+      { "item": 6, "name": "medical_records_requested", "completed": true, "note": "Requested Day 1, received Day 5" },
+      { "item": 7, "name": "educational_records_requested", "completed": true, "note": "GAP: Requested Day 1, received Day 5" },
+      { "item": 8, "name": "legal_status_confirmed", "completed": true, "note": "Joint custody, verified Day 3" },
+      { "item": 9, "name": "guardian_contact_verified", "completed": true, "note": "Both parents contacted Day 1" },
+      { "item": 10, "name": "service_activation_date_set", "completed": true, "note": "Scheduled Day 10" }
+    ]
+  },
+  "gaps": [
+    {
+      "gap_id": "GAP-1",
+      "type": "missing_document",
+      "severity": "BLOCKING",
+      "title": "Missing Guardian Consent Form",
+      "description": "Referral received WITHOUT signed guardian consent form",
+      "missing_document": "Guardian Consent for Treatment (Form ICC-001)",
+      "step_blocked": "consent",
+      "detected_day": 1,
+      "resolved_day": 3,
+      "resolution_days": 2,
+      "resolution_method": "Guardian faxed signed form",
+      "status": "RESOLVED"
+    },
+    {
+      "gap_id": "GAP-2",
+      "type": "missing_document",
+      "severity": "BLOCKING",
+      "title": "Missing School Records",
+      "description": "Referral received WITHOUT school records/academic history",
+      "missing_documents": ["School records", "IEP/504 evaluations", "Disciplinary history"],
+      "step_blocked": "referral",
+      "detected_day": 1,
+      "resolved_day": 5,
+      "resolution_days": 4,
+      "resolution_method": "AISD counseling department faxed records",
+      "status": "RESOLVED"
+    },
+    {
+      "gap_id": "GAP-3",
+      "type": "insurance_issue",
+      "severity": "WARNING",
+      "title": "Insurance Expired",
+      "description": "Medicaid eligibility shows EXPIRED",
+      "payer": "Texas Medicaid (STAR Health)",
+      "policy_number": "TMP-4455-7788",
+      "error": "Eligibility expired 2025-06-30",
+      "step_blocked": "payer",
+      "detected_day": 7,
+      "resolved_day": 7,
+      "resolution_hours": 4,
+      "resolution_method": "Guardian provided updated Medicaid card",
+      "status": "RESOLVED"
+    }
+  ],
+  "timeline": [
+    { "day": 1, "stage": "Referral received", "status": "INCOMPLETE", "gaps_active": 2, "evidence": "Missing: guardian consent, school records. System auto-generated 2 gap alerts." },
+    { "day": 1, "stage": "Gap alert", "status": "ALERT", "gaps_active": 2, "evidence": "2 BLOCKING alerts created in notifications table." },
+    { "day": 3, "stage": "Partial docs received", "status": "FOLLOW-UP", "gaps_active": 1, "evidence": "Guardian consent received (audit log). School records still missing." },
+    { "day": 5, "stage": "Complete", "status": "ACCEPTED", "gaps_active": 0, "evidence": "All documents received. WF-001: SCREENING → ACCEPTED. Checklist 10/10." },
+    { "day": 7, "stage": "Insurance issue", "status": "ISSUE", "gaps_active": 1, "evidence": "Insurance expired detected during payer verification." },
+    { "day": 7, "stage": "Resolution", "status": "RESOLVED", "gaps_active": 0, "evidence": "Insurance updated and re-verified. Benefits confirmed." },
+    { "day": 10, "stage": "Auth submitted", "status": "SUBMITTED", "gaps_active": 0, "evidence": "Authorization request sent via portal. Status: pending approval." }
+  ],
+  "workflow_transitions": [
+    { "from": "", "to": "RECEIVED", "day": 1, "reason": "Referral received - incomplete documentation" },
+    { "from": "RECEIVED", "to": "SCREENING", "day": 1, "reason": "Screening initiated. GAP ALERT: Missing guardian consent form and school records." },
+    { "from": "SCREENING", "to": "ACCEPTED", "day": 5, "reason": "ALL GAPS RESOLVED. Guardian consent received (Day 3). School records received (Day 5). Insurance updated (Day 7)." }
+  ],
+  "audit_log_summary": [
+    { "action": "gap_detected", "actor": "system", "day": 1, "old_values": "guardian_consent: null, school_records: null", "new_values": "guardian_consent: MISSING, school_records: MISSING, alerts: 2" },
+    { "action": "partial_documentation_received", "actor": "guardian", "day": 3, "old_values": "guardian_consent: MISSING, school_records: MISSING", "new_values": "guardian_consent: RECEIVED, school_records: STILL_MISSING" },
+    { "action": "all_documentation_complete", "actor": "intake-coordinator", "day": 5, "old_values": "overall: INCOMPLETE", "new_values": "overall: COMPLETE, status: ACCEPTED" },
+    { "action": "insurance_expired_detected", "actor": "system", "day": 7, "old_values": "insurance_status: active", "new_values": "insurance_status: EXPIRED, payer_verification: FAILED" },
+    { "action": "insurance_updated_verified", "actor": "intake-coordinator", "day": 7, "old_values": "insurance_status: EXPIRED", "new_values": "insurance_status: ACTIVE, eligibility: approved" },
+    { "action": "authorization_submitted", "actor": "intake-coordinator", "day": 10, "old_values": "auth_submitted: false", "new_values": "auth_submitted: true, status: pending_approval" }
+  ],
+  "database_records_created": {
+    "youth_profiles": 1,
+    "workflow_instances_v2": 1,
+    "workflow_transitions_v2": 3,
+    "intake_pipeline": 1,
+    "referral_checklists": 1,
+    "notifications": 3,
+    "audit_logs": 6,
+    "status_transitions": 5,
+    "authorizations": 1
+  },
+  "acceptance_verdict": {
+    "gap_detection_works": true,
+    "system_flags_incomplete": true,
+    "gaps_tracked_until_resolved": true,
+    "partial_resolution_supported": true,
+    "full_resolution_advances_workflow": true,
+    "overall": "PASSED"
+  }
+}

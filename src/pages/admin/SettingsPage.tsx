@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { AppShell } from "@/components/shell/AppShell";
-import { TopBar } from "@/components/shell/TopBar";
 import { trpc } from "@/providers/trpc";
 import { useAuth, ROLE_DEFINITIONS } from "@/hooks/useAuth";
 import { Settings, Users, ShieldCheck, KeyRound, UserCog, Trash2, CheckCircle, XCircle, Save } from "lucide-react";
@@ -18,9 +16,9 @@ const PERM_LABELS: Record<string, string> = {
 export function SettingsPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"users" | "roles" | "access">("users");
-  const { data: users, refetch } = trpc.user.list.useQuery();
-  const updateMutation = trpc.user.update.useMutation({ onSuccess: () => refetch() });
-  const deleteMutation = trpc.user.delete.useMutation({ onSuccess: () => refetch() });
+  const { data: users, refetch } = trpc.auth.listUsers.useQuery();
+  const updateMutation = trpc.auth.updateUser.useMutation({ onSuccess: () => refetch() });
+  const deleteMutation = trpc.auth.deleteUser.useMutation({ onSuccess: () => refetch() });
 
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ role: "", department: "" });
@@ -46,9 +44,8 @@ export function SettingsPage() {
   const isSuperAdmin = user?.role === "super-admin";
 
   return (
-    <AppShell>
-      <TopBar />
-      <div className="px-6 pt-4">
+    
+      <div className="px-4 md:px-6 pt-4">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#374151" }}>
@@ -214,6 +211,7 @@ export function SettingsPage() {
           </div>
         )}
       </div>
-    </AppShell>
   );
 }
+
+export default SettingsPage;

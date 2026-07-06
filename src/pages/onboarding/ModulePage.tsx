@@ -19,3 +19,5 @@ export function ModulePage() {
 
   return <ModuleContentViewer moduleId={moduleId} />;
 }
+
+export default ModulePage;

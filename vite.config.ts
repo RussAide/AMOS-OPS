@@ -25,6 +25,16 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, "dist/public"),
     emptyOutDir: true,
-    cssMinify: false,
+    cssMinify: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          recharts: ["recharts"],
+          vendor: ["react", "react-dom", "react-router-dom"],
+          trpc: ["@trpc/client", "@trpc/react-query", "@tanstack/react-query"],
+          lucide: ["lucide-react"],
+        },
+      },
+    },
   },
 });

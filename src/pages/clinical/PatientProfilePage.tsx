@@ -1,7 +1,5 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { AppShell } from "@/components/shell/AppShell";
-import { TopBar } from "@/components/shell/TopBar";
 import { trpc } from "@/providers/trpc";
 import {
   HeartPulse, ArrowLeft, Calendar, Phone, Mail, MapPin,
@@ -42,17 +40,13 @@ export function PatientProfilePage() {
 
   if (isLoading) {
     return (
-      <AppShell><TopBar />
-        <div className="px-6 pt-4"><p className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>Loading patient...</p></div>
-      </AppShell>
+      <div className="px-4 md:px-6 pt-4"><p className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>Loading patient...</p></div>
     );
   }
 
   if (!data) {
     return (
-      <AppShell><TopBar />
-        <div className="px-6 pt-4"><p className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>Patient not found</p></div>
-      </AppShell>
+      <div className="px-4 md:px-6 pt-4"><p className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>Patient not found</p></div>
     );
   }
 
@@ -78,9 +72,8 @@ export function PatientProfilePage() {
   ];
 
   return (
-    <AppShell>
-      <TopBar />
-      <div className="px-6 pt-4">
+    <>
+      <div className="px-4 md:px-6 pt-4">
         {/* Back + Header */}
         <button onClick={() => navigate("/clinical/patients")} className="flex items-center gap-1 text-[12px] mb-4 hover:underline" style={{ color: "#245C5A" }}>
           <ArrowLeft size={14} /> Back to Patient Registry
@@ -424,7 +417,7 @@ export function PatientProfilePage() {
       {showNewSession && (
         <NewSessionModal patientId={patientId} onClose={() => setShowNewSession(false)} onSubmit={(data) => createSession.mutate(data)} isPending={createSession.isPending} />
       )}
-    </AppShell>
+  </>
   );
 }
 
@@ -556,3 +549,5 @@ function NewSessionModal({ patientId, onClose, onSubmit, isPending }: {
     </div>
   );
 }
+
+export default PatientProfilePage;

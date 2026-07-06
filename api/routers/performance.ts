@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "../middleware";
+import { createRouter, publicQuery, authedQuery, auditLog } from "../middleware";
 import { getDb } from "../queries/connection";
-import { performanceReviews } from "@db/schema";
-import { eq, desc } from "drizzle-orm";
+import { performanceReviews, hrPeople } from "@db/schema";
+import { eq, desc, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export const performanceRouter = createRouter({
@@ -20,6 +20,16 @@ export const performanceRouter = createRouter({
           .all();
       }
       return db.select().from(performanceReviews).orderBy(desc(performanceReviews.createdAt)).all();
+    }),
+
+  // ─── Get single review ─────────────────────────────────────
+  getById: publicQuery
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const review = await db.select().from(performanceReviews).where(eq(performanceReviews.id, input.id)).get();
+      if (!review) throw new Error("Review not found");
+      return review;
     }),
 
   // ─── Create review ─────────────────────────────────────────
@@ -89,6 +99,36 @@ export const performanceRouter = createRouter({
       return db.select().from(performanceReviews).where(eq(performanceReviews.id, id)).get();
     }),
 
+  // ─── Sign off review ───────────────────────────────────────
+  signOff: authedQuery
+    .input(
+      z.object({
+        id: z.string(),
+        signedOffBy: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = getDb();
+      const actor = ctx.user?.email ?? "unknown";
+
+      await db
+        .update(performanceReviews)
+        .set({
+          signedOffBy: input.signedOffBy,
+          signedOffAt: new Date().toISOString(),
+        })
+        .where(eq(performanceReviews.id, input.id));
+
+      auditLog({
+        action: "performance:signOff",
+        actor,
+        resource: `review:${input.id}`,
+        details: `Review signed off by ${input.signedOffBy}`,
+      });
+
+      return db.select().from(performanceReviews).where(eq(performanceReviews.id, input.id)).get();
+    }),
+
   // ─── Delete review ─────────────────────────────────────────
   delete: publicQuery
     .input(z.object({ id: z.string() }))
@@ -97,4 +137,41 @@ export const performanceRouter = createRouter({
       await db.delete(performanceReviews).where(eq(performanceReviews.id, input.id));
       return { success: true };
     }),
+
+  // ─── Dashboard stats ───────────────────────────────────────
+  dashboard: publicQuery.query(async () => {
+    const db = getDb();
+    const allReviews = await db.select().from(performanceReviews).all();
+    const allPeople = await db.select().from(hrPeople).all();
+
+    const byType = {
+      "30-day": allReviews.filter((r) => r.reviewType === "30-day").length,
+      "90-day": allReviews.filter((r) => r.reviewType === "90-day").length,
+      annual: allReviews.filter((r) => r.reviewType === "annual").length,
+      corrective: allReviews.filter((r) => r.reviewType === "corrective").length,
+    };
+
+    const byRating = {
+      exceeds: allReviews.filter((r) => r.overallRating === "exceeds").length,
+      meets: allReviews.filter((r) => r.overallRating === "meets").length,
+      "needs-improvement": allReviews.filter((r) => r.overallRating === "needs-improvement").length,
+      unsatisfactory: allReviews.filter((r) => r.overallRating === "unsatisfactory").length,
+      unset: allReviews.filter((r) => !r.overallRating).length,
+    };
+
+    const pendingSignOff = allReviews.filter((r) => r.reviewedBy && !r.signedOffBy).length;
+
+    // People without recent reviews
+    const peopleWithReviews = new Set(allReviews.map((r) => r.personId));
+
+    return {
+      totalReviews: allReviews.length,
+      byType,
+      byRating,
+      pendingSignOff,
+      peopleWithReviews: peopleWithReviews.size,
+      totalPeople: allPeople.length,
+      peopleWithoutReviews: allPeople.length - peopleWithReviews.size,
+    };
+  }),
 });

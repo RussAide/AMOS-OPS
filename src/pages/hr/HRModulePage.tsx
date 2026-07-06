@@ -98,7 +98,8 @@ export function HRModulePage() {
   };
 
   return (
-    <div className="p-6">
+    
+      <div className="p-6">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 mb-4">
         <button onClick={() => navigate("/hr")} className="flex items-center gap-1 text-[13px] font-medium hover:underline" style={{ color: "#245C5A" }}>
@@ -337,3 +338,5 @@ export function HRModulePage() {
     </div>
   );
 }
+
+export default HRModulePage;

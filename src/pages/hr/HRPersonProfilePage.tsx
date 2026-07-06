@@ -38,7 +38,9 @@ export function HRPersonProfilePage() {
 
   if (!person) {
     return (
-      <div className="p-6 text-center">
+      <>
+
+        <div className="p-6 text-center">
         <h2 className="text-[18px] font-bold mb-2" style={{ color: "var(--topbar-title)" }}>
           Person Not Found
         </h2>
@@ -50,6 +52,7 @@ export function HRPersonProfilePage() {
           Back to Command Center
         </button>
       </div>
+      </>
     );
   }
 
@@ -66,8 +69,12 @@ export function HRPersonProfilePage() {
   const activationProgress = Math.round((completedActivation / activationModules.length) * 100);
 
   return (
-    <div className="p-6">
-      {/* Breadcrumb */}
+    
+      <>
+
+    
+        <div className="p-6">
+        {/* Breadcrumb */}
       <div className="flex items-center gap-2 mb-4">
         <button
           onClick={() => navigate("/hr")}
@@ -298,7 +305,8 @@ export function HRPersonProfilePage() {
               const hasIssue = status?.category === "terminal" || statusId === "cr-expiring" || statusId === "cr-expired" || statusId === "pf-incomplete";
 
               return (
-                <div
+                <>
+                 <div
                   key={modId}
                   onClick={() => navigate(`/hr/${modId}`)}
                   className="rounded-lg border p-3 cursor-pointer transition-all hover:shadow-sm"
@@ -326,6 +334,7 @@ export function HRPersonProfilePage() {
                     <span className="text-[11px]" style={{ color: "#9CA3AF" }}>--</span>
                   )}
                 </div>
+                </>
               );
             })}
           </div>
@@ -356,5 +365,8 @@ export function HRPersonProfilePage() {
         </div>
       )}
     </div>
+  </>
   );
 }
+
+export default HRPersonProfilePage;

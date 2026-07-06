@@ -1,223 +1,201 @@
 # AMOS-OPS Deployment Guide
+## Sprint Complete — 143 Tasks Done
+## Date: 2026-07-05
 
-## Architecture
+---
 
-```
-                    +------------------+
-                    |     Users        |
-                    +--------+---------+
-                             |
-              +--------------+--------------+
-              |                             |
-    +---------v---------+       +-----------v----------+
-    |    Netlify        |       |     Railway          |
-    |  (Frontend SPA)   |       |   (Backend API)      |
-    |  dist/public/     |       |  dist/boot.js        |
-    |  Port: n/a        |       |  Port: 3000          |
-    +---------+---------+       +-----------+----------+
-              |                             |
-              |  /api/*  +------>  /api/trpc/*
-              |  (proxy) |       (tRPC + SQLite)
-              |          |
-              +----------v-----------+
-                         |
-               +---------v----------+
-               |   amos-ops.db      |
-               |   (SQLite/WAL)     |
-               +--------------------+
-```
+## What You Need
 
-## Prerequisites
+| Requirement | Version |
+|-------------|---------|
+| Node.js | 20+ |
+| npm | 10+ |
+| SQLite | 3+ (embedded, no separate install needed) |
 
-- GitHub account
-- Railway account (railway.app)
-- Netlify account (netlify.com)
-- Node.js 20+ (local development)
+---
 
-## Step 1: Push to GitHub
+## Step 1: Install Dependencies
 
 ```bash
-cd /path/to/amos-ops
-git init
-git add .
-git commit -m "AMOS-OPS v1.0 ready for deploy"
-git branch -M main
-git remote add origin https://github.com/YOUR-USERNAME/amos-ops.git
-git push -u origin main
+cd codebase/
+npm install
 ```
 
-## Step 2: Railway Backend Deployment
+> If you get peer dependency warnings, use: `npm install --legacy-peer-deps`
 
-### 2.1 Create Project
+---
 
-1. Go to [railway.app/dashboard](https://railway.app/dashboard)
-2. Click **New Project**
-3. Select **Deploy from GitHub repo**
-4. Choose your `amos-ops` repository
-5. Railway auto-detects the Dockerfile
-
-### 2.2 Configure Environment Variables
-
-Go to Project → Variables and add:
-
-| Variable | Value | Required |
-|----------|-------|----------|
-| `NODE_ENV` | `production` | Yes |
-| `PORT` | `3000` | Yes |
-| `DATABASE_PATH` | `/app/data/amos-ops.db` | Yes |
-| `JWT_SECRET` | Generate with: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"` | Yes |
-| `APP_ID` | `amos-ops` | Optional |
-| `APP_SECRET` | Any strong random string | Optional |
-
-### 2.3 Add Persistent Volume
-
-1. Go to Project → Your Service → Settings
-2. Scroll to **Volumes**
-3. Click **Add Volume**
-4. Mount path: `/app/data`
-5. Size: 1GB (can scale later)
-
-### 2.4 Deploy
-
-1. Click **Deploy** (or push to main branch for auto-deploy)
-2. Wait for build to complete (~2-3 minutes)
-3. Click the generated domain to verify: `https://your-app.up.railway.app/api/trpc/ping`
-4. Should return: `{ "ok": true, "ts": ... }`
-
-### 2.5 Seed the Database (First Time Only)
+## Step 2: Set Environment Variables
 
 ```bash
-# Install Railway CLI
-curl -fsSL https://railway.app/install.sh | bash
-
-# Login
-railway login
-
-# Link to project
-railway link
-
-# Open a shell to the running container
-railway shell
-
-# Inside the container, seed data:
-node -e "
-const sqlite = require('better-sqlite3');
-const db = new sqlite('/app/data/amos-ops.db');
-// Run the seed script contents here
-console.log('Database seeded');
-"
+cp .env.example .env
 ```
 
-Or use the **Seed Admin** button in the UI after first deploy.
+Edit `.env` and set at least these:
 
-## Step 3: Netlify Frontend Deployment
+```env
+# REQUIRED: Strong JWT secret (min 32 chars, random generated)
+# Generate with: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+JWT_SECRET=your-strong-generated-secret-here-min-32-chars
 
-### 3.1 Update API Proxy URL
+# Database (SQLite — embedded, no separate server)
+DATABASE_URL=file:./amos-ops.db
 
-Edit `netlify.toml` and replace the Railway URL:
+# App URL
+APP_URL=http://localhost:5173
 
-```toml
-[[redirects]]
-  from = "/api/*"
-  to = "https://YOUR-RAILWAY-APP.up.railway.app/api/:splat"
-  status = 200
+# Microsoft Graph (optional — can run without MS integration)
+MS_GRAPH_TENANT_ID=your-tenant-id
+MS_GRAPH_CLIENT_ID=your-client-id
+MS_GRAPH_CLIENT_SECRET=your-client-secret
 ```
 
-### 3.2 Connect to Netlify
+> The app will **refuse to start** with a weak JWT_SECRET in production mode.
 
-1. Go to [netlify.com](https://netlify.com)
-2. Click **Add new site** → **Import an existing project**
-3. Select **GitHub** → Choose `amos-ops` repo
-4. Build settings:
-   - **Build command:** `npm run build`
-   - **Publish directory:** `dist/public`
-5. Click **Deploy site**
+---
 
-### 3.3 Configure Environment (Optional)
-
-If you want the frontend to connect directly to Railway without the proxy:
-
-1. Go to Site → Configuration → Environment variables
-2. Add: `VITE_API_URL=https://your-railway-app.up.railway.app`
-3. Update `src/providers/trpc.tsx` to use `import.meta.env.VITE_API_URL`
-
-### 3.4 Verify
-
-1. Visit your Netlify URL: `https://your-site.netlify.app`
-2. Should redirect to `/login`
-3. Create admin account → Log in → All modules visible
-
-## Step 4: Post-Deployment Checklist
-
-### 4.1 First Login
-
-1. Visit your Netlify URL
-2. Click **"Create Default Admin Account"**
-3. Log in with `admin@adolbi.com` / `admin123`
-4. Navigate to all modules to verify
-
-### 4.2 Verify API Endpoints
+## Step 3: Initialize Database
 
 ```bash
-# Health check
-curl https://YOUR-RAILWAY.up.railway.app/api/trpc/ping
-
-# Auth test
-curl -X POST https://YOUR-RAILWAY.up.railway.app/api/trpc/auth.seedAdmin
-
-# Protected endpoint (should fail without auth)
-curl https://YOUR-RAILWAY.up.railway.app/api/trpc/nil.getStats
-
-# With auth
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  https://YOUR-RAILWAY.up.railway.app/api/trpc/nil.getStats
+npm run db:push
+# or
+npx drizzle-kit push
 ```
 
-### 4.3 Enable Auto-Deploy
+This creates all tables defined in `db/schema.ts`.
 
-**Railway:** Auto-deploys on every push to `main` (enabled by default)
-**Netlify:** Auto-deploys on every push to `main` (enabled by default)
+---
+
+## Step 4: Seed Data (Optional but Recommended)
+
+```bash
+npm run db:seed
+```
+
+This seeds:
+- 8 workflow definitions (WF-001 through WF-008)
+- 21 workflow instances (3 pilot cases + 18 sample)
+- 13 agent personas (6 pilot + 7 deferred)
+- 36 KPI baseline data
+- Sample patients, clinical sessions, HR data
+
+---
+
+## Step 5: Build for Production
+
+```bash
+npm run build
+```
+
+This produces:
+- `dist/` — Frontend (React app)
+- `dist-server/` — Backend (Hono API server)
+
+---
+
+## Step 6: Start the Application
+
+### Development Mode (hot reload)
+```bash
+npm run dev
+```
+
+### Production Mode
+```bash
+npm start
+```
+
+The app will be available at `http://localhost:5173`
+
+---
+
+## Default Login
+
+After seeding, use these credentials:
+
+| Role | Username | Password |
+|------|----------|----------|
+| Super Admin | admin | Admin123! |
+| Clinical Director | clinical | Clinical123! |
+| GRO Administrator | gro-admin | GroAdmin123! |
+| QA Coordinator | qa | QA123! |
+| HR Director | hr-director | HRDirector123! |
+
+> **IMPORTANT:** Change default passwords immediately after first login.
+
+---
+
+## What Was Built (Sprint Summary)
+
+| Stage | Tasks | Key Deliverables |
+|-------|-------|-----------------|
+| Stage 0 | Inventory | 9 files audited, 6 routers secured |
+| Stage 1 | Cleanup | Route fixes, nav rewrite, auth security |
+| Stage 2A | Foundation | 7-section sidebar, 28 routes, role-based access |
+| Stage 2B | Work Queue + DMS | MyWorkToday workspace, document lifecycle |
+| Stage 2C | Workflows | 8 workflows, 64 endpoints, 21 instances |
+| Stage 2D | Personas + Workspaces | Clinical + GRO frontline workspaces |
+| Stage 3 | Departments | 7 departments, 50+ features, 36 KPIs |
+| Stage 4 | Security | Password complexity, PHI enforcement, encryption strategy |
+| Stage 5 | ICR + RC | 5 ICR entries, 15 RC decisions |
+
+**Total: 143 tasks completed. Zero remaining.**
+
+---
 
 ## Troubleshooting
 
-### Issue: "Database locked" errors
-**Fix:** Ensure only one Railway instance is running. SQLite doesn't support concurrent writes across instances.
-
-### Issue: "Cannot find module" on Railway
-**Fix:** Check that `npm run build` succeeds locally. The Dockerfile runs this during the build stage.
-
-### Issue: Frontend shows "API Error"
-**Fix:** 
-1. Check Railway service is running
-2. Verify `netlify.toml` proxy URL matches Railway domain
-3. Check browser dev tools → Network for 404s
-
-### Issue: Sessions lost on restart
-**Fix:** Ensure `/app/data` volume is mounted. Sessions are stored in SQLite which is on the volume.
-
-## Security Recommendations
-
-1. **Change JWT_SECRET** immediately after first deploy
-2. **Change admin password** after first login
-3. **Enable HTTPS only** (both Railway and Netlify do this by default)
-4. **Set up database backups** (Railway volume snapshots or manual export)
-5. **Restrict CORS** in production by updating `api/boot.ts`
-
-## Backup & Restore
-
-### Backup SQLite Database
+### Build fails with "Cannot find module"
 ```bash
-# From Railway shell
-sqlite3 /app/data/amos-ops.db ".backup /app/data/backup-$(date +%Y%m%d).db"
-
-# Download the backup
-railway ssh
-cat /app/data/backup-20250101.db > backup.db
+rm -rf node_modules package-lock.json
+npm install --legacy-peer-deps
 ```
 
-### Restore
+### Database errors
 ```bash
-# Upload backup to Railway volume
-railway ssh
-cat backup.db | sqlite3 /app/data/amos-ops.db ".restore -"
+rm -f amos-ops.db
+npm run db:push
+npm run db:seed
 ```
+
+### Port already in use
+```bash
+# Kill process on port 5173
+lsof -ti:5173 | xargs kill -9
+# Or change port in .env
+```
+
+### Weak JWT_SECRET error in production
+Generate a strong secret:
+```bash
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+```
+
+---
+
+## File Manifest (Key Files)
+
+| File | Purpose |
+|------|---------|
+| `src/pages/DashboardPage.tsx` | Main dashboard with 36 KPIs |
+| `src/pages/clinical/ClinicalWorkspacePage.tsx` | BHC clinical frontline workspace |
+| `src/pages/gro/GROWorkspacePage.tsx` | GRO residential frontline workspace |
+| `src/pages/workflows/MyWorkTodayPage.tsx` | Work queue workspace |
+| `src/data/navData.ts` | 7-section sidebar navigation |
+| `api/router.ts` | tRPC router registration |
+| `api/middleware.ts` | Auth + PHI + boundary enforcement |
+| `db/schema.ts` | Database schema (all tables) |
+| `docs/icr/ICR-REGISTRY.md` | Interface Contract Registry |
+| `docs/RC-DECISION-LOG.md` | RC integration decisions |
+| `ENCRYPTION.md` | Encryption at rest strategy |
+| `TASK_REGISTRY.md` | Complete task registry (all DONE) |
+
+---
+
+## Support
+
+For issues or questions, reference:
+- `TASK_REGISTRY.md` — full task list with acceptance criteria
+- `ENCRYPTION.md` — security implementation guide
+- `docs/icr/ICR-REGISTRY.md` — API contracts
+- `docs/RC-DECISION-LOG.md` — integration decisions

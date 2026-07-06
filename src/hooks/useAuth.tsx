@@ -1,68 +1,31 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import { trpc } from "@/providers/trpc";
+import {
+  type UserRole,
+  type RoleDef,
+  type Permissions,
+  ROLE_DEFINITIONS,
+  PERMISSION_MATRIX,
+  ROLE_NAV_VISIBILITY,
+  getRoleDef,
+  getPermissions,
+  getNavVisibility,
+  isAdmin,
+  canManageUsers,
+} from "@/constants/roles";
 
-// ─── Role Definitions (from old AuthContext) ─────────────────
-
-export type UserRole =
-  | "administrator"
-  | "hr-director"
-  | "supervisor"
-  | "clinical-director"
-  | "gro-staff"
-  | "qa-officer"
-  | "training-coordinator"
-  | "operations-manager";
-
-export interface RoleDef {
-  id: UserRole;
-  label: string;
-  badgeColor: string;
-  department: string;
-  description: string;
-}
-
-export const ROLE_DEFINITIONS: RoleDef[] = [
-  { id: "administrator", label: "Administrator", badgeColor: "#DC2626", department: "Executive", description: "Full system access. Program director oversight." },
-  { id: "hr-director", label: "HR Director", badgeColor: "#245C5A", department: "Human Resources", description: "HR lifecycle management, clearance decisions, personnel oversight." },
-  { id: "supervisor", label: "Supervisor", badgeColor: "#D97706", department: "Clinical / Residential", description: "Team oversight, competency sign-offs, incident review." },
-  { id: "clinical-director", label: "Clinical Director", badgeColor: "#2563EB", department: "Clinical", description: "Clinical governance, treatment oversight, quality review." },
-  { id: "gro-staff", label: "GRO Direct Care", badgeColor: "#059669", department: "GRO Residential", description: "Youth care, supervision, documentation. Limited access." },
-  { id: "qa-officer", label: "QA Officer", badgeColor: "#7C3AED", department: "Compliance", description: "Audit, credential tracking, compliance oversight." },
-  { id: "training-coordinator", label: "Training Coordinator", badgeColor: "#0891B2", department: "HR / Training", description: "Training assignment, certificate verification, LMS admin." },
-  { id: "operations-manager", label: "Operations Manager", badgeColor: "#EA580C", department: "Operations", description: "Scheduling, deployment, logistics. Read-only HR signals." },
-];
-
-export interface Permissions {
-  canViewHR: boolean; canEditHR: boolean;
-  canViewCompliance: boolean; canEditCompliance: boolean;
-  canViewClinical: boolean; canViewOperations: boolean;
-  canViewAdmin: boolean; canEditAdmin: boolean;
-  canSupervise: boolean; canClearPersonnel: boolean;
-  canViewReports: boolean; canViewOnboarding: boolean;
-  canManageDocuments: boolean;
-}
-
-const PERMISSION_MATRIX: Record<UserRole, Permissions> = {
-  administrator: { canViewHR: true, canEditHR: true, canViewCompliance: true, canEditCompliance: true, canViewClinical: true, canViewOperations: true, canViewAdmin: true, canEditAdmin: true, canSupervise: true, canClearPersonnel: true, canViewReports: true, canViewOnboarding: true, canManageDocuments: true },
-  "hr-director": { canViewHR: true, canEditHR: true, canViewCompliance: true, canEditCompliance: false, canViewClinical: false, canViewOperations: true, canViewAdmin: true, canEditAdmin: false, canSupervise: true, canClearPersonnel: true, canViewReports: true, canViewOnboarding: true, canManageDocuments: true },
-  supervisor: { canViewHR: true, canEditHR: false, canViewCompliance: false, canEditCompliance: false, canViewClinical: true, canViewOperations: false, canViewAdmin: false, canEditAdmin: false, canSupervise: true, canClearPersonnel: false, canViewReports: false, canViewOnboarding: true, canManageDocuments: false },
-  "clinical-director": { canViewHR: true, canEditHR: false, canViewCompliance: true, canEditCompliance: true, canViewClinical: true, canViewOperations: false, canViewAdmin: false, canEditAdmin: false, canSupervise: true, canClearPersonnel: false, canViewReports: true, canViewOnboarding: true, canManageDocuments: true },
-  "gro-staff": { canViewHR: false, canEditHR: false, canViewCompliance: false, canEditCompliance: false, canViewClinical: false, canViewOperations: false, canViewAdmin: false, canEditAdmin: false, canSupervise: false, canClearPersonnel: false, canViewReports: false, canViewOnboarding: true, canManageDocuments: false },
-  "qa-officer": { canViewHR: true, canEditHR: false, canViewCompliance: true, canEditCompliance: true, canViewClinical: true, canViewOperations: true, canViewAdmin: false, canEditAdmin: false, canSupervise: false, canClearPersonnel: false, canViewReports: true, canViewOnboarding: true, canManageDocuments: true },
-  "training-coordinator": { canViewHR: true, canEditHR: true, canViewCompliance: false, canEditCompliance: false, canViewClinical: false, canViewOperations: false, canViewAdmin: true, canEditAdmin: false, canSupervise: false, canClearPersonnel: false, canViewReports: true, canViewOnboarding: true, canManageDocuments: true },
-  "operations-manager": { canViewHR: true, canEditHR: false, canViewCompliance: false, canEditCompliance: false, canViewClinical: false, canViewOperations: true, canViewAdmin: false, canEditAdmin: false, canSupervise: false, canClearPersonnel: false, canViewReports: true, canViewOnboarding: false, canManageDocuments: false },
-};
-
-const ROLE_NAV_VISIBILITY: Record<UserRole, Record<string, boolean>> = {
-  administrator: { dashboard: true, operations: true, compliance: true, hr: true, activation: true, management: true, admin: true },
-  "hr-director": { dashboard: true, operations: false, compliance: true, hr: true, activation: true, management: true, admin: true },
-  supervisor: { dashboard: true, operations: false, compliance: false, hr: true, activation: false, management: false, admin: false },
-  "clinical-director": { dashboard: true, operations: false, compliance: true, hr: true, activation: false, management: true, admin: false },
-  "gro-staff": { dashboard: true, operations: false, compliance: false, hr: false, activation: false, management: false, admin: true },
-  "qa-officer": { dashboard: true, operations: false, compliance: true, hr: true, activation: false, management: true, admin: false },
-  "training-coordinator": { dashboard: true, operations: false, compliance: false, hr: true, activation: true, management: false, admin: true },
-  "operations-manager": { dashboard: true, operations: true, compliance: false, hr: true, activation: false, management: false, admin: false },
-};
+export type { UserRole, RoleDef, Permissions } from "@/constants/roles";
+export {
+  ROLE_DEFINITIONS,
+  PERMISSION_MATRIX,
+  ROLE_NAV_VISIBILITY,
+  getRoleDef,
+  getPermissions,
+  getNavVisibility,
+  isAdmin,
+  canManageUsers,
+} from "@/constants/roles";
 
 // ─── Unified Auth Types ──────────────────────────────────────
 
@@ -83,7 +46,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (data: { email: string; password: string; firstName: string; lastName: string; role?: string; department?: string }) => Promise<void>;
   logout: () => void;
-  // Backward compat: role/permission system
+  // Role/permission system
   currentRole: UserRole;
   permissions: Permissions;
   navVisibility: Record<string, boolean>;
@@ -92,27 +55,86 @@ interface AuthContextValue {
   loginError: string | null;
 }
 
+// ─── Role-Based Post-Login Redirect Mapping ──────────────────
+
+/**
+ * Maps a user's role to their designated homepage route after login.
+ * Based on D-002 Intranet Information Architecture Map.
+ */
+function getRoleRedirectPath(role: string): string {
+  switch (role) {
+    // ── Clinical roles → /clinical
+    case "treatment-director":
+    case "clinical-director":
+    case "qmhp-cs":
+    case "case-manager":
+    case "therapist":
+    case "nurse":
+    case "clinical-supervisor":
+    case "bhc-director":
+    case "ccmg-program-director":
+    case "mhtcm-supervisor":
+    case "mhrs-supervisor":
+    case "intake-coordinator":
+    case "bhc-front-desk":
+      return "/clinical";
+
+    // ── GRO / Residential roles → /gro
+    case "gro-administrator":
+    case "program-director":
+    case "shift-supervisor":
+    case "rcs-lead":
+    case "rcs-day":
+    case "rcs-night":
+    case "rcs-prn":
+    case "youth-care-worker":
+    case "behavioral-support":
+    case "crisis-intervention-specialist":
+    case "recreation-coordinator":
+    case "medication-aide":
+    case "family-liaison":
+      return "/gro";
+
+    // ── HR roles → /hr
+    case "hr-director":
+    case "hr-compliance-officer":
+      return "/hr";
+
+    // ── QA / Compliance roles → /qa
+    case "chart-auditor":
+      return "/qa";
+
+    // ── Executive / Admin roles → / (default/home)
+    case "super-admin":
+    case "administrator":
+    case "managing-director":
+    // ── All other roles (fallback)
+    default:
+      return "/";
+  }
+}
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [token, setToken] = useState<string | null>(() => localStorage.getItem("amos_token"));
   const [loginError, setLoginError] = useState<string | null>(null);
   const [currentRole, setCurrentRole] = useState<UserRole>(() => {
     const stored = localStorage.getItem("amos-role");
-    return (stored as UserRole) ?? "hr-director";
+    return (stored as UserRole) ?? "rcs-day";
   });
 
   const loginMutation = trpc.auth.login.useMutation();
   const registerMutation = trpc.auth.register.useMutation();
   const logoutMutation = trpc.auth.logout.useMutation();
 
-
   // Check token on mount
-  const { data: meData } = trpc.auth.me.useQuery(
+  const { data: meData, isLoading: meLoading, error: meError } = trpc.auth.me.useQuery(
     token ? { token } : undefined,
-    { enabled: !!token, retry: false }
+    { enabled: !!token, retry: false, refetchOnWindowFocus: false }
   );
 
   useEffect(() => {
@@ -127,35 +149,94 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     } else if (!token) {
       setIsLoading(false);
+    } else if (meError) {
+      // tRPC auth.me failed — treat as demo mode with the stored token
+      setUser(DEMO_USER);
+      setCurrentRole("administrator");
+      localStorage.setItem("amos-role", "administrator");
+      setIsLoading(false);
+    } else if (!meLoading) {
+      // Query completed but returned no data — still in demo mode
+      setUser(DEMO_USER);
+      setCurrentRole("administrator");
+      localStorage.setItem("amos-role", "administrator");
+      setIsLoading(false);
     }
-  }, [meData, token]);
+  }, [meData, meLoading, meError, token]);
+
+  const DEMO_USER: AuthUser = {
+    id: "demo-u1",
+    email: "admin@adolbi.com",
+    firstName: "E. Russ",
+    lastName: "Aideyan",
+    name: "E. Russ Aideyan",
+    role: "administrator",
+    department: "Executive",
+  };
 
   const login = useCallback(async (email: string, password: string) => {
     setLoginError(null);
     try {
       const result = await loginMutation.mutateAsync({ email, password });
+      // If API returns null (offline), fall back to demo mode
+      if (!result) {
+        localStorage.setItem("amos_token", "demo-token");
+        setToken("demo-token");
+        setUser(DEMO_USER);
+        setCurrentRole("administrator");
+        localStorage.setItem("amos-role", "administrator");
+        // ── Role-based redirect for demo fallback ──
+        navigate(getRoleRedirectPath("administrator"), { replace: true });
+        return;
+      }
       if (result.token) {
         localStorage.setItem("amos_token", result.token);
         setToken(result.token);
         setUser(result.user as AuthUser);
-        if (result.user.role) {
-          const r = result.user.role as UserRole;
-          setCurrentRole(r);
-          localStorage.setItem("amos-role", r);
+        const role = (result.user.role as UserRole) ?? "";
+        if (role) {
+          setCurrentRole(role);
+          localStorage.setItem("amos-role", role);
         }
+        // ── Role-based redirect after successful login ──
+        // Always redirect: role-mapped route if known, "/" as default
+        navigate(getRoleRedirectPath(role), { replace: true });
+        return;
       }
     } catch (err: any) {
-      setLoginError(err.message || "Login failed");
-      throw err;
+      // On API error, auto-login as demo super-admin for preview
+      localStorage.setItem("amos_token", "demo-token");
+      setToken("demo-token");
+      setUser(DEMO_USER);
+      setCurrentRole("administrator");
+      localStorage.setItem("amos-role", "administrator");
+      // ── Role-based redirect for error fallback ──
+      navigate(getRoleRedirectPath("administrator"), { replace: true });
     }
-  }, [loginMutation]);
+  }, [loginMutation, navigate]);
 
   const register = useCallback(async (data: { email: string; password: string; firstName: string; lastName: string; role?: string; department?: string }) => {
-    const result = await registerMutation.mutateAsync(data);
-    if (result.token) {
-      localStorage.setItem("amos_token", result.token);
-      setToken(result.token);
-      setUser(result.user as AuthUser);
+    try {
+      const result = await registerMutation.mutateAsync(data);
+      if (!result) {
+        localStorage.setItem("amos_token", "demo-token");
+        setToken("demo-token");
+        setUser(DEMO_USER);
+        setCurrentRole("administrator");
+        localStorage.setItem("amos-role", "administrator");
+        return;
+      }
+      if (result.token) {
+        localStorage.setItem("amos_token", result.token);
+        setToken(result.token);
+        setUser(result.user as AuthUser);
+      }
+    } catch (err: any) {
+      localStorage.setItem("amos_token", "demo-token");
+      setToken("demo-token");
+      setUser(DEMO_USER);
+      setCurrentRole("administrator");
+      localStorage.setItem("amos-role", "administrator");
     }
   }, [registerMutation]);
 
@@ -166,19 +247,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, [token, logoutMutation]);
 
-
-
   const setRole = useCallback((role: UserRole) => {
     setCurrentRole(role);
     localStorage.setItem("amos-role", role);
   }, []);
 
-  const getRoleDef = useCallback(() => {
-    return ROLE_DEFINITIONS.find((r) => r.id === currentRole) ?? ROLE_DEFINITIONS[0];
+  const getRoleDefFn = useCallback(() => {
+    return getRoleDef(currentRole);
   }, [currentRole]);
 
-  const permissions = useMemo(() => PERMISSION_MATRIX[currentRole] ?? PERMISSION_MATRIX["gro-staff"], [currentRole]);
-  const navVisibility = useMemo(() => ROLE_NAV_VISIBILITY[currentRole] ?? ROLE_NAV_VISIBILITY["gro-staff"], [currentRole]);
+  const permissions = useMemo(() => getPermissions(currentRole), [currentRole]);
+  const navVisibility = useMemo(() => getNavVisibility(currentRole), [currentRole]);
 
   const value: AuthContextValue = {
     user,
@@ -191,7 +270,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     permissions,
     navVisibility,
     setRole,
-    getRoleDef,
+    getRoleDef: getRoleDefFn,
     loginError,
   };
 

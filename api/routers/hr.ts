@@ -1,20 +1,20 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "../middleware";
+import { createRouter, authedQuery, auditLog } from "../middleware";
 import { getDb } from "../queries/connection";
 import { hrPeople, moduleStatuses, statusTransitions } from "@db/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { triggerWorkflow } from "../lib/workflow";
 
 export const hrRouter = createRouter({
   // ─── People CRUD ───────────────────────────────────────────
 
-  listPeople: publicQuery.query(async () => {
+  listPeople: authedQuery.query(async () => {
     const db = getDb();
     return db.select().from(hrPeople).orderBy(desc(hrPeople.createdAt)).all();
   }),
 
-  getPerson: publicQuery
+  getPerson: authedQuery
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -23,7 +23,7 @@ export const hrRouter = createRouter({
       return person;
     }),
 
-  createPerson: publicQuery
+  createPerson: authedQuery
     .input(
       z.object({
         firstName: z.string().min(1),
@@ -36,9 +36,10 @@ export const hrRouter = createRouter({
         supervisor: z.string().optional(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = getDb();
       const id = randomUUID();
+      const actor = ctx.user?.email ?? "unknown";
 
       await db.insert(hrPeople).values({
         id,
@@ -54,7 +55,13 @@ export const hrRouter = createRouter({
 
       const person = await db.select().from(hrPeople).where(eq(hrPeople.id, id)).get();
 
-      // ─── Trigger workflow ──────────────────────────────────
+      auditLog({
+        action: "hr:createPerson",
+        actor,
+        resource: `person:${id}`,
+        details: `Created person "${input.firstName} ${input.lastName}" (${input.role}, ${input.department})`,
+      });
+
       triggerWorkflow("hr.person-created", {
         personId: id,
         firstName: input.firstName,
@@ -67,7 +74,7 @@ export const hrRouter = createRouter({
       return person;
     }),
 
-  updatePerson: publicQuery
+  updatePerson: authedQuery
     .input(
       z.object({
         id: z.string(),
@@ -83,21 +90,52 @@ export const hrRouter = createRouter({
         supervisor: z.string().optional(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = getDb();
       const { id, ...updates } = input;
+      const actor = ctx.user?.email ?? "unknown";
+
+      const personBefore = await db.select().from(hrPeople).where(eq(hrPeople.id, id)).get();
 
       await db
         .update(hrPeople)
         .set(updates)
         .where(eq(hrPeople.id, id));
 
+      auditLog({
+        action: "hr:updatePerson",
+        actor,
+        resource: `person:${id}`,
+        details: `Updated person "${personBefore?.firstName ?? ""} ${personBefore?.lastName ?? ""}" — fields: ${Object.keys(updates).join(", ")}`,
+      });
+
       return db.select().from(hrPeople).where(eq(hrPeople.id, id)).get();
+    }),
+
+  deletePerson: authedQuery
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = getDb();
+      const actor = ctx.user?.email ?? "unknown";
+
+      // Delete related records first
+      await db.delete(moduleStatuses).where(eq(moduleStatuses.personId, input.id));
+      await db.delete(statusTransitions).where(eq(statusTransitions.personId, input.id));
+      await db.delete(hrPeople).where(eq(hrPeople.id, input.id));
+
+      auditLog({
+        action: "hr:deletePerson",
+        actor,
+        resource: `person:${input.id}`,
+        details: `Deleted person and all related records`,
+      });
+
+      return { success: true };
     }),
 
   // ─── Module Statuses ───────────────────────────────────────
 
-  getModuleStatuses: publicQuery
+  getModuleStatuses: authedQuery
     .input(z.object({ personId: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const db = getDb();
@@ -107,7 +145,7 @@ export const hrRouter = createRouter({
       return db.select().from(moduleStatuses).all();
     }),
 
-  setModuleStatus: publicQuery
+  setModuleStatus: authedQuery
     .input(
       z.object({
         personId: z.string(),
@@ -115,8 +153,9 @@ export const hrRouter = createRouter({
         statusId: z.string(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = getDb();
+      const actor = ctx.user?.email ?? "unknown";
 
       // Get person info for workflow
       const person = await db.select().from(hrPeople).where(eq(hrPeople.id, input.personId)).get();
@@ -153,7 +192,13 @@ export const hrRouter = createRouter({
         result = await db.select().from(moduleStatuses).where(eq(moduleStatuses.id, id)).get();
       }
 
-      // ─── Trigger workflow ──────────────────────────────────
+      auditLog({
+        action: "hr:setModuleStatus",
+        actor,
+        resource: `person:${input.personId}`,
+        details: `Set module "${input.moduleId}" to status "${input.statusId}" for ${person ? `${person.firstName} ${person.lastName}` : input.personId}`,
+      });
+
       if (person) {
         const moduleNames: Record<string, string> = {
           recruitment: "Recruitment", screening: "Screening", interview: "Interview",
@@ -179,7 +224,7 @@ export const hrRouter = createRouter({
 
   // ─── Status Transitions (Audit Trail) ──────────────────────
 
-  listTransitions: publicQuery
+  listTransitions: authedQuery
     .input(z.object({ personId: z.string().optional() }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -194,7 +239,7 @@ export const hrRouter = createRouter({
       return db.select().from(statusTransitions).orderBy(desc(statusTransitions.changedAt)).all();
     }),
 
-  createTransition: publicQuery
+  createTransition: authedQuery
     .input(
       z.object({
         personId: z.string(),
@@ -207,8 +252,9 @@ export const hrRouter = createRouter({
         note: z.string().optional(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = getDb();
+      const actor = ctx.user?.email ?? input.changedBy;
       const id = randomUUID();
 
       await db.insert(statusTransitions).values({
@@ -223,6 +269,58 @@ export const hrRouter = createRouter({
         note: input.note ?? null,
       });
 
+      auditLog({
+        action: "hr:createTransition",
+        actor,
+        resource: `person:${input.personId}`,
+        details: `Status transition: "${input.moduleName}" from "${input.fromStatus}" to "${input.toStatus}"${input.note ? ` — ${input.note}` : ""}`,
+      });
+
       return db.select().from(statusTransitions).where(eq(statusTransitions.id, id)).get();
     }),
+
+  // ─── HR Dashboard Stats ────────────────────────────────────
+
+  dashboard: authedQuery.query(async () => {
+    const db = getDb();
+    const allPeople = await db.select().from(hrPeople).all();
+    const allStatuses = await db.select().from(moduleStatuses).all();
+    const allTransitions = await db.select().from(statusTransitions).all();
+
+    const totalPeople = allPeople.length;
+    const employees = allPeople.filter((p) => p.isEmployee).length;
+    const candidates = allPeople.filter((p) => !p.isEmployee).length;
+    const activePeople = allPeople.filter((p) => p.isActive).length;
+
+    // Activation pipeline stats
+    const activationLane = allPeople.filter((p) => p.lane === "activation");
+    const managementLane = allPeople.filter((p) => p.lane === "management");
+
+    // Module breakdown
+    const moduleStats: Record<string, { total: number; byStatus: Record<string, number> }> = {};
+    for (const mod of ["recruitment", "screening", "offers", "orientation", "onboarding", "clearance", "personnel-files", "credentials", "performance", "compliance", "separation"]) {
+      const modStatuses = allStatuses.filter((s) => s.moduleId === mod);
+      const byStatus: Record<string, number> = {};
+      for (const s of modStatuses) {
+        byStatus[s.statusId] = (byStatus[s.statusId] || 0) + 1;
+      }
+      moduleStats[mod] = { total: modStatuses.length, byStatus };
+    }
+
+    // Recent transitions
+    const recentTransitions = allTransitions
+      .sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime())
+      .slice(0, 10);
+
+    return {
+      totalPeople,
+      employees,
+      candidates,
+      activePeople,
+      activationLane: activationLane.length,
+      managementLane: managementLane.length,
+      moduleStats,
+      recentTransitions,
+    };
+  }),
 });

@@ -64,7 +64,9 @@ export function OnboardingHomePage() {
   ];
 
   return (
-    <div>
+    <>
+
+      <div>
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-2">
@@ -175,5 +177,8 @@ export function OnboardingHomePage() {
 
       <TrackSelectionGrid />
     </div>
+  </>
   );
 }
+
+export default OnboardingHomePage;

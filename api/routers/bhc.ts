@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "../middleware";
+import { createRouter, authedQuery, adminQuery } from "../middleware";
 import { getDb } from "../queries/connection";
 import {
   patients,
@@ -8,8 +8,14 @@ import {
   outcomeMeasures,
   insurancePlans,
   hrPeople,
+  assessments,
+  assessmentDomains,
+  ccmgReferrals,
+  ccmgCareCoordination,
+  mhtcmEncounters,
+  mhrsEncounters,
 } from "@db/schema";
-import { eq, desc, and, like, sql } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -26,19 +32,89 @@ function generatePlanNumber() {
   return `TP-${year}-${seq}`;
 }
 
+function generateAssessmentNumber() {
+  const year = new Date().getFullYear();
+  const seq = Math.floor(Math.random() * 9999).toString().padStart(4, "0");
+  return `CANS-${year}-${seq}`;
+}
+
+function generateReferralNumber() {
+  const year = new Date().getFullYear();
+  const seq = Math.floor(Math.random() * 9999).toString().padStart(4, "0");
+  return `REF-${year}-${seq}`;
+}
+
 // ─── Patient Router ──────────────────────────────────────────
 
 export const bhcRouter = createRouter({
-  // ─── Insurance Plans ───────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  // 1. INSURANCE PLANS — Full CRUD
+  // ════════════════════════════════════════════════════════════
 
-  listInsurancePlans: publicQuery.query(async () => {
+  listInsurancePlans: authedQuery.query(async () => {
     const db = getDb();
-    return db.select().from(insurancePlans).where(eq(insurancePlans.isActive, true)).all();
+    return db.select().from(insurancePlans).orderBy(desc(insurancePlans.createdAt)).all();
   }),
 
-  // ─── Patients CRUD ─────────────────────────────────────────
+  getInsurancePlan: authedQuery
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const plan = await db.select().from(insurancePlans).where(eq(insurancePlans.id, input.id)).get();
+      if (!plan) throw new Error("Insurance plan not found");
+      return plan;
+    }),
 
-  listPatients: publicQuery
+  createInsurancePlan: adminQuery
+    .input(z.object({
+      payerName: z.string().min(1),
+      planName: z.string().min(1),
+      policyNumberPattern: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const id = randomUUID();
+      const now = new Date().toISOString();
+      await db.insert(insurancePlans).values({
+        id, payerName: input.payerName, planName: input.planName,
+        policyNumberPattern: input.policyNumberPattern ?? null,
+        isActive: true, createdAt: now,
+      });
+      return db.select().from(insurancePlans).where(eq(insurancePlans.id, id)).get();
+    }),
+
+  updateInsurancePlan: adminQuery
+    .input(z.object({
+      id: z.string(),
+      payerName: z.string().optional(),
+      planName: z.string().optional(),
+      policyNumberPattern: z.string().optional(),
+      isActive: z.boolean().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const { id, ...updates } = input;
+      const setValues: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(updates)) {
+        if (value !== undefined) setValues[key] = value;
+      }
+      await db.update(insurancePlans).set(setValues).where(eq(insurancePlans.id, id));
+      return db.select().from(insurancePlans).where(eq(insurancePlans.id, id)).get();
+    }),
+
+  deleteInsurancePlan: adminQuery
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      await db.delete(insurancePlans).where(eq(insurancePlans.id, input.id));
+      return { success: true };
+    }),
+
+  // ════════════════════════════════════════════════════════════
+  // 2. PATIENTS CRUD
+  // ════════════════════════════════════════════════════════════
+
+  listPatients: authedQuery
     .input(
       z.object({
         search: z.string().optional(),
@@ -85,7 +161,7 @@ export const bhcRouter = createRouter({
       return { patients: paginated, total, page, pageSize };
     }),
 
-  getPatient: publicQuery
+  getPatient: authedQuery
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -93,31 +169,36 @@ export const bhcRouter = createRouter({
       if (!patient) throw new Error("Patient not found");
 
       const plans = await db
-        .select()
-        .from(treatmentPlans)
+        .select().from(treatmentPlans)
         .where(eq(treatmentPlans.patientId, input.id))
-        .orderBy(desc(treatmentPlans.createdAt))
-        .all();
+        .orderBy(desc(treatmentPlans.createdAt)).all();
 
       const sessions = await db
-        .select()
-        .from(clinicalSessions)
+        .select().from(clinicalSessions)
         .where(eq(clinicalSessions.patientId, input.id))
-        .orderBy(desc(clinicalSessions.sessionDate))
-        .limit(10)
-        .all();
+        .orderBy(desc(clinicalSessions.sessionDate)).limit(10).all();
 
       const outcomes = await db
-        .select()
-        .from(outcomeMeasures)
+        .select().from(outcomeMeasures)
         .where(eq(outcomeMeasures.patientId, input.id))
-        .orderBy(desc(outcomeMeasures.administeredAt))
-        .all();
+        .orderBy(desc(outcomeMeasures.administeredAt)).all();
 
-      return { patient, treatmentPlans: plans, recentSessions: sessions, outcomeMeasures: outcomes };
+      // Get CANS assessments
+      const cansAssessments = await db
+        .select().from(assessments)
+        .where(eq(assessments.youthId, input.id))
+        .orderBy(desc(assessments.assessmentDate)).all();
+
+      // Get care coordination
+      const careCoordination = await db
+        .select().from(ccmgCareCoordination)
+        .where(eq(ccmgCareCoordination.youthId, input.id))
+        .orderBy(desc(ccmgCareCoordination.createdAt)).all();
+
+      return { patient, treatmentPlans: plans, recentSessions: sessions, outcomeMeasures: outcomes, cansAssessments, careCoordination };
     }),
 
-  createPatient: publicQuery
+  createPatient: authedQuery
     .input(
       z.object({
         firstName: z.string().min(1).max(100),
@@ -140,18 +221,12 @@ export const bhcRouter = createRouter({
       const mrn = generateMRN();
 
       await db.insert(patients).values({
-        id,
-        mrn,
-        firstName: input.firstName,
-        lastName: input.lastName,
-        dateOfBirth: input.dateOfBirth,
-        gender: input.gender ?? null,
-        phone: input.phone ?? null,
-        email: input.email ?? null,
-        address: input.address ?? null,
-        insuranceId: input.insuranceId ?? null,
-        emergencyName: input.emergencyName ?? null,
-        emergencyPhone: input.emergencyPhone ?? null,
+        id, mrn,
+        firstName: input.firstName, lastName: input.lastName,
+        dateOfBirth: input.dateOfBirth, gender: input.gender ?? null,
+        phone: input.phone ?? null, email: input.email ?? null,
+        address: input.address ?? null, insuranceId: input.insuranceId ?? null,
+        emergencyName: input.emergencyName ?? null, emergencyPhone: input.emergencyPhone ?? null,
         referralSource: input.referralSource ?? null,
         assignedClinicianId: input.assignedClinicianId,
       });
@@ -159,7 +234,7 @@ export const bhcRouter = createRouter({
       return db.select().from(patients).where(eq(patients.id, id)).get();
     }),
 
-  updatePatient: publicQuery
+  updatePatient: authedQuery
     .input(
       z.object({
         id: z.string(),
@@ -194,7 +269,7 @@ export const bhcRouter = createRouter({
       return db.select().from(patients).where(eq(patients.id, id)).get();
     }),
 
-  dischargePatient: publicQuery
+  dischargePatient: authedQuery
     .input(
       z.object({
         id: z.string(),
@@ -217,9 +292,11 @@ export const bhcRouter = createRouter({
       return db.select().from(patients).where(eq(patients.id, input.id)).get();
     }),
 
-  // ─── Treatment Plans ───────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  // 3. TREATMENT PLANS — Full CRUD
+  // ════════════════════════════════════════════════════════════
 
-  listTreatmentPlans: publicQuery
+  listTreatmentPlans: authedQuery
     .input(z.object({ patientId: z.string().optional(), clinicianId: z.string().optional(), status: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const db = getDb();
@@ -238,7 +315,7 @@ export const bhcRouter = createRouter({
       return query.orderBy(desc(treatmentPlans.createdAt)).all();
     }),
 
-  getTreatmentPlan: publicQuery
+  getTreatmentPlan: authedQuery
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -246,16 +323,14 @@ export const bhcRouter = createRouter({
       if (!plan) throw new Error("Treatment plan not found");
 
       const sessions = await db
-        .select()
-        .from(clinicalSessions)
+        .select().from(clinicalSessions)
         .where(eq(clinicalSessions.treatmentPlanId, input.id))
-        .orderBy(desc(clinicalSessions.sessionDate))
-        .all();
+        .orderBy(desc(clinicalSessions.sessionDate)).all();
 
       return { ...plan, sessions };
     }),
 
-  createTreatmentPlan: publicQuery
+  createTreatmentPlan: authedQuery
     .input(
       z.object({
         patientId: z.string(),
@@ -294,7 +369,7 @@ export const bhcRouter = createRouter({
       return db.select().from(treatmentPlans).where(eq(treatmentPlans.id, id)).get();
     }),
 
-  updateTreatmentPlan: publicQuery
+  updateTreatmentPlan: authedQuery
     .input(
       z.object({
         id: z.string(),
@@ -326,7 +401,7 @@ export const bhcRouter = createRouter({
       return db.select().from(treatmentPlans).where(eq(treatmentPlans.id, id)).get();
     }),
 
-  approveTreatmentPlan: publicQuery
+  approveTreatmentPlan: adminQuery
     .input(z.object({ id: z.string(), approvedBy: z.string() }))
     .mutation(async ({ input }) => {
       const db = getDb();
@@ -337,9 +412,11 @@ export const bhcRouter = createRouter({
       return db.select().from(treatmentPlans).where(eq(treatmentPlans.id, input.id)).get();
     }),
 
-  // ─── Clinical Sessions ─────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  // 4. CLINICAL SESSIONS — Full CRUD
+  // ════════════════════════════════════════════════════════════
 
-  listSessions: publicQuery
+  listSessions: authedQuery
     .input(
       z.object({
         patientId: z.string().optional(),
@@ -366,7 +443,7 @@ export const bhcRouter = createRouter({
       return query.orderBy(desc(clinicalSessions.sessionDate)).all();
     }),
 
-  getSession: publicQuery
+  getSession: authedQuery
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -375,7 +452,7 @@ export const bhcRouter = createRouter({
       return session;
     }),
 
-  createSession: publicQuery
+  createSession: authedQuery
     .input(
       z.object({
         patientId: z.string(),
@@ -425,7 +502,7 @@ export const bhcRouter = createRouter({
       return db.select().from(clinicalSessions).where(eq(clinicalSessions.id, id)).get();
     }),
 
-  updateSession: publicQuery
+  updateSession: authedQuery
     .input(
       z.object({
         id: z.string(),
@@ -458,7 +535,7 @@ export const bhcRouter = createRouter({
       return db.select().from(clinicalSessions).where(eq(clinicalSessions.id, id)).get();
     }),
 
-  cancelSession: publicQuery
+  cancelSession: authedQuery
     .input(z.object({ id: z.string(), reason: z.string().optional() }))
     .mutation(async ({ input }) => {
       const db = getDb();
@@ -469,9 +546,11 @@ export const bhcRouter = createRouter({
       return db.select().from(clinicalSessions).where(eq(clinicalSessions.id, input.id)).get();
     }),
 
-  // ─── Outcome Measures ──────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  // 5. OUTCOME MEASURES — Full CRUD
+  // ════════════════════════════════════════════════════════════
 
-  listOutcomeMeasures: publicQuery
+  listOutcomeMeasures: authedQuery
     .input(
       z.object({
         patientId: z.string().optional(),
@@ -496,7 +575,16 @@ export const bhcRouter = createRouter({
       return query.orderBy(desc(outcomeMeasures.administeredAt)).all();
     }),
 
-  createOutcomeMeasure: publicQuery
+  getOutcomeMeasure: authedQuery
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const om = await db.select().from(outcomeMeasures).where(eq(outcomeMeasures.id, input.id)).get();
+      if (!om) throw new Error("Outcome measure not found");
+      return om;
+    }),
+
+  createOutcomeMeasure: authedQuery
     .input(
       z.object({
         patientId: z.string(),
@@ -528,13 +616,12 @@ export const bhcRouter = createRouter({
       return db.select().from(outcomeMeasures).where(eq(outcomeMeasures.id, id)).get();
     }),
 
-  getOutcomeTrends: publicQuery
+  getOutcomeTrends: authedQuery
     .input(z.object({ patientId: z.string(), measureType: z.string().optional() }))
     .query(async ({ input }) => {
       const db = getDb();
       let query = db
-        .select()
-        .from(outcomeMeasures)
+        .select().from(outcomeMeasures)
         .where(eq(outcomeMeasures.patientId, input.patientId))
         .orderBy(outcomeMeasures.administeredAt);
 
@@ -544,7 +631,6 @@ export const bhcRouter = createRouter({
 
       const results = await query.all();
 
-      // Group by measure type
       const grouped: Record<string, typeof results> = {};
       for (const r of results) {
         if (!grouped[r.measureType]) grouped[r.measureType] = [];
@@ -554,9 +640,487 @@ export const bhcRouter = createRouter({
       return grouped;
     }),
 
-  // ─── Dashboard ─────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  // 6. CANS / TRR ASSESSMENT TOOLS
+  // ════════════════════════════════════════════════════════════
 
-  dashboardKPIs: publicQuery.query(async () => {
+  listCansAssessments: authedQuery
+    .input(z.object({ youthId: z.string().optional(), status: z.string().optional() }).optional())
+    .query(async ({ input }) => {
+      const db = getDb();
+      const params = input ?? {};
+      let query = db.select().from(assessments);
+
+      const conditions = [];
+      if (params.youthId) conditions.push(eq(assessments.youthId, params.youthId));
+      if (params.status) conditions.push(eq(assessments.status, params.status));
+
+      if (conditions.length > 0) {
+        const condition = conditions.length === 1 ? conditions[0] : and(...conditions);
+        return query.where(condition).orderBy(desc(assessments.assessmentDate)).all();
+      }
+      return query.orderBy(desc(assessments.assessmentDate)).all();
+    }),
+
+  getCansAssessment: authedQuery
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const assessment = await db.select().from(assessments).where(eq(assessments.id, input.id)).get();
+      if (!assessment) throw new Error("Assessment not found");
+
+      const domains = await db
+        .select().from(assessmentDomains)
+        .where(eq(assessmentDomains.assessmentId, input.id))
+        .orderBy(assessmentDomains.domainNumber).all();
+
+      return { ...assessment, domains };
+    }),
+
+  createCansAssessment: authedQuery
+    .input(
+      z.object({
+        youthId: z.string(),
+        mrn: z.string(),
+        youthName: z.string(),
+        assessmentType: z.enum(["intake", "quarterly", "annual", "discharge", "incident_driven"]).default("intake"),
+        assessmentDate: z.string(),
+        completedBy: z.string(),
+        completedById: z.string().optional(),
+        presentingProblems: z.string().optional(),
+        psychiatricHistory: z.string().optional(),
+        substanceUseHistory: z.string().optional(),
+        traumaHistory: z.string().optional(),
+        medicalHistory: z.string().optional(),
+        familyHistory: z.string().optional(),
+        educationalHistory: z.string().optional(),
+        // Risk assessments
+        riskSuicide: z.enum(["none", "low", "moderate", "high", "imminent"]).optional(),
+        riskSelfHarm: z.enum(["none", "low", "moderate", "high", "imminent"]).optional(),
+        riskAggression: z.enum(["none", "low", "moderate", "high", "imminent"]).optional(),
+        riskElopement: z.enum(["none", "low", "moderate", "high", "imminent"]).optional(),
+        riskSubstanceUse: z.enum(["none", "low", "moderate", "high", "imminent"]).optional(),
+        riskVulnerability: z.enum(["none", "low", "moderate", "high", "imminent"]).optional(),
+        safetyPlanRequired: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const id = randomUUID();
+      const now = new Date().toISOString();
+
+      await db.insert(assessments).values({
+        id,
+        youthId: input.youthId,
+        mrn: input.mrn,
+        youthName: input.youthName,
+        assessmentType: input.assessmentType,
+        assessmentDate: input.assessmentDate,
+        completedBy: input.completedBy,
+        completedById: input.completedById ?? null,
+        presentingProblems: input.presentingProblems ?? null,
+        psychiatricHistory: input.psychiatricHistory ?? null,
+        substanceUseHistory: input.substanceUseHistory ?? null,
+        traumaHistory: input.traumaHistory ?? null,
+        medicalHistory: input.medicalHistory ?? null,
+        familyHistory: input.familyHistory ?? null,
+        educationalHistory: input.educationalHistory ?? null,
+        riskSuicide: input.riskSuicide ?? null,
+        riskSelfHarm: input.riskSelfHarm ?? null,
+        riskAggression: input.riskAggression ?? null,
+        riskElopement: input.riskElopement ?? null,
+        riskSubstanceUse: input.riskSubstanceUse ?? null,
+        riskVulnerability: input.riskVulnerability ?? null,
+        safetyPlanRequired: input.safetyPlanRequired ?? false,
+        status: "draft",
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      return { success: true, id };
+    }),
+
+  updateCansAssessment: authedQuery
+    .input(
+      z.object({
+        id: z.string(),
+        presentingProblems: z.string().optional(),
+        psychiatricHistory: z.string().optional(),
+        substanceUseHistory: z.string().optional(),
+        traumaHistory: z.string().optional(),
+        medicalHistory: z.string().optional(),
+        familyHistory: z.string().optional(),
+        educationalHistory: z.string().optional(),
+        cansCompleted: z.boolean().optional(),
+        cansTotalScore: z.number().optional(),
+        cansRiskLevel: z.enum(["low", "moderate", "high", "very_high"]).optional(),
+        locDetermined: z.boolean().optional(),
+        locLevel: z.enum(["loc_1_high_acuity", "loc_2_moderate_acuity", "loc_3_low_acuity", "not_determined"]).optional(),
+        locClinicalRationale: z.string().optional(),
+        riskSuicide: z.enum(["none", "low", "moderate", "high", "imminent"]).optional(),
+        riskSelfHarm: z.enum(["none", "low", "moderate", "high", "imminent"]).optional(),
+        riskAggression: z.enum(["none", "low", "moderate", "high", "imminent"]).optional(),
+        riskElopement: z.enum(["none", "low", "moderate", "high", "imminent"]).optional(),
+        riskSubstanceUse: z.enum(["none", "low", "moderate", "high", "imminent"]).optional(),
+        riskVulnerability: z.enum(["none", "low", "moderate", "high", "imminent"]).optional(),
+        overallRiskLevel: z.enum(["low", "moderate", "high", "critical"]).optional(),
+        safetyPlanRequired: z.boolean().optional(),
+        safetyPlanCompleted: z.boolean().optional(),
+        status: z.enum(["draft", "in_progress", "pending_review", "completed", "superseded"]).optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const { id, ...fields } = input;
+      const now = new Date().toISOString();
+
+      const updateData: Record<string, unknown> = { updatedAt: now };
+      for (const [key, value] of Object.entries(fields)) {
+        if (value !== undefined) updateData[key] = value;
+      }
+
+      await db.update(assessments).set(updateData).where(eq(assessments.id, id));
+      return { success: true };
+    }),
+
+  completeCansAssessment: adminQuery
+    .input(z.object({ id: z.string(), reviewedBy: z.string().optional(), approvedBy: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const now = new Date().toISOString();
+
+      const updateData: Record<string, unknown> = {
+        status: "completed",
+        updatedAt: now,
+      };
+      if (input.reviewedBy) {
+        updateData.reviewedBy = input.reviewedBy;
+        updateData.reviewedAt = now;
+      }
+      if (input.approvedBy) {
+        updateData.approvedBy = input.approvedBy;
+        updateData.approvedAt = now;
+      }
+
+      await db.update(assessments).set(updateData).where(eq(assessments.id, input.id));
+      return { success: true };
+    }),
+
+  // ─── CANS Domain Scoring ───────────────────────────────────
+
+  listAssessmentDomains: authedQuery
+    .input(z.object({ assessmentId: z.string() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      return db.select().from(assessmentDomains)
+        .where(eq(assessmentDomains.assessmentId, input.assessmentId))
+        .orderBy(assessmentDomains.domainNumber).all();
+    }),
+
+  createAssessmentDomain: authedQuery
+    .input(
+      z.object({
+        assessmentId: z.string(),
+        domainNumber: z.number().int().positive(),
+        domainName: z.string().min(1),
+        score: z.number().int().optional(),
+        scoreLabel: z.enum(["no_evidence", "mild", "moderate", "severe"]).optional(),
+        strengths: z.string().optional(),
+        needs: z.string().optional(),
+        observations: z.string().optional(),
+        clinicalNotes: z.string().optional(),
+        interventionNeeded: z.boolean().optional(),
+        interventionDescription: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const id = randomUUID();
+      const now = new Date().toISOString();
+
+      await db.insert(assessmentDomains).values({
+        id,
+        assessmentId: input.assessmentId,
+        domainNumber: input.domainNumber,
+        domainName: input.domainName,
+        score: input.score ?? null,
+        scoreLabel: input.scoreLabel ?? null,
+        strengths: input.strengths ?? null,
+        needs: input.needs ?? null,
+        observations: input.observations ?? null,
+        clinicalNotes: input.clinicalNotes ?? null,
+        interventionNeeded: input.interventionNeeded ?? false,
+        interventionDescription: input.interventionDescription ?? null,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      // Recalculate total CANS score
+      const domains = await db.select().from(assessmentDomains)
+        .where(eq(assessmentDomains.assessmentId, input.assessmentId)).all();
+      const totalScore = domains.reduce((sum, d) => sum + (d.score ?? 0), 0);
+
+      let riskLevel: string | null = null;
+      if (totalScore <= 20) riskLevel = "low";
+      else if (totalScore <= 40) riskLevel = "moderate";
+      else if (totalScore <= 60) riskLevel = "high";
+      else riskLevel = "very_high";
+
+      await db.update(assessments).set({
+        cansTotalScore: totalScore,
+        cansRiskLevel: riskLevel,
+        cansCompleted: domains.length >= 10,
+        updatedAt: now,
+      }).where(eq(assessments.id, input.assessmentId));
+
+      return { success: true, id, totalScore, riskLevel };
+    }),
+
+  updateAssessmentDomain: authedQuery
+    .input(
+      z.object({
+        id: z.string(),
+        score: z.number().int().optional(),
+        scoreLabel: z.enum(["no_evidence", "mild", "moderate", "severe"]).optional(),
+        strengths: z.string().optional(),
+        needs: z.string().optional(),
+        observations: z.string().optional(),
+        clinicalNotes: z.string().optional(),
+        interventionNeeded: z.boolean().optional(),
+        interventionDescription: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const { id, ...fields } = input;
+      const now = new Date().toISOString();
+
+      const updateData: Record<string, unknown> = { updatedAt: now };
+      for (const [key, value] of Object.entries(fields)) {
+        if (value !== undefined) updateData[key] = value;
+      }
+
+      await db.update(assessmentDomains).set(updateData).where(eq(assessmentDomains.id, id));
+      return { success: true };
+    }),
+
+  // ════════════════════════════════════════════════════════════
+  // 7. REFERRAL INTAKE WORKFLOW
+  // ════════════════════════════════════════════════════════════
+
+  listReferrals: authedQuery
+    .input(
+      z.object({
+        youthId: z.string().optional(),
+        status: z.string().optional(),
+        fromDepartment: z.string().optional(),
+        toDepartment: z.string().optional(),
+        urgency: z.string().optional(),
+      }).optional()
+    )
+    .query(async ({ input }) => {
+      const db = getDb();
+      const params = input ?? {};
+      let query = db.select().from(ccmgReferrals);
+
+      const conditions = [];
+      if (params.youthId) conditions.push(eq(ccmgReferrals.youthId, params.youthId));
+      if (params.status) conditions.push(eq(ccmgReferrals.status, params.status));
+      if (params.fromDepartment) conditions.push(eq(ccmgReferrals.fromDepartment, params.fromDepartment));
+      if (params.toDepartment) conditions.push(eq(ccmgReferrals.toDepartment, params.toDepartment));
+      if (params.urgency) conditions.push(eq(ccmgReferrals.urgency, params.urgency));
+
+      if (conditions.length > 0) {
+        const condition = conditions.length === 1 ? conditions[0] : and(...conditions);
+        return query.where(condition).orderBy(desc(ccmgReferrals.createdAt)).all();
+      }
+      return query.orderBy(desc(ccmgReferrals.createdAt)).all();
+    }),
+
+  getReferral: authedQuery
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const referral = await db.select().from(ccmgReferrals).where(eq(ccmgReferrals.id, input.id)).get();
+      if (!referral) throw new Error("Referral not found");
+      return referral;
+    }),
+
+  createReferral: authedQuery
+    .input(
+      z.object({
+        youthId: z.string(),
+        youthName: z.string(),
+        mrn: z.string(),
+        referralType: z.enum(["internal", "external", "gro_to_bhc", "bhc_to_gro", "inter_department"]),
+        fromDepartment: z.enum(["CCMG", "MHTCM", "MHRS", "GRO"]),
+        toDepartment: z.enum(["CCMG", "MHTCM", "MHRS", "GRO"]),
+        requestedBy: z.string(),
+        requestedById: z.string().optional(),
+        reasonForReferral: z.string(),
+        clinicalJustification: z.string().optional(),
+        urgency: z.enum(["routine", "urgent", "emergency"]).default("routine"),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const id = randomUUID();
+      const now = new Date().toISOString();
+
+      await db.insert(ccmgReferrals).values({
+        id,
+        youthId: input.youthId,
+        youthName: input.youthName,
+        mrn: input.mrn,
+        referralType: input.referralType,
+        fromDepartment: input.fromDepartment,
+        toDepartment: input.toDepartment,
+        requestedBy: input.requestedBy,
+        requestedById: input.requestedById ?? null,
+        reasonForReferral: input.reasonForReferral,
+        clinicalJustification: input.clinicalJustification ?? null,
+        urgency: input.urgency,
+        status: "pending",
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      return { success: true, id };
+    }),
+
+  acceptReferral: adminQuery
+    .input(z.object({ id: z.string(), acceptedBy: z.string(), scheduledDate: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const now = new Date().toISOString();
+      await db.update(ccmgReferrals).set({
+        status: "accepted",
+        acceptedBy: input.acceptedBy,
+        acceptedAt: now,
+        scheduledDate: input.scheduledDate ?? null,
+        updatedAt: now,
+      }).where(eq(ccmgReferrals.id, input.id));
+      return { success: true };
+    }),
+
+  completeReferral: adminQuery
+    .input(z.object({
+      id: z.string(),
+      outcomeNotes: z.string().optional(),
+      followUpRequired: z.boolean().optional(),
+      followUpDate: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const now = new Date().toISOString();
+      await db.update(ccmgReferrals).set({
+        status: "completed",
+        completedDate: now,
+        outcomeNotes: input.outcomeNotes ?? null,
+        followUpRequired: input.followUpRequired ?? false,
+        followUpDate: input.followUpDate ?? null,
+        updatedAt: now,
+      }).where(eq(ccmgReferrals.id, input.id));
+      return { success: true };
+    }),
+
+  declineReferral: adminQuery
+    .input(z.object({ id: z.string(), reason: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      await db.update(ccmgReferrals).set({
+        status: "declined",
+        outcomeNotes: input.reason,
+        updatedAt: new Date().toISOString(),
+      }).where(eq(ccmgReferrals.id, input.id));
+      return { success: true };
+    }),
+
+  // ════════════════════════════════════════════════════════════
+  // 8. SERVICE DELIVERY DOCUMENTATION (Aggregated)
+  // ════════════════════════════════════════════════════════════
+
+  getServiceDeliverySummary: authedQuery
+    .input(z.object({ youthId: z.string().optional(), dateFrom: z.string().optional(), dateTo: z.string().optional() }).optional())
+    .query(async ({ input }) => {
+      const db = getDb();
+      const params = input ?? {};
+
+      // Get MHTCM encounters
+      let mhtcmQuery = db.select().from(mhtcmEncounters);
+      const mhtcmConditions = [];
+      if (params.youthId) mhtcmConditions.push(eq(mhtcmEncounters.youthId, params.youthId));
+      if (params.dateFrom) mhtcmConditions.push(sql`${mhtcmEncounters.encounterDate} >= ${params.dateFrom}`);
+      if (params.dateTo) mhtcmConditions.push(sql`${mhtcmEncounters.encounterDate} <= ${params.dateTo}`);
+
+      const mhtcmResults = mhtcmConditions.length > 0
+        ? await mhtcmQuery.where(and(...mhtcmConditions)).orderBy(desc(mhtcmEncounters.encounterDate)).all()
+        : await mhtcmQuery.orderBy(desc(mhtcmEncounters.encounterDate)).all();
+
+      // Get MHRS encounters
+      let mhrsQuery = db.select().from(mhrsEncounters);
+      const mhrsConditions = [];
+      if (params.youthId) mhrsConditions.push(eq(mhrsEncounters.youthId, params.youthId));
+      if (params.dateFrom) mhrsConditions.push(sql`${mhrsEncounters.encounterDate} >= ${params.dateFrom}`);
+      if (params.dateTo) mhrsConditions.push(sql`${mhrsEncounters.encounterDate} <= ${params.dateTo}`);
+
+      const mhrsResults = mhrsConditions.length > 0
+        ? await mhrsQuery.where(and(...mhrsConditions)).orderBy(desc(mhrsEncounters.encounterDate)).all()
+        : await mhrsQuery.orderBy(desc(mhrsEncounters.encounterDate)).all();
+
+      // Get clinical sessions
+      let clinicalQuery = db.select().from(clinicalSessions);
+      const clinicalConditions = [];
+      if (params.youthId) clinicalConditions.push(eq(clinicalSessions.patientId, params.youthId));
+      if (params.dateFrom) clinicalConditions.push(sql`${clinicalSessions.sessionDate} >= ${params.dateFrom}`);
+      if (params.dateTo) clinicalConditions.push(sql`${clinicalSessions.sessionDate} <= ${params.dateTo}`);
+
+      const clinicalResults = clinicalConditions.length > 0
+        ? await clinicalQuery.where(and(...clinicalConditions)).orderBy(desc(clinicalSessions.sessionDate)).all()
+        : await clinicalQuery.orderBy(desc(clinicalSessions.sessionDate)).all();
+
+      // Summary stats
+      const totalMhtcmUnits = mhtcmResults.reduce((sum, e) => sum + (e.unitsBilled ?? 0), 0);
+      const totalMhrsUnits = mhrsResults.reduce((sum, e) => sum + (e.unitsBilled ?? 0), 0);
+      const totalClinicalMinutes = clinicalResults.reduce((sum, s) => sum + (s.durationMinutes ?? 0), 0);
+
+      // Documentation status breakdown
+      const mhtcmByStatus = { draft: 0, signed: 0, submitted: 0 };
+      for (const e of mhtcmResults) {
+        if (e.documentationStatus === "draft") mhtcmByStatus.draft++;
+        else if (e.documentationStatus === "signed") mhtcmByStatus.signed++;
+        else if (e.documentationStatus === "submitted") mhtcmByStatus.submitted++;
+      }
+
+      const mhrsByStatus = { draft: 0, signed: 0, submitted: 0 };
+      for (const e of mhrsResults) {
+        if (e.documentationStatus === "draft") mhrsByStatus.draft++;
+        else if (e.documentationStatus === "signed") mhrsByStatus.signed++;
+        else if (e.documentationStatus === "submitted") mhrsByStatus.submitted++;
+      }
+
+      return {
+        mhtcmEncounters: mhtcmResults,
+        mhrsEncounters: mhrsResults,
+        clinicalSessions: clinicalResults,
+        summary: {
+          mhtcmCount: mhtcmResults.length,
+          mhrsCount: mhrsResults.length,
+          clinicalCount: clinicalResults.length,
+          totalMhtcmUnits,
+          totalMhrsUnits,
+          totalClinicalMinutes,
+          mhtcmDocumentation: mhtcmByStatus,
+          mhrsDocumentation: mhrsByStatus,
+        },
+      };
+    }),
+
+  // ════════════════════════════════════════════════════════════
+  // DASHBOARD
+  // ════════════════════════════════════════════════════════════
+
+  dashboardKPIs: authedQuery.query(async () => {
     const db = getDb();
     const allPatients = await db.select().from(patients).all();
     const activePatients = allPatients.filter((p) => p.status === "active").length;
@@ -567,10 +1131,8 @@ export const bhcRouter = createRouter({
     const sessionsToday = allSessions.filter((s) => s.sessionDate.startsWith(today) && s.status === "scheduled").length;
 
     const pendingApprovals = await db
-      .select()
-      .from(treatmentPlans)
-      .where(eq(treatmentPlans.status, "under_review"))
-      .all();
+      .select().from(treatmentPlans)
+      .where(eq(treatmentPlans.status, "under_review")).all();
 
     // High risk count
     const highRiskSessions = allSessions.filter((s) => {
@@ -588,6 +1150,14 @@ export const bhcRouter = createRouter({
     const weekStart = new Date(now.getTime() - now.getDay() * 86400000).toISOString();
     const sessionsThisWeek = allSessions.filter((s) => s.sessionDate >= weekStart && (s.status === "completed" || s.status === "scheduled")).length;
 
+    // Pending referrals
+    const allReferrals = await db.select().from(ccmgReferrals).all();
+    const pendingReferrals = allReferrals.filter((r) => r.status === "pending").length;
+
+    // Assessment stats
+    const allAssessments = await db.select().from(assessments).all();
+    const pendingAssessments = allAssessments.filter((a) => a.status === "draft" || a.status === "in_progress").length;
+
     return {
       totalPatients: allPatients.length,
       activePatients,
@@ -596,10 +1166,12 @@ export const bhcRouter = createRouter({
       sessionsThisWeek,
       pendingApprovals: pendingApprovals.length,
       highRiskCount: highRiskSessions.length,
+      pendingReferrals,
+      pendingAssessments,
     };
   }),
 
-  clinicianWorkload: publicQuery.query(async () => {
+  clinicianWorkload: authedQuery.query(async () => {
     const db = getDb();
     const allSessions = await db.select().from(clinicalSessions).all();
     const allPeople = await db.select().from(hrPeople).all();

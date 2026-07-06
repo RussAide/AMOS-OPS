@@ -10,3 +10,5 @@ export function HRLayout() {
     </HRProvider>
   );
 }
+
+export default HRLayout;

@@ -1,6 +1,4 @@
 import { useState, useEffect } from "react";
-import { AppShell } from "@/components/shell/AppShell";
-import { TopBar } from "@/components/shell/TopBar";
 import { trpc } from "@/providers/trpc";
 import { Network, Search, RefreshCw, GitBranch, Zap, Users, FileText, Activity } from "lucide-react";
 
@@ -42,9 +40,9 @@ export function NILGraphPage() {
   }, []);
 
   return (
-    <AppShell>
-      <TopBar />
-      <div className="px-6 pt-4">
+    
+      <>
+        <div className="px-4 md:px-6 pt-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -193,7 +191,9 @@ export function NILGraphPage() {
                         e.from_entity_id === node.id || e.to_entity_id === node.id
                       );
                       return (
-                        <div key={node.id} className="flex items-start gap-3 p-3 rounded-lg border" style={{ borderColor: "var(--card-border)" }}>
+                        <>
+
+                          <div key={node.id} className="flex items-start gap-3 p-3 rounded-lg border" style={{ borderColor: "var(--card-border)" }}>
                           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: (TYPE_COLORS[node.entity_type] ?? "#6B7280") + "10" }}>
                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: TYPE_COLORS[node.entity_type] ?? "#6B7280" }} />
                           </div>
@@ -214,6 +214,7 @@ export function NILGraphPage() {
                             )}
                           </div>
                         </div>
+                        </>
                       );
                     })}
                   </div>
@@ -238,6 +239,8 @@ export function NILGraphPage() {
           </div>
         </div>
       </div>
-    </AppShell>
+  </>
   );
 }
+
+export default NILGraphPage;

@@ -225,3 +225,5 @@ export function ManagementPage() {
     </div>
   );
 }
+
+export default ManagementPage;

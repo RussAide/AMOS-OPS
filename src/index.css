@@ -76,6 +76,30 @@
   }
 }
 
+/* ─── Mobile Sidebar Slide-in Animation ─── */
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slideIn {
+  animation: slideIn 0.2s ease-out forwards;
+}
+
+/* ─── Mobile Content Padding ─── */
+@media (max-width: 1023px) {
+  .mobile-content-pad {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+}
+
 /* ─── Scrollbar Styling ─── */
 ::-webkit-scrollbar {
   width: 6px;

@@ -1,6 +1,4 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { AppShell } from "@/components/shell/AppShell";
-import { TopBar } from "@/components/shell/TopBar";
 import { Breadcrumb } from "@/components/shell/Breadcrumb";
 import { HeroBanner } from "@/components/shell/HeroBanner";
 import { heroConfigs } from "@/data/navData";
@@ -23,11 +21,12 @@ export function OnboardingLayout() {
   }
 
   return (
-    <AppShell>
-      <TopBar />
+    <>
       <Breadcrumb path={path} />
       <HeroBanner config={heroConfig} />
       <Outlet />
-    </AppShell>
+    </>
   );
 }
+
+export default OnboardingLayout;

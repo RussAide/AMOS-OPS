@@ -52,3 +52,5 @@ export function TrackPage() {
     </div>
   );
 }
+
+export default TrackPage;

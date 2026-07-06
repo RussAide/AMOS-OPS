@@ -184,3 +184,5 @@ export function EmployeePage() {
     </div>
   );
 }
+
+export default EmployeePage;

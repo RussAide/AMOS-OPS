@@ -1,167 +1,206 @@
 import { z } from "zod";
 import { createRouter, publicQuery } from "../middleware";
 import { getDb } from "../queries/connection";
-import { documents, hrPeople } from "@db/schema";
-import { eq, and } from "drizzle-orm";
+import { documentTemplates, generatedDocuments } from "@db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
-import { triggerWorkflow } from "../lib/workflow";
+
+// ══════════════════════════════════════════════════════════════
+// Document Generation Pipeline Router (T-010)
+// Template registry + document job management
+// ══════════════════════════════════════════════════════════════
 
 export const documentsRouter = createRouter({
-  list: publicQuery
-    .input(z.object({ personId: z.string().optional(), moduleId: z.string().optional() }).optional())
+
+  // ════════════════════════════════════════════════════════════
+  // TEMPLATES
+  // ════════════════════════════════════════════════════════════
+
+  listTemplates: publicQuery
+    .input(z.object({
+      documentType: z.string().optional(),
+      division: z.string().optional(),
+      status: z.string().optional(),
+    }).optional())
     .query(async ({ input }) => {
       const db = getDb();
+      let conditions = [];
+      if (input?.documentType) conditions.push(eq(documentTemplates.documentType, input.documentType as any));
+      if (input?.status) conditions.push(eq(documentTemplates.status, input.status as any));
 
-      if (input?.personId && input?.moduleId) {
-        return db
-          .select()
-          .from(documents)
-          .where(
-            and(
-              eq(documents.personId, input.personId),
-              eq(documents.moduleId, input.moduleId),
-            ),
-          )
-          .all();
+      let results = conditions.length > 0
+        ? await db.select().from(documentTemplates).where(and(...conditions)).orderBy(documentTemplates.templateName)
+        : await db.select().from(documentTemplates).orderBy(documentTemplates.templateName);
+
+      // Filter by division if specified
+      if (input?.division) {
+        results = results.filter((t) => {
+          if (t.applicableDivisions === "all") return true;
+          try { const divs = JSON.parse(t.applicableDivisions); return divs.includes(input.division); } catch { return false; }
+        });
       }
 
-      if (input?.personId) {
-        return db
-          .select()
-          .from(documents)
-          .where(eq(documents.personId, input.personId))
-          .all();
-      }
-
-      return db.select().from(documents).all();
+      return results;
     }),
 
-  getById: publicQuery
-    .input(z.object({ id: z.string() }))
+  getTemplate: publicQuery
+    .input(z.object({ id: z.string().optional(), code: z.string().optional() }))
     .query(async ({ input }) => {
       const db = getDb();
-      const doc = await db.select().from(documents).where(eq(documents.id, input.id)).get();
-      if (!doc) throw new Error("Document not found");
-      return doc;
+      if (input?.id) return db.select().from(documentTemplates).where(eq(documentTemplates.id, input.id)).get();
+      if (input?.code) return db.select().from(documentTemplates).where(eq(documentTemplates.templateCode, input.code)).get();
+      return null;
     }),
 
-  create: publicQuery
-    .input(
-      z.object({
-        personId: z.string(),
-        moduleId: z.string(),
-        recordName: z.string().min(1),
-        fileName: z.string().min(1),
-        fileType: z.string().optional(),
-        fileSize: z.number().optional(),
-        filePath: z.string().optional(),
-        uploadedBy: z.string().optional(),
-        expiryDate: z.string().optional(),
-      }),
-    )
+  // ════════════════════════════════════════════════════════════
+  // DOCUMENT GENERATION JOBS
+  // ════════════════════════════════════════════════════════════
+
+  listGeneratedDocuments: publicQuery
+    .input(z.object({
+      templateId: z.string().optional(),
+      youthId: z.string().optional(),
+      status: z.string().optional(),
+      generatedBy: z.string().optional(),
+    }).optional())
+    .query(async ({ input }) => {
+      const db = getDb();
+      let conditions = [];
+      if (input?.templateId) conditions.push(eq(generatedDocuments.templateId, input.templateId));
+      if (input?.youthId) conditions.push(eq(generatedDocuments.youthId, input.youthId));
+      if (input?.status) conditions.push(eq(generatedDocuments.status, input.status as any));
+      if (input?.generatedBy) conditions.push(eq(generatedDocuments.generatedBy, input.generatedBy));
+
+      const results = conditions.length > 0
+        ? await db.select().from(generatedDocuments).where(and(...conditions)).orderBy(desc(generatedDocuments.createdAt))
+        : await db.select().from(generatedDocuments).orderBy(desc(generatedDocuments.createdAt));
+      return results;
+    }),
+
+  createDocumentJob: publicQuery
+    .input(z.object({
+      templateId: z.string(),
+      templateCode: z.string(),
+      documentTitle: z.string(),
+      youthId: z.string().optional(),
+      youthName: z.string().optional(),
+      mrn: z.string().optional(),
+      generatedBy: z.string(),
+      generatedById: z.string().optional(),
+      division: z.string().optional(),
+    }))
     .mutation(async ({ input }) => {
       const db = getDb();
       const id = randomUUID();
+      const now = new Date().toISOString();
 
-      await db.insert(documents).values({
+      await db.insert(generatedDocuments).values({
         id,
-        personId: input.personId,
-        moduleId: input.moduleId,
-        recordName: input.recordName,
-        fileName: input.fileName,
-        fileType: input.fileType ?? null,
-        fileSize: input.fileSize ?? null,
-        filePath: input.filePath ?? null,
-        uploadedBy: input.uploadedBy ?? null,
-        expiryDate: input.expiryDate ?? null,
+        templateId: input.templateId,
+        templateCode: input.templateCode,
+        documentTitle: input.documentTitle,
+        youthId: input.youthId ?? null,
+        youthName: input.youthName ?? null,
+        mrn: input.mrn ?? null,
+        generatedBy: input.generatedBy,
+        generatedById: input.generatedById ?? null,
+        division: input.division ?? null,
+        status: "queued",
+        createdAt: now,
       });
 
-      const doc = await db.select().from(documents).where(eq(documents.id, id)).get();
-
-      // ─── Trigger workflow ──────────────────────────────────
-      const person = await db.select().from(hrPeople).where(eq(hrPeople.id, input.personId)).get();
-      triggerWorkflow("document.uploaded", {
-        personId: input.personId,
-        personName: person ? `${person.firstName} ${person.lastName}` : "Unknown",
-        moduleId: input.moduleId,
-        recordName: input.recordName,
-      }).catch((err) => console.error("[Workflow] Document uploaded trigger failed:", err));
-
-      return doc;
+      return { success: true, id, status: "queued" };
     }),
 
-  updateStatus: publicQuery
-    .input(
-      z.object({
-        id: z.string(),
-        status: z.enum(["uploaded", "verified", "rejected", "expired"]),
-        verifiedBy: z.string().optional(),
-        note: z.string().optional(),
-      }),
-    )
+  updateDocumentStatus: publicQuery
+    .input(z.object({
+      id: z.string(),
+      status: z.enum(["queued", "generating", "completed", "failed"]),
+      filePath: z.string().optional(),
+      fileSize: z.number().optional(),
+      pageCount: z.number().optional(),
+      errorMessage: z.string().optional(),
+    }))
     .mutation(async ({ input }) => {
       const db = getDb();
-
-      const updates: Record<string, unknown> = { status: input.status };
-      if (input.status === "verified") {
-        updates.verifiedAt = new Date().toISOString();
-        updates.verifiedBy = input.verifiedBy ?? null;
-      }
-      if (input.note !== undefined) {
-        updates.note = input.note;
-      }
-
-      await db.update(documents).set(updates).where(eq(documents.id, input.id));
-      const doc = await db.select().from(documents).where(eq(documents.id, input.id)).get();
-
-      // ─── Trigger workflow ──────────────────────────────────
-      if (doc) {
-        const person = await db.select().from(hrPeople).where(eq(hrPeople.id, doc.personId)).get();
-        const ctx = {
-          personId: doc.personId,
-          personName: person ? `${person.firstName} ${person.lastName}` : "Unknown",
-          moduleId: doc.moduleId,
-          moduleName: doc.moduleId,
-          recordName: doc.recordName,
-          note: input.note || "",
-        };
-
-        if (input.status === "verified") {
-          triggerWorkflow("document.verified", ctx).catch((err) =>
-            console.error("[Workflow] Document verified trigger failed:", err)
-          );
-        } else if (input.status === "rejected") {
-          triggerWorkflow("document.rejected", ctx).catch((err) =>
-            console.error("[Workflow] Document rejected trigger failed:", err)
-          );
-        }
+      const { id, ...fields } = input;
+      const updateData: Record<string, any> = {};
+      if (fields.status !== undefined) updateData.status = fields.status;
+      if (fields.filePath !== undefined) updateData.filePath = fields.filePath;
+      if (fields.fileSize !== undefined) updateData.fileSize = fields.fileSize;
+      if (fields.pageCount !== undefined) updateData.pageCount = fields.pageCount;
+      if (fields.errorMessage !== undefined) updateData.errorMessage = fields.errorMessage;
+      if (fields.status === "completed" || fields.status === "failed") {
+        updateData.completedAt = new Date().toISOString();
       }
 
-      return doc;
-    }),
-
-  delete: publicQuery
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      const db = getDb();
-      await db.delete(documents).where(eq(documents.id, input.id));
+      await db.update(generatedDocuments).set(updateData).where(eq(generatedDocuments.id, id));
       return { success: true };
     }),
 
-  getMissingDocuments: publicQuery
-    .input(z.object({ personId: z.string() }))
-    .query(async ({ input }) => {
-      // This returns all non-verified documents for a person
-      const db = getDb();
-      return db
-        .select()
-        .from(documents)
-        .where(
-          and(
-            eq(documents.personId, input.personId),
-            eq(documents.status, "uploaded"),
-          ),
-        )
-        .all();
-    }),
+  // ════════════════════════════════════════════════════════════
+  // DOCUMENT TYPE REGISTRY
+  // ════════════════════════════════════════════════════════════
+
+  getDocumentTypes: publicQuery.query(() => {
+    return {
+      clinical: [
+        { code: "treatment-plan", name: "Treatment Plan", description: "Individualized treatment plan with measurable goals" },
+        { code: "progress-note", name: "Progress Note", description: "Clinical session progress documentation" },
+        { code: "discharge-summary", name: "Discharge Summary", description: "Youth discharge summary with aftercare plan" },
+        { code: "cans-assessment", name: "CANS Assessment", description: "Child and Adolescent Needs and Strengths assessment" },
+        { code: "psychiatric-eval", name: "Psychiatric Evaluation", description: "LPHA psychiatric evaluation report" },
+      ],
+      compliance: [
+        { code: "incident-report", name: "Incident Report", description: "Restraint/seclusion incident documentation per T-748" },
+        { code: "rights-acknowledgment", name: "Youth Rights Acknowledgment", description: "Youth rights delivery and acknowledgment record" },
+        { code: "part2-consent", name: "42 CFR Part 2 Consent", description: "SUD information disclosure consent form" },
+        { code: "chart-audit-report", name: "Chart Audit Report", description: "Clinical documentation audit findings" },
+      ],
+      administrative: [
+        { code: "service-plan-mhtcm", name: "MHTCM Service Plan", description: "Mental Health Targeted Case Management 6-function plan" },
+        { code: "service-plan-mhrs", name: "MHRS Service Plan", description: "Mental Health Rehabilitative Services 4-category plan" },
+        { code: "eligibility-determination", name: "Eligibility Determination", description: "MHTCM/MHRS eligibility documentation" },
+      ],
+      financial: [
+        { code: "encounter-form-t1017", name: "T1017 Encounter Form", description: "MHTCM encounter with billing documentation" },
+        { code: "encounter-form-h2017", name: "H2017 Encounter Form", description: "MHRS encounter with billing documentation" },
+      ],
+      hr: [
+        { code: "credentialing-packet", name: "Credentialing Packet", description: "Staff credentialing and privileging documentation" },
+        { code: "training-record", name: "Training Record", description: "Staff training completion and competency record" },
+      ],
+      executive: [
+        { code: "mgma-scorecard", name: "MGMA Scorecard", description: "7-domain practice management scorecard" },
+        { code: "census-report", name: "Census Report", description: "Three-stage campus census summary" },
+        { code: "compliance-dashboard", name: "Compliance Dashboard", description: "Multi-domain compliance status report" },
+      ],
+    };
+  }),
+
+  // ════════════════════════════════════════════════════════════
+  // SEED DATA
+  // ════════════════════════════════════════════════════════════
+
+  seedDocumentTemplates: publicQuery.mutation(async () => {
+    const db = getDb();
+    const now = new Date().toISOString();
+
+    await db.insert(documentTemplates).values([
+      { id: "tpl-001", templateName: "Treatment Plan", templateCode: "treatment-plan", description: "Individualized treatment plan with measurable goals per HHSC standards", documentType: "clinical", applicableDivisions: JSON.stringify(["BHC"]), coverPageRequired: true, tocRequired: false, signatureBlocks: 2, primaryColor: "#C45C4A", status: "active", createdAt: now, updatedAt: now },
+      { id: "tpl-002", templateName: "Incident Report", templateCode: "incident-report", description: "Restraint/seclusion incident documentation per Title 26 TAC Chapter 748", documentType: "compliance", applicableDivisions: JSON.stringify(["GRO"]), coverPageRequired: false, tocRequired: false, signatureBlocks: 3, primaryColor: "#245C5A", status: "active", createdAt: now, updatedAt: now },
+      { id: "tpl-003", templateName: "MHTCM Service Plan", templateCode: "service-plan-mhtcm", description: "Mental Health Targeted Case Management 6-function service plan with T1017 billing", documentType: "administrative", applicableDivisions: JSON.stringify(["BHC"]), coverPageRequired: true, tocRequired: true, signatureBlocks: 2, primaryColor: "#C45C4A", status: "active", createdAt: now, updatedAt: now },
+      { id: "tpl-004", templateName: "MHRS Service Plan", templateCode: "service-plan-mhrs", description: "Mental Health Rehabilitative Services 4-category service plan with H2017 billing", documentType: "administrative", applicableDivisions: JSON.stringify(["BHC"]), coverPageRequired: true, tocRequired: true, signatureBlocks: 2, primaryColor: "#C45C4A", status: "active", createdAt: now, updatedAt: now },
+      { id: "tpl-005", templateName: "T1017 Encounter Form", templateCode: "encounter-form-t1017", description: "MHTCM encounter documentation with T1017 billing codes", documentType: "financial", applicableDivisions: JSON.stringify(["BHC"]), coverPageRequired: false, tocRequired: false, signatureBlocks: 1, primaryColor: "#D97706", status: "active", createdAt: now, updatedAt: now },
+      { id: "tpl-006", templateName: "H2017 Encounter Form", templateCode: "encounter-form-h2017", description: "MHRS encounter documentation with H2017 billing codes", documentType: "financial", applicableDivisions: JSON.stringify(["BHC"]), coverPageRequired: false, tocRequired: false, signatureBlocks: 1, primaryColor: "#D97706", status: "active", createdAt: now, updatedAt: now },
+      { id: "tpl-007", templateName: "Youth Rights Acknowledgment", templateCode: "rights-acknowledgment", description: "Youth rights delivery, explanation, and acknowledgment record per T-748", documentType: "compliance", applicableDivisions: JSON.stringify(["GRO"]), coverPageRequired: false, tocRequired: false, signatureBlocks: 3, primaryColor: "#245C5A", status: "active", createdAt: now, updatedAt: now },
+      { id: "tpl-008", templateName: "42 CFR Part 2 Consent", templateCode: "part2-consent", description: "SUD information disclosure consent form per 42 CFR Part 2", documentType: "compliance", applicableDivisions: JSON.stringify(["BHC", "GRO"]), coverPageRequired: false, tocRequired: false, signatureBlocks: 4, primaryColor: "#991B1B", status: "active", createdAt: now, updatedAt: now },
+      { id: "tpl-009", templateName: "MGMA Scorecard", templateCode: "mgma-scorecard", description: "7-domain practice management scorecard with KPI tracking", documentType: "executive", applicableDivisions: "all", coverPageRequired: true, tocRequired: true, signatureBlocks: 1, primaryColor: "#991B1B", status: "active", createdAt: now, updatedAt: now },
+      { id: "tpl-010", templateName: "Census Report", templateCode: "census-report", description: "Three-stage campus census summary with alert status", documentType: "executive", applicableDivisions: JSON.stringify(["GRO"]), coverPageRequired: true, tocRequired: false, signatureBlocks: 1, primaryColor: "#245C5A", status: "active", createdAt: now, updatedAt: now },
+      { id: "tpl-011", templateName: "Credentialing Packet", templateCode: "credentialing-packet", description: "Staff credentialing, privileging, and competency documentation", documentType: "hr", applicableDivisions: JSON.stringify(["GAD"]), coverPageRequired: true, tocRequired: true, signatureBlocks: 2, primaryColor: "#D97706", status: "active", createdAt: now, updatedAt: now },
+      { id: "tpl-012", templateName: "Chart Audit Report", templateCode: "chart-audit-report", description: "Clinical documentation audit findings with compliance scoring", documentType: "compliance", applicableDivisions: JSON.stringify(["BHC"]), coverPageRequired: true, tocRequired: false, signatureBlocks: 1, primaryColor: "#C45C4A", status: "draft", createdAt: now, updatedAt: now },
+    ]).onConflictDoNothing();
+
+    return { success: true, message: "Document templates seeded: 12 templates across 6 document types" };
+  }),
 });

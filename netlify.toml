@@ -1,29 +1,27 @@
-# Netlify Configuration for AMOS-OPS Frontend
-# Railway backend: amos-ops-production.up.railway.app
-
 [build]
-  publish = "dist/public"
-  command = "npm run build"
+  command = "npm install && npm run build:client"
+  publish = "dist"
 
 [build.environment]
   NODE_VERSION = "20"
+  NPM_FLAGS = "--legacy-peer-deps"
 
-# API proxy: all /api/* requests go to Railway backend
 [[redirects]]
   from = "/api/*"
-  to = "https://amos-ops-production.up.railway.app/api/:splat"
+  to = "https://YOUR_RAILWAY_BACKEND_URL/api/:splat"
   status = 200
   force = true
 
-# Upload proxy: file downloads from Railway
 [[redirects]]
-  from = "/uploads/*"
-  to = "https://amos-ops-production.up.railway.app/uploads/:splat"
+  from = "/trpc/*"
+  to = "https://YOUR_RAILWAY_BACKEND_URL/trpc/:splat"
   status = 200
   force = true
 
-# SPA fallback: all routes serve index.html for React Router
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+[context.production]
+  environment = { NODE_ENV = "production" }

@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { AppShell } from "@/components/shell/AppShell";
-import { TopBar } from "@/components/shell/TopBar";
 import { trpc } from "@/providers/trpc";
 import { Cloud, RefreshCw, Users, Shield, Clock, CheckCircle, AlertTriangle, XCircle } from "lucide-react";
 
@@ -22,9 +20,8 @@ export function EntraIDPage() {
   };
 
   return (
-    <AppShell>
-      <TopBar />
-      <div className="px-6 pt-4">
+    
+      <div className="px-4 md:px-6 pt-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -241,6 +238,7 @@ export function EntraIDPage() {
           )}
         </div>
       </div>
-    </AppShell>
   );
 }
+
+export default EntraIDPage;

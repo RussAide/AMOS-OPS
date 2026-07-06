@@ -267,3 +267,5 @@ export function EvidencePage() {
     </div>
   );
 }
+
+export default EvidencePage;

@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { AppShell } from "@/components/shell/AppShell";
-import { TopBar } from "@/components/shell/TopBar";
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
 import { ShieldCheck, ArrowLeft, ClipboardCheck, AlertTriangle, FileWarning, ChevronRight } from "lucide-react";
@@ -28,9 +26,11 @@ export function QAListPage() {
   ];
 
   return (
-    <AppShell>
-      <TopBar />
-      <div className="px-6 pt-4">
+    
+      <>
+
+    
+        <div className="px-4 md:px-6 pt-4">
         <div className="mb-6">
           <button onClick={() => navigate("/qa")} className="flex items-center gap-1 text-[12px] mb-2 hover:underline" style={{ color: "#245C5A" }}>
             <ArrowLeft size={14} /> Back to QA Dashboard
@@ -124,6 +124,8 @@ export function QAListPage() {
           </div>
         )}
       </div>
-    </AppShell>
+  </>
   );
 }
+
+export default QAListPage;
