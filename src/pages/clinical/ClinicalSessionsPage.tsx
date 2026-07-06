@@ -328,7 +328,7 @@ export function ClinicalSessionsPage() {
 
               <div className="flex items-center gap-4 text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>
                 <span><strong>Clinician:</strong> {selectedSession.clinicianId?.slice(0, 12)}</span>
-                {selectedSession.billingCode && <span><strong>Billing:</strong> {selectedSession.billingCode}</strong></span>}
+                {selectedSession.billingCode && <span><strong>Billing:</strong> {selectedSession.billingCode}</span>}
                 {selectedSession.nextSessionDate && <span><strong>Next:</strong> {new Date(selectedSession.nextSessionDate).toLocaleDateString()}</span>}
               </div>
             </div>
