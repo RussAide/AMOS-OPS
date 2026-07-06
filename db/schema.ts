@@ -2578,21 +2578,6 @@ export const vendorContracts = sqliteTable("vendor_contracts", {
 // M21: Agent Persona Registry
 // ═══════════════════════════════════════════════════════════════
 
-export const agentPersonas = sqliteTable("agent_personas", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  code: text("code").notNull(),
-  description: text("description").notNull(),
-  status: text("status", { enum: ["active", "inactive", "pilot"] }).notNull().default("inactive"),
-  wave: text("wave", { enum: ["pilot", "wave1", "wave2", "wave3"] }).notNull().default("wave3"),
-  category: text("category").notNull(),
-  permissions: text("permissions"), // JSON array
-  outputs: text("outputs"), // JSON array
-  activatedAt: text("activated_at"),
-  sortOrder: integer("sort_order").notNull().default(0),
-  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
-  updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
-});
 
 // ═══════════════════════════════════════════════════════════════
 // D005: Workflow Engine Tables (v2)
