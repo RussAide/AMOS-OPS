@@ -253,7 +253,11 @@ export function EnhancementRegisterPage() {
               cursor: "pointer",
             }}
           >
-            {s === "all" ? <Lightbulb size={14} style={{ color: "#245C5A" }} /> : <STATUS_CONFIG[s as Status].icon size={14} style={{ color: STATUS_CONFIG[s as Status].color }} />}
+            {(() => {
+  if (s === "all") return <Lightbulb size={14} style={{ color: "#245C5A" }} />;
+  const IconComp = STATUS_CONFIG[s as Status].icon;
+  return <IconComp size={14} style={{ color: STATUS_CONFIG[s as Status].color }} />;
+})()}
             <div>
               <p className="text-[15px] font-bold leading-tight" style={{ color: statusFilter === s ? (STATUS_CONFIG[s as Status]?.color ?? "#245C5A") : "var(--topbar-title)" }}>
                 {counts[s] ?? 0}
