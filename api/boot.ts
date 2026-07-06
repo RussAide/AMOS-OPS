@@ -2,16 +2,12 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { serve } from "@hono/node-server";
-import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { appRouter } from "./router";
-import { createContext } from "./context";
 import { initDatabase } from "./db-init";
 import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
 
-// ─── Initialize ──────────────────────────────────────────────
-
+// ─── Initialize Database ─────────────────────────────────────
 try {
   initDatabase();
   console.log("[DB] Database initialized");
@@ -52,11 +48,6 @@ app.get("/api/health", (c) => {
 // ─── File Upload ─────────────────────────────────────────────
 app.post("/api/upload", async (c) => {
   try {
-    const contentType = c.req.header("content-type") || "";
-    if (!contentType.includes("multipart/form-data")) {
-      return c.json({ error: "Expected multipart/form-data" }, 400);
-    }
-
     const formData = await c.req.formData();
     const file = formData.get("file") as File | null;
     if (!file) return c.json({ error: "No file provided" }, 400);
@@ -73,7 +64,6 @@ app.post("/api/upload", async (c) => {
       storedName: safeName,
       filePath: `/uploads/${safeName}`,
       fileSize: file.size,
-      fileType: file.type,
     }, 201);
   } catch (err: any) {
     console.error("[Upload] Error:", err);
@@ -106,14 +96,22 @@ app.get("/uploads/:filename", async (c) => {
   return c.body(fileBuffer);
 });
 
-// ─── tRPC API ────────────────────────────────────────────────
+// ─── tRPC API (lazy load to avoid env.ts at startup) ─────────
 app.use("/api/trpc/*", async (c) => {
-  return fetchRequestHandler({
-    endpoint: "/api/trpc",
-    req: c.req.raw,
-    router: appRouter,
-    createContext,
-  });
+  try {
+    const { fetchRequestHandler } = await import("@trpc/server/adapters/fetch");
+    const { appRouter } = await import("./router");
+    const { createContext } = await import("./context");
+    return fetchRequestHandler({
+      endpoint: "/api/trpc",
+      req: c.req.raw,
+      router: appRouter,
+      createContext,
+    });
+  } catch (err: any) {
+    console.error("[tRPC] Error:", err);
+    return c.json({ error: "API temporarily unavailable", details: err.message }, 503);
+  }
 });
 
 // ─── Serve Frontend (Production SPA) ─────────────────────────
@@ -128,8 +126,8 @@ if (fs.existsSync(DIST_DIR)) {
     }
   });
 } else {
-  console.warn("[WARN] dist/public not found — frontend will not be served");
-  app.get("/", (c) => c.json({ message: "AMOS-OPS API Server", status: "ok", frontend: "not built" }));
+  console.warn("[WARN] dist/public not found");
+  app.get("/", (c) => c.json({ message: "AMOS-OPS API Server", status: "ok" }));
 }
 
 // ─── 404 Fallback ────────────────────────────────────────────
