@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { LogOut, Settings, Bot, ChevronDown, Shield } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { navSections, bottomNavItems } from "@/data/navData";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/use-auth";
 import { ROLE_DEFINITIONS, DIVISIONS, getDivisionCategory, type UserRole } from "@/constants/roles";
 
 /* ─── Section → navVisibility key(s) ───

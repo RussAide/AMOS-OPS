@@ -3,7 +3,7 @@ import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import type React from "react";
 import { OnboardingProvider } from "@/context/OnboardingContext";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/use-auth";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppShell } from "@/components/shell/AppShell";
