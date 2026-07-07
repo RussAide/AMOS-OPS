@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useState, useEffect } from "react";
-import { AppSidebar } from "./AppSidebar";
-import { TopBar } from "./TopBar";
+import { AppSidebar } from "./app-sidebar";
+import { TopBar } from "./top-bar";
 import { AskAmosPanel } from "@/components/help/AskAmosPanel";
 
 interface AppShellProps {
