@@ -1,3 +1,4 @@
+// AMOS-OPS auth hook
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { trpc } from "@/providers/trpc";
