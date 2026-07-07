@@ -1,5 +1,12 @@
-// AMOS-OPS auth hook
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  type ReactNode,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { trpc } from "@/providers/trpc";
 import {
@@ -58,13 +65,8 @@ interface AuthContextValue {
 
 // ─── Role-Based Post-Login Redirect Mapping ──────────────────
 
-/**
- * Maps a user's role to their designated homepage route after login.
- * Based on D-002 Intranet Information Architecture Map.
- */
 function getRoleRedirectPath(role: string): string {
   switch (role) {
-    // ── Clinical roles → /clinical
     case "treatment-director":
     case "clinical-director":
     case "qmhp-cs":
@@ -79,8 +81,6 @@ function getRoleRedirectPath(role: string): string {
     case "intake-coordinator":
     case "bhc-front-desk":
       return "/clinical";
-
-    // ── GRO / Residential roles → /gro
     case "gro-administrator":
     case "program-director":
     case "shift-supervisor":
@@ -95,21 +95,14 @@ function getRoleRedirectPath(role: string): string {
     case "medication-aide":
     case "family-liaison":
       return "/gro";
-
-    // ── HR roles → /hr
     case "hr-director":
     case "hr-compliance-officer":
       return "/hr";
-
-    // ── QA / Compliance roles → /qa
     case "chart-auditor":
       return "/qa";
-
-    // ── Executive / Admin roles → / (default/home)
     case "super-admin":
     case "administrator":
     case "managing-director":
-    // ── All other roles (fallback)
     default:
       return "/";
   }
@@ -119,6 +112,18 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
+
+  // ── DEMO USER — defined BEFORE any useEffect ──
+  const DEMO_USER: AuthUser = {
+    id: "demo-u1",
+    email: "admin@adolbi.com",
+    firstName: "E. Russ",
+    lastName: "Aideyan",
+    name: "E. Russ Aideyan",
+    role: "administrator",
+    department: "Executive",
+  };
+
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [token, setToken] = useState<string | null>(() => localStorage.getItem("amos_token"));
@@ -151,13 +156,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else if (!token) {
       setIsLoading(false);
     } else if (meError) {
-      // tRPC auth.me failed — treat as demo mode with the stored token
       setUser(DEMO_USER);
       setCurrentRole("administrator");
       localStorage.setItem("amos-role", "administrator");
       setIsLoading(false);
     } else if (!meLoading) {
-      // Query completed but returned no data — still in demo mode
       setUser(DEMO_USER);
       setCurrentRole("administrator");
       localStorage.setItem("amos-role", "administrator");
@@ -165,28 +168,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [meData, meLoading, meError, token]);
 
-  const DEMO_USER: AuthUser = {
-    id: "demo-u1",
-    email: "admin@adolbi.com",
-    firstName: "E. Russ",
-    lastName: "Aideyan",
-    name: "E. Russ Aideyan",
-    role: "administrator",
-    department: "Executive",
-  };
-
   const login = useCallback(async (email: string, password: string) => {
     setLoginError(null);
     try {
       const result = await loginMutation.mutateAsync({ email, password });
-      // If API returns null (offline), fall back to demo mode
       if (!result) {
         localStorage.setItem("amos_token", "demo-token");
         setToken("demo-token");
         setUser(DEMO_USER);
         setCurrentRole("administrator");
         localStorage.setItem("amos-role", "administrator");
-        // ── Role-based redirect for demo fallback ──
         navigate(getRoleRedirectPath("administrator"), { replace: true });
         return;
       }
@@ -199,19 +190,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setCurrentRole(role);
           localStorage.setItem("amos-role", role);
         }
-        // ── Role-based redirect after successful login ──
-        // Always redirect: role-mapped route if known, "/" as default
         navigate(getRoleRedirectPath(role), { replace: true });
         return;
       }
     } catch (err: any) {
-      // On API error, auto-login as demo super-admin for preview
       localStorage.setItem("amos_token", "demo-token");
       setToken("demo-token");
       setUser(DEMO_USER);
       setCurrentRole("administrator");
       localStorage.setItem("amos-role", "administrator");
-      // ── Role-based redirect for error fallback ──
       navigate(getRoleRedirectPath("administrator"), { replace: true });
     }
   }, [loginMutation, navigate]);
