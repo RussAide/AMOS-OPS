@@ -30,7 +30,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/hooks/useAuth";
+import ... from "@/hooks/use-auth"
 
 // ─── Types ─────────────────────────────────────────────────────
 interface HelpTopic {
