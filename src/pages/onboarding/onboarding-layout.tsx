@@ -1,5 +1,5 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { Breadcrumb } from "@/components/shell/breadcrumb";
+import { Breadcrumb } from "@/components/shell/nav-breadcrumb";
 import { HeroBanner } from "@/components/shell/hero-banner";
 import { heroConfigs } from "@/data/navData";
 

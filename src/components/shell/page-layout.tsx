@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { useLocation } from "react-router-dom";
 import { heroConfigs } from "@/data/navData";
-import { Breadcrumb } from "./breadcrumb";
+import { Breadcrumb } from "./nav-breadcrumb";
 import { HeroBanner } from "./hero-banner";
 
 interface PageLayoutProps {
