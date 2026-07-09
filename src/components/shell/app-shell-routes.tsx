@@ -2,13 +2,13 @@ import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import type React from "react";
-import { OnboardingProvider } from "@/context/OnboardingContext";
+import { OnboardingProvider } from "@/context/onboarding-context";
 import { useAuth } from "@/hooks/use-auth";
-import { NotificationProvider } from "@/context/NotificationContext";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { AppShell } from "@/components/shell/AppShell";
-import { FacilityProvider } from "@/context/FacilityContext";
-import { SuspenseFallback } from "@/components/shell/SuspenseFallback";
+import { NotificationProvider } from "@/context/notification-context";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { AppShell } from "@/components/shell/app-shell";
+import { FacilityProvider } from "@/context/facility-context";
+import { SuspenseFallback } from "@/components/shell/suspense-fallback";
 
 /* ─── Lazy Pages ─── */
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Search, Bell, BellRing, CheckCheck, User, LogOut, LogIn, Menu, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { useNotifications, formatTimeAgo, getNotificationColor, getNotificationBg } from "@/context/NotificationContext";
+import { useNotifications, formatTimeAgo, getNotificationColor, getNotificationBg } from "@/context/notification-context";
 
 const ROLE_COLOR: Record<string, string> = {
   administrator: "#DC2626",
