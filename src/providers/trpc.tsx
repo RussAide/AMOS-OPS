@@ -101,6 +101,54 @@ function getSingleDemoData(procedure: string): any {
   if (procedure === "msgraph.listUsers") return [];
   if (procedure === "msgraph.listGroups") return [];
   if (procedure === "msgraph.syncHistory") return [];
+  // ─── DASHBOARD AGGREGATE ENDPOINTS ───────────────────────
+  if (procedure === "dashboard.overview") return {
+    revenue: { totalClaims: 8, deniedClaims: 1, totalBilled: 5285000, totalCollected: 3250000, collectionRate: 61 },
+    bhc: { activePatients: 5, sessionsThisWeek: 8, highRiskCount: 1, pendingApprovals: 1 },
+    campus: { occupiedBeds: 12, totalBeds: 16, occupancyRate: 75, facilityCount: 2 },
+    mgma: { domainCount: 7, kpiCount: 42 },
+    part2: { activeSUDRecords: 3, validConsents: 3, expiredConsents: 0, recentAudits: 1 },
+    gad: { overdueWorkOrders: 1, openWorkOrders: 3 },
+    documents: { total: 12, published: 6, draft: 3 },
+  };
+  if (procedure === "dashboard.operationalKPIs") return {
+    censusToday: 12, admissions7d: 2, discharges7d: 1, pendingAdmissions: 1, bedTurnoverRate: 5,
+    avgLengthOfStay: 45, medicationErrors7d: 0, incidents7d: 1, restraints7d: 0, safetyRoundsCompleted: 28,
+    shiftCoverageRate: 95, trainingComplianceRate: 88,
+  };
+  if (procedure === "dashboard.complianceKPIs") return {
+    overallScore: 94, openCAPs: 3, overdueItems: 1, hipaaScore: 98, stateLicensureScore: 92,
+    staffCredentialScore: 88, incidentReportingScore: 100, medicationMgmtScore: 95, youthRightsScore: 97,
+    openAudits: 2, completedAuditsThisQuarter: 3,
+  };
+  if (procedure === "dashboard.clinicalKPIs") return {
+    activePatients: 5, sessionsThisWeek: 8, sessionCompletionRate: 92, avgSessionDuration: 55,
+    treatmentPlansActive: 4, treatmentPlansOverdue: 1, readmissionRate: 5, authorizationStatus: 80,
+    outcomeMeasuresCompleted: 12, highRiskPatients: 1,
+  };
+  if (procedure === "dashboard.revenueKPIs") return {
+    claimsSubmitted30d: 6, approvalRate: 75, denialRate: 15, avgDaysToPayment: 18,
+    outstandingAR: 1250000, authorizationExpiry30d: 1, writeOffs30d: 45000, netRevenue30d: 980000,
+  };
+  if (procedure === "dashboard.workforceKPIs") return {
+    totalStaff: 24, openPositions: 3, credentialComplianceRate: 88, trainingCompletionRate: 82,
+    turnoverRate12m: 12, pendingSeparations: 1, expiringCredentials: 2, avgTenureMonths: 18,
+    overtimeHoursWeek: 16, agencyUsagePercent: 5,
+  };
+  if (procedure === "dashboard.executiveKPIs") return {
+    revenueMTD: 485000, operatingCensus: 75, compliancePosture: 94, criticalRisks: 1,
+    staffingLevel: 92, strategicProjectStatus: 68, boardMeetingDays: 14,
+  };
+  if (procedure === "ccmg.bhcDashboard") return {
+    departments: { mhtcm: { activePlans: 4, pendingIntakes: 1, avgCaseLoad: 8 }, mhrs: { activePrograms: 3, groupsThisWeek: 6 } },
+    intakeQueue: [{ id: "i1", youthName: "Test Youth", status: "pending", referralDate: "2026-06-28" }],
+  };
+  if (procedure === "m19.getCampusSummary") return {
+    mainUnit: { occupied: 8, capacity: 8, status: "full" },
+    ecsUnit: { occupied: 4, capacity: 8, status: "available" },
+    cypressUnit: { occupied: 0, capacity: 16, status: "planned" },
+    totalOccupied: 12, totalCapacity: 32,
+  };
   // ─── M1 ENDPOINTS ────────────────────────────────────────
   if (procedure === "m1.dashboardKPIs") return {
     totalInOnboarding: 5, modulesCompleted: 18, totalModules: 24,

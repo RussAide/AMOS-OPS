@@ -169,12 +169,12 @@ export function DashboardPage() {
 
   // ── Alerts ──
   const alerts: { level: "critical" | "warning" | "info"; message: string; route?: string }[] = [];
-  if ((d?.revenue?.deniedClaims ?? 0) > 0) alerts.push({ level: "warning", message: `${d!.revenue.deniedClaims} denied claim(s) requiring follow-up`, route: "/revenue/claims" });
-  if ((d?.part2?.expiredConsents ?? 0) > 0) alerts.push({ level: "critical", message: `${d!.part2.expiredConsents} expired Part 2 consent(s)`, route: "/compliance/part2" });
-  if ((d?.gad?.overdueWorkOrders ?? 0) > 0) alerts.push({ level: "warning", message: `${d!.gad.overdueWorkOrders} overdue work order(s)`, route: "/gad" });
-  if ((d?.bhc?.highRiskCount ?? 0) > 0) alerts.push({ level: "critical", message: `${d!.bhc.highRiskCount} high-risk flag(s) active`, route: "/clinical/bhc" });
-  if ((c?.overdueItems ?? 0) > 0) alerts.push({ level: "warning", message: `${c!.overdueItems} overdue compliance item(s)`, route: "/qa" });
-  if ((w?.expiringCredentials ?? 0) > 0) alerts.push({ level: "info", message: `${w!.expiringCredentials} credential(s) expiring soon`, route: "/hr/credentials" });
+  if ((d?.revenue?.deniedClaims ?? 0) > 0) alerts.push({ level: "warning", message: `${d?.revenue?.deniedClaims ?? 0} denied claim(s) requiring follow-up`, route: "/revenue/claims" });
+  if ((d?.part2?.expiredConsents ?? 0) > 0) alerts.push({ level: "critical", message: `${d?.part2?.expiredConsents ?? 0} expired Part 2 consent(s)`, route: "/compliance/part2" });
+  if ((d?.gad?.overdueWorkOrders ?? 0) > 0) alerts.push({ level: "warning", message: `${d?.gad?.overdueWorkOrders ?? 0} overdue work order(s)`, route: "/gad" });
+  if ((d?.bhc?.highRiskCount ?? 0) > 0) alerts.push({ level: "critical", message: `${d?.bhc?.highRiskCount ?? 0} high-risk flag(s) active`, route: "/clinical/bhc" });
+  if ((c?.overdueItems ?? 0) > 0) alerts.push({ level: "warning", message: `${c?.overdueItems ?? 0} overdue compliance item(s)`, route: "/qa" });
+  if ((w?.expiringCredentials ?? 0) > 0) alerts.push({ level: "info", message: `${w?.expiringCredentials ?? 0} credential(s) expiring soon`, route: "/hr/credentials" });
 
   // ── Module Cards ──
   const modules = [
@@ -376,9 +376,9 @@ export function DashboardPage() {
                   <circle cx="60" cy="60" r="50" stroke="#f0f0f0" strokeWidth="10" fill="none" />
                   <circle
                     cx="60" cy="60" r="50"
-                    stroke={e!.compliancePosture >= 80 ? "#059669" : e!.compliancePosture >= 50 ? "#D97706" : "#DC2626"}
+                    stroke={(e?.compliancePosture ?? 0) >= 80 ? "#059669" : (e?.compliancePosture ?? 0) >= 50 ? "#D97706" : "#DC2626"}
                     strokeWidth="10" fill="none"
-                    strokeDasharray={`${(e!.compliancePosture / 100) * 314} 314`}
+                    strokeDasharray={`${((e?.compliancePosture ?? 0) / 100) * 314} 314`}
                     strokeLinecap="round"
                   />
                 </svg>
@@ -520,9 +520,9 @@ export function DashboardPage() {
           <div className="grid grid-cols-4 gap-3">
             {[
               { label: "Current", value: r?.outstandingAR ?? 0, color: "#059669" },
-              { label: "1-30 Days", value: (r?.outstandingAR ?? 0) > 0 ? Math.round((r!.outstandingAR) * 0.4) : 0, color: "#D97706" },
-              { label: "31-60 Days", value: (r?.outstandingAR ?? 0) > 0 ? Math.round((r!.outstandingAR) * 0.35) : 0, color: "#F59E0B" },
-              { label: "61+ Days", value: (r?.outstandingAR ?? 0) > 0 ? Math.round((r!.outstandingAR) * 0.25) : 0, color: "#DC2626" },
+              { label: "1-30 Days", value: (r?.outstandingAR ?? 0) > 0 ? Math.round((r?.outstandingAR ?? 0) * 0.4) : 0, color: "#D97706" },
+              { label: "31-60 Days", value: (r?.outstandingAR ?? 0) > 0 ? Math.round((r?.outstandingAR ?? 0) * 0.35) : 0, color: "#F59E0B" },
+              { label: "61+ Days", value: (r?.outstandingAR ?? 0) > 0 ? Math.round((r?.outstandingAR ?? 0) * 0.25) : 0, color: "#DC2626" },
             ].map((a) => (
               <div key={a.label} className="text-center p-3 rounded-lg" style={{ backgroundColor: a.color + "10" }}>
                 <p className="text-[11px] font-medium uppercase tracking-[0.5px] mb-1" style={{ color: a.color }}>{a.label}</p>
