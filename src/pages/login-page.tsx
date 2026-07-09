@@ -95,7 +95,7 @@ const DEPT_PILLS = ["Executive", "Corporate", "GAD", "BHC", "GRO"];
 export function LoginPage() {
   const navigate = useNavigate();
   const { login, register, isAuthenticated } = useAuth();
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(true); // Show login form directly
   const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -148,7 +148,7 @@ export function LoginPage() {
       </div>
 
       {/* ─── Main Content ──────────────────────────────── */}
-      <div className="relative flex flex-col items-center px-4 pt-12 pb-8" style={{ zIndex: 10, minHeight: "calc(100vh - 48px)" }}>
+      <div className="relative flex flex-col items-center justify-center px-4 py-6" style={{ zIndex: 10, minHeight: "calc(100vh - 48px)" }}>
 
         {!showForm ? (
           /* ═══════════ LANDING VIEW ═══════════ */
@@ -230,39 +230,39 @@ export function LoginPage() {
             {/* Back to landing */}
             <button
               onClick={() => { setShowForm(false); setError(""); }}
-              className="text-[11px] mb-4 flex items-center gap-1 transition-colors hover:opacity-80"
+              className="text-[11px] mb-3 flex items-center gap-1 transition-colors hover:opacity-80"
               style={{ color: "rgba(255,255,255,0.4)" }}
             >
               <ChevronRight size={12} className="rotate-180" /> Back to overview
             </button>
 
             {/* Logo */}
-            <div className="text-center mb-6">
+            <div className="text-center mb-4">
               <img
                 src="/assets/AMOS-OPS_Logo_Vertical_Dark.png"
                 alt="AMOS-OPS"
-                className="w-[140px] mx-auto mb-3"
+                className="w-[100px] mx-auto mb-2"
                 draggable={false}
               />
-              <h2 className="text-[20px] font-bold text-white">Sign In to AMOS-OPS</h2>
+              <h2 className="text-[18px] font-bold text-white">Sign In to AMOS-OPS</h2>
               <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>Enter your credentials to continue</p>
             </div>
 
             {/* Card */}
-            <div className="rounded-xl p-6" style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(20px)" }}>
+            <div className="rounded-xl p-5" style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(20px)" }}>
               {/* Tabs */}
-              <div className="flex mb-5 rounded-lg overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
+              <div className="flex mb-4 rounded-lg overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
                 <button onClick={() => { setMode("login"); setError(""); }} className="flex-1 py-2 text-[12px] font-medium transition-all" style={{ backgroundColor: mode === "login" ? "#245C5A" : "transparent", color: mode === "login" ? "#fff" : "rgba(255,255,255,0.4)" }}>Sign In</button>
                 <button onClick={() => { setMode("register"); setError(""); }} className="flex-1 py-2 text-[12px] font-medium transition-all" style={{ backgroundColor: mode === "register" ? "#245C5A" : "transparent", color: mode === "register" ? "#fff" : "rgba(255,255,255,0.4)" }}>Register</button>
               </div>
 
               {error && (
-                <div className="flex items-center gap-2 p-3 rounded-lg mb-4 text-[11px]" style={{ backgroundColor: "rgba(220,38,38,0.12)", color: "#FCA5A5", border: "1px solid rgba(220,38,38,0.2)" }}>
+                <div className="flex items-center gap-2 p-2.5 rounded-lg mb-3 text-[11px]" style={{ backgroundColor: "rgba(220,38,38,0.12)", color: "#FCA5A5", border: "1px solid rgba(220,38,38,0.2)" }}>
                   <AlertCircle size={13} /> {error}
                 </div>
               )}
 
-              <form onSubmit={mode === "login" ? handleLogin : handleRegister} className="space-y-3">
+              <form onSubmit={mode === "login" ? handleLogin : handleRegister} className="space-y-2.5">
                 <div>
                   <label className="text-[10px] font-medium mb-1 block" style={{ color: "rgba(255,255,255,0.4)" }}>Email</label>
                   <input type="email" required className="w-full rounded-lg px-3 py-2.5 text-[12px] outline-none transition-colors" style={{ backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", color: "#fff" }} placeholder="admin@adolbi.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
