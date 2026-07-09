@@ -37,6 +37,7 @@ import {
   StickyNote,
   ClipboardSignature,
   Lightbulb,
+  Globe2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -694,7 +695,7 @@ const ADMIN_ITEMS: NavItem[] = [
     label: "Site Review",
     agent: "AMOS-Domain",
     href: "/executive/marketing-review",
-    icon: Globe,
+    icon: Globe2,
     section: "ADMIN",
     roles: ["super-admin", "executive-director", "managing-director"],
   },

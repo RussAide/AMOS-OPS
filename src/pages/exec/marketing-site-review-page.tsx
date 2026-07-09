@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import {
-  Globe, RefreshCw, ChevronRight, AlertTriangle, CheckCircle2,
+  Globe2, RefreshCw, ChevronRight, AlertTriangle, CheckCircle2,
   XCircle, ArrowUpRight, BarChart3, ShieldCheck, Search, Eye,
   Smartphone, FileText, Zap, Accessibility, Type, Image, AlertOctagon,
 } from "lucide-react";
@@ -58,7 +58,7 @@ export function MarketingSiteReviewPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-[22px] font-bold flex items-center gap-2" style={{ color: "var(--topbar-title)" }}>
-            <Globe size={22} style={{ color: "#245C5A" }} /> Marketing Site Review
+            <Globe2 size={22} style={{ color: "#245C5A" }} /> Marketing Site Review
           </h1>
           <p className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>
             Automated quality audit for public-facing website
