@@ -98,7 +98,7 @@ export function LoginPage() {
   const [showForm, setShowForm] = useState(true); // Show login form directly
   const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ email: "", password: "", firstName: "", lastName: "", role: "rcs-day", department: "" });
 
   if (isAuthenticated) {
