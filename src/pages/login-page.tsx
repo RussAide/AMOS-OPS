@@ -45,7 +45,6 @@ function ParticleBackground() {
         ctx.fillStyle = `rgba(90, 168, 165, ${p.o})`;
         ctx.fill();
       });
-      // Draw faint connecting lines
       for (let i = 0; i < particles.length; i++) {
         for (let j = i + 1; j < particles.length; j++) {
           const dx = particles[i].x - particles[j].x;
@@ -95,7 +94,7 @@ const DEPT_PILLS = ["Executive", "Corporate", "GAD", "BHC", "GRO"];
 export function LoginPage() {
   const navigate = useNavigate();
   const { login, register, isAuthenticated } = useAuth();
-  const [showForm, setShowForm] = useState(true); // Show login form directly
+  const [showForm, setShowForm] = useState(true);
   const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -139,7 +138,6 @@ export function LoginPage() {
     <div className="min-h-screen relative overflow-hidden" style={{ background: "linear-gradient(180deg, #0a1628 0%, #0d1f35 50%, #0a1628 100%)" }}>
       <ParticleBackground />
 
-      {/* ─── Top Bar ───────────────────────────────────── */}
       <div className="relative flex items-center justify-end px-6 py-3" style={{ zIndex: 10 }}>
         <div className="flex items-center gap-1.5 text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>
           <Lock size={10} />
@@ -147,41 +145,19 @@ export function LoginPage() {
         </div>
       </div>
 
-      {/* ─── Main Content ──────────────────────────────── */}
       <div className="relative flex flex-col items-center justify-center px-4 py-6" style={{ zIndex: 10, minHeight: "calc(100vh - 48px)" }}>
 
         {!showForm ? (
-          /* ═══════════ LANDING VIEW ═══════════ */
           <div className="w-full max-w-2xl mx-auto text-center">
-            {/* AMOS-OPS Logo */}
             <div className="mb-2">
-              <img
-                src="/assets/AMOS-OPS_Logo_Vertical_Dark.png"
-                alt="AMOS-OPS"
-                className="w-[260px] mx-auto"
-                draggable={false}
-              />
+              <img src="/assets/AMOS-OPS_Logo_Vertical_Dark.png" alt="AMOS-OPS" className="w-[260px] mx-auto" draggable={false} />
             </div>
+            <p className="text-[13px] font-semibold tracking-[0.25em] uppercase mb-0.5" style={{ color: "#5BA8A5" }}>Digital Operations System</p>
+            <p className="text-[12px] mb-8" style={{ color: "rgba(255,255,255,0.4)" }}>Adolbi Care &middot; Enterprise Healthcare Platform</p>
 
-            {/* Tagline — right below the logo */}
-            <p className="text-[13px] font-semibold tracking-[0.25em] uppercase mb-0.5" style={{ color: "#5BA8A5" }}>
-              Digital Operations System
-            </p>
-            <p className="text-[12px] mb-8" style={{ color: "rgba(255,255,255,0.4)" }}>
-              Adolbi Care &middot; Enterprise Healthcare Platform
-            </p>
-
-            {/* Feature Cards */}
             <div className="grid grid-cols-3 gap-3 mb-8">
               {FEATURE_CARDS.map(card => (
-                <div
-                  key={card.title}
-                  className="rounded-xl p-3 text-left transition-all hover:scale-[1.02]"
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.06)",
-                  }}
-                >
+                <div key={card.title} className="rounded-xl p-3 text-left transition-all hover:scale-[1.02]" style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
                   <card.icon size={16} style={{ color: card.color }} className="mb-2" />
                   <div className="text-[11px] font-semibold text-white mb-0.5">{card.title}</div>
                   <div className="text-[9px] leading-relaxed" style={{ color: "rgba(255,255,255,0.35)" }}>{card.description}</div>
@@ -189,68 +165,33 @@ export function LoginPage() {
               ))}
             </div>
 
-            {/* Access Button */}
-            <button
-              onClick={() => setShowForm(true)}
-              className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl text-[14px] font-bold text-white transition-all hover:scale-[1.02] active:scale-[0.98] mb-3"
-              style={{
-                background: "linear-gradient(135deg, #245C5A 0%, #1a8a85 100%)",
-                boxShadow: "0 4px 24px rgba(36,92,90,0.4), 0 0 60px rgba(36,92,90,0.15)",
-              }}
-            >
+            <button onClick={() => setShowForm(true)} className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl text-[14px] font-bold text-white transition-all hover:scale-[1.02] active:scale-[0.98] mb-3" style={{ background: "linear-gradient(135deg, #245C5A 0%, #1a8a85 100%)", boxShadow: "0 4px 24px rgba(36,92,90,0.4), 0 0 60px rgba(36,92,90,0.15)" }}>
               <Shield size={16} />
               Access AMOS-OPS
               <ChevronRight size={16} />
             </button>
 
-            <p className="text-[10px] mb-8" style={{ color: "rgba(255,255,255,0.25)" }}>
-              Authorized personnel only &middot; All access is logged
-            </p>
+            <p className="text-[10px] mb-8" style={{ color: "rgba(255,255,255,0.25)" }}>Authorized personnel only &middot; All access is logged</p>
 
-            {/* Department Pills */}
             <div className="flex items-center justify-center gap-2 flex-wrap">
               {DEPT_PILLS.map(dept => (
-                <span
-                  key={dept}
-                  className="px-3 py-1 rounded-full text-[10px] font-medium"
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    color: "rgba(255,255,255,0.45)",
-                  }}
-                >
-                  {dept}
-                </span>
+                <span key={dept} className="px-3 py-1 rounded-full text-[10px] font-medium" style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.45)" }}>{dept}</span>
               ))}
             </div>
           </div>
         ) : (
-          /* ═══════════ LOGIN FORM VIEW ═══════════ */
           <div className="w-full max-w-md mx-auto">
-            {/* Back to landing */}
-            <button
-              onClick={() => { setShowForm(false); setError(""); }}
-              className="text-[11px] mb-3 flex items-center gap-1 transition-colors hover:opacity-80"
-              style={{ color: "rgba(255,255,255,0.4)" }}
-            >
+            <button onClick={() => { setShowForm(false); setError(""); }} className="text-[11px] mb-3 flex items-center gap-1 transition-colors hover:opacity-80" style={{ color: "rgba(255,255,255,0.4)" }}>
               <ChevronRight size={12} className="rotate-180" /> Back to overview
             </button>
 
-            {/* Logo */}
             <div className="text-center mb-4">
-              <img
-                src="/assets/AMOS-OPS_Logo_Vertical_Dark.png"
-                alt="AMOS-OPS"
-                className="w-[100px] mx-auto mb-2"
-                draggable={false}
-              />
+              <img src="/assets/AMOS-OPS_Logo_Vertical_Dark.png" alt="AMOS-OPS" className="w-[100px] mx-auto mb-2" draggable={false} />
               <h2 className="text-[18px] font-bold text-white">Sign In to AMOS-OPS</h2>
               <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>Enter your credentials to continue</p>
             </div>
 
-            {/* Card */}
             <div className="rounded-xl p-5" style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(20px)" }}>
-              {/* Tabs */}
               <div className="flex mb-4 rounded-lg overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
                 <button onClick={() => { setMode("login"); setError(""); }} className="flex-1 py-2 text-[12px] font-medium transition-all" style={{ backgroundColor: mode === "login" ? "#245C5A" : "transparent", color: mode === "login" ? "#fff" : "rgba(255,255,255,0.4)" }}>Sign In</button>
                 <button onClick={() => { setMode("register"); setError(""); }} className="flex-1 py-2 text-[12px] font-medium transition-all" style={{ backgroundColor: mode === "register" ? "#245C5A" : "transparent", color: mode === "register" ? "#fff" : "rgba(255,255,255,0.4)" }}>Register</button>
