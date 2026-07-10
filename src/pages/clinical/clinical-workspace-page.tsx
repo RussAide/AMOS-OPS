@@ -716,7 +716,7 @@ function OutcomeMeasureModal({
             {answeredCount > 0 && (
               <div
                 className="p-4 rounded-lg border"
-                style={{ borderColor: severityLevel?.color + "40" ?? "#E5E7EB", backgroundColor: severityLevel?.color + "08" ?? "#F9FAFB" }}
+                style={{ borderColor: (severityLevel?.color ?? "#999") + "40", backgroundColor: (severityLevel?.color ?? "#999") + "08" }}
               >
                 <div className="flex items-center justify-between">
                   <div>

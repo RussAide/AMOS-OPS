@@ -295,7 +295,7 @@ function StartSessionModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => setForm((prev) => ({ ...prev, patientId: e.target.value }))}
             >
               <option value="">Choose a patient</option>
-              {patientsData?.patients.map((p) => (
+              {(patientsData?.patients ?? []).map((p) => (
                 <option key={p.id} value={p.id}>{p.lastName}, {p.firstName} ({p.mrn})</option>
               ))}
             </select>
@@ -395,7 +395,7 @@ function ServiceNoteModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => update("patientId", e.target.value)}
             >
               <option value="">Choose a patient</option>
-              {patientsData?.patients.map((p) => (
+              {(patientsData?.patients ?? []).map((p) => (
                 <option key={p.id} value={p.id}>{p.lastName}, {p.firstName}</option>
               ))}
             </select>
@@ -571,7 +571,7 @@ function OutcomeMeasureModal({ onClose }: { onClose: () => void }) {
                 onChange={(e) => setPatientId(e.target.value)}
               >
                 <option value="">Choose a patient</option>
-                {patientsData?.patients.map((p) => (
+                {(patientsData?.patients ?? []).map((p) => (
                   <option key={p.id} value={p.id}>{p.lastName}, {p.firstName}</option>
                 ))}
               </select>
@@ -702,7 +702,7 @@ function TreatmentPlanModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => setPatientId(e.target.value)}
             >
               <option value="">Choose a patient</option>
-              {patientsData?.patients.map((p) => (
+              {(patientsData?.patients ?? []).map((p) => (
                 <option key={p.id} value={p.id}>{p.lastName}, {p.firstName}</option>
               ))}
             </select>
@@ -999,7 +999,7 @@ export function ClinicalDashboardPage() {
             </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {patientsData?.patients.map((patient) => (
+            {(patientsData?.patients ?? []).map((patient) => (
               <div
                 key={patient.id}
                 className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm"

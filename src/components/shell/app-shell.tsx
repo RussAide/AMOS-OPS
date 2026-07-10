@@ -2,6 +2,8 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { AppSidebar } from "./app-sidebar";
+import { Menu, X } from "lucide-react";
+import { useState } from "react";
 
 // ─── HOME / DASHBOARD ───
 import DashboardPage from "@/pages/dashboard-page";
@@ -172,10 +174,37 @@ export function AppShell() {
     );
   }
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background">
-      <AppSidebar />
+    <div className="flex h-screen w-screen overflow-hidden bg-background relative">
+      {/* Mobile sidebar overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - hidden on mobile unless toggled */}
+      <div className={`${mobileMenuOpen ? 'fixed left-0 top-0 z-50 h-screen' : 'hidden lg:flex'} flex-shrink-0`}>
+        <AppSidebar mobile={mobileMenuOpen} onNavigate={() => setMobileMenuOpen(false)} />
+      </div>
+
       <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Mobile top bar with hamburger */}
+        <div className="flex items-center gap-3 px-4 py-2 border-b lg:hidden" style={{ backgroundColor: 'var(--topbar-bg, #fff)' }}>
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="flex items-center justify-center w-10 h-10 rounded-lg border"
+            style={{ borderColor: 'var(--role-badge-border, #E2E8F0)' }}
+            aria-label="Toggle menu"
+          >
+            {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+          <span className="text-[16px] font-semibold" style={{ color: 'var(--topbar-title, #1a1a2e)' }}>AMOS Intranet</span>
+        </div>
+
         <main className="flex-1 overflow-auto p-4 md:p-6">
           <Routes>
             {/* ─── HOME ─── */}

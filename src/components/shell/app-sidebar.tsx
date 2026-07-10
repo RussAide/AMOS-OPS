@@ -137,7 +137,7 @@ export function AppSidebar({ mobile = false, onNavigate }: AppSidebarProps) {
 
   return (
     <aside
-      className={`h-screen flex flex-col overflow-hidden z-50 ${mobile ? "w-[260px]" : "w-[240px] fixed left-0 top-0"}`}
+      className={`h-screen flex flex-col overflow-hidden z-50 ${mobile ? "w-[260px] fixed left-0 top-0" : "w-[240px] flex-shrink-0"}`}
       style={{
         background: "linear-gradient(180deg, #0f2524 0%, #142E2D 50%, #0f2524 100%)",
       }}
