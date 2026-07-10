@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/hooks/use-auth";
+import ErrorBoundary from "@/components/error-boundary";
 import { AppSidebar } from "./app-sidebar";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
@@ -206,9 +207,10 @@ export function AppShell() {
         </div>
 
         <main className="flex-1 overflow-auto p-4 md:p-6">
-          <Routes>
-            {/* ─── HOME ─── */}
-            <Route path="/" element={<DashboardPage />} />
+          <ErrorBoundary>
+            <Routes>
+              {/* ─── HOME ─── */}
+              <Route path="/" element={<DashboardPage />} />
 
             {/* ─── CLINICAL / BHC ─── */}
             <Route path="/clinical" element={<ClinicalDashboardPage />} />
@@ -352,9 +354,10 @@ export function AppShell() {
             <Route path="/my-shift" element={<MyShiftPage />} />
             <Route path="/meetings-escalations" element={<MeetingsEscalationsPage />} />
 
-            {/* ─── FALLBACK ─── */}
-            <Route path="*" element={<DashboardPage />} />
-          </Routes>
+              {/* ─── FALLBACK ─── */}
+              <Route path="*" element={<DashboardPage />} />
+            </Routes>
+          </ErrorBoundary>
         </main>
       </div>
       <Toaster />

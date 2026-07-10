@@ -149,6 +149,418 @@ function getSingleDemoData(procedure: string): any {
     cypressUnit: { occupied: 0, capacity: 16, status: "planned" },
     totalOccupied: 12, totalCapacity: 32,
   };
+  // ─── BHC CLINICAL ENDPOINTS ──────────────────────────────
+  if (procedure === "bhc.listPatients") return {
+    patients: [
+      { id: "p1", firstName: "Marcus", lastName: "Johnson", age: 15, gender: "M", status: "active", admissionDate: "2026-04-01", diagnoses: ["F90.0 ADHD", "F91.1 Conduct Disorder"], assignedClinician: "Dr. Hall" },
+      { id: "p2", firstName: "Destiny", lastName: "Williams", age: 14, gender: "F", status: "active", admissionDate: "2026-04-15", diagnoses: ["F32.9 Major Depression", "F43.10 PTSD"], assignedClinician: "Lilian Ike" },
+      { id: "p3", firstName: "Carlos", lastName: "Ramirez", age: 16, gender: "M", status: "active", admissionDate: "2026-05-01", diagnoses: ["F31.9 Bipolar II", "F19.10 Substance Use"], assignedClinician: "Dr. Hall" },
+      { id: "p4", firstName: "Aaliyah", lastName: "Peterson", age: 13, gender: "F", status: "active", admissionDate: "2026-05-20", diagnoses: ["F41.1 Generalized Anxiety", "F84.0 ASD Traits"], assignedClinician: "Lilian Ike" },
+      { id: "p5", firstName: "Jaylen", lastName: "Brooks", age: 15, gender: "M", status: "active", admissionDate: "2026-06-10", diagnoses: ["F43.10 PTSD", "F91.8 Oppositional Defiant"], assignedClinician: "Jonthan Guidry" },
+    ],
+  };
+  if (procedure === "bhc.listSessions") return {
+    sessions: [
+      { id: "s1", patientId: "p1", patientName: "Marcus Johnson", sessionType: "Individual Therapy", scheduledDate: "2026-06-30", scheduledTime: "09:00", status: "scheduled", duration: 60, clinician: "Dr. Hall" },
+      { id: "s2", patientId: "p2", patientName: "Destiny Williams", sessionType: "Group CBT", scheduledDate: "2026-06-30", scheduledTime: "10:30", status: "scheduled", duration: 90, clinician: "Lilian Ike" },
+      { id: "s3", patientId: "p3", patientName: "Carlos Ramirez", sessionType: "Family Session", scheduledDate: "2026-06-30", scheduledTime: "14:00", status: "scheduled", duration: 60, clinician: "Dr. Hall" },
+      { id: "s4", patientId: "p4", patientName: "Aaliyah Peterson", sessionType: "Psychosocial Rehab", scheduledDate: "2026-07-01", scheduledTime: "11:00", status: "scheduled", duration: 60, clinician: "Lilian Ike" },
+      { id: "s5", patientId: "p5", patientName: "Jaylen Brooks", sessionType: "Skills Training", scheduledDate: "2026-07-01", scheduledTime: "15:00", status: "scheduled", duration: 45, clinician: "Jonthan Guidry" },
+      { id: "s6", patientId: "p1", patientName: "Marcus Johnson", sessionType: "Case Management", scheduledDate: "2026-07-02", scheduledTime: "10:00", status: "scheduled", duration: 30, clinician: "Jonthan Guidry" },
+    ],
+  };
+  if (procedure === "bhc.dashboardKPIs") return { activePatients: 5, sessionsToday: 3, sessionsThisWeek: 8, highRiskCount: 1, pendingPlans: 1, overdueNotes: 2, authorizationExpiring: 1, outcomeMeasuresDue: 3 };
+  if (procedure === "bhc.clinicianWorkload") return {
+    clinicians: [
+      { name: "Dr. Hall", activeCases: 3, sessionsToday: 2, sessionsThisWeek: 6, notesOverdue: 1, status: "active" },
+      { name: "Lilian Ike", activeCases: 2, sessionsToday: 1, sessionsThisWeek: 4, notesOverdue: 0, status: "active" },
+      { name: "Jonthan Guidry", activeCases: 2, sessionsToday: 0, sessionsThisWeek: 3, notesOverdue: 1, status: "active" },
+      { name: "Dr. Sarah Kim", activeCases: 1, sessionsToday: 0, sessionsThisWeek: 2, notesOverdue: 0, status: "part-time" },
+    ],
+  };
+  if (procedure === "bhc.getPatient") return { id: "p1", firstName: "Marcus", lastName: "Johnson", age: 15, gender: "M", status: "active", admissionDate: "2026-04-01", diagnoses: ["F90.0 ADHD", "F91.1 Conduct Disorder"], assignedClinician: "Dr. Hall", insurancePlan: "Superior HealthPlan", guardianName: "Tanya Johnson", guardianPhone: "(713) 555-0101", allergies: ["Penicillin"], medications: ["Methylphenidate 10mg"], roomNumber: "201A" };
+  if (procedure === "bhc.listInsurancePlans") return {
+    plans: [
+      { id: "ip1", name: "Superior HealthPlan", type: "Medicaid", payer: "Texas Medicaid", isActive: true },
+      { id: "ip2", name: "Blue Cross Blue Shield TX", type: "Commercial", payer: "BCBS", isActive: true },
+      { id: "ip3", name: "UnitedHealthcare Community Plan", type: "Medicaid Managed Care", payer: "UHC", isActive: true },
+    ],
+  };
+  if (procedure === "bhc.listTreatmentPlans") return {
+    plans: [
+      { id: "tp1", patientId: "p1", patientName: "Marcus Johnson", primaryDiagnosis: "F90.0 ADHD", goals: 4, goalsCompleted: 2, status: "active", startDate: "2026-04-01", reviewDate: "2026-07-01", clinician: "Dr. Hall" },
+      { id: "tp2", patientId: "p2", patientName: "Destiny Williams", primaryDiagnosis: "F32.9 Major Depression", goals: 5, goalsCompleted: 2, status: "active", startDate: "2026-04-15", reviewDate: "2026-07-15", clinician: "Lilian Ike" },
+      { id: "tp3", patientId: "p3", patientName: "Carlos Ramirez", primaryDiagnosis: "F31.9 Bipolar II", goals: 6, goalsCompleted: 1, status: "active", startDate: "2026-05-01", reviewDate: "2026-08-01", clinician: "Dr. Hall" },
+      { id: "tp4", patientId: "p4", patientName: "Aaliyah Peterson", primaryDiagnosis: "F41.1 Generalized Anxiety", goals: 4, goalsCompleted: 1, status: "active", startDate: "2026-05-20", reviewDate: "2026-08-20", clinician: "Lilian Ike" },
+    ],
+  };
+  if (procedure === "bhc.listOutcomeMeasures") return {
+    measures: [
+      { id: "om1", patientId: "p1", patientName: "Marcus Johnson", measureType: "CANS", score: 28, previousScore: 32, trend: "improving", dateAdministered: "2026-06-15", dueDate: "2026-07-15" },
+      { id: "om2", patientId: "p2", patientName: "Destiny Williams", measureType: "PHQ-A", score: 14, previousScore: 18, trend: "improving", dateAdministered: "2026-06-10", dueDate: "2026-07-10" },
+      { id: "om3", patientId: "p3", patientName: "Carlos Ramirez", measureType: "CANS", score: 35, previousScore: 33, trend: "worsening", dateAdministered: "2026-06-20", dueDate: "2026-07-20" },
+      { id: "om4", patientId: "p4", patientName: "Aaliyah Peterson", measureType: "SCARED", score: 22, previousScore: 25, trend: "improving", dateAdministered: "2026-06-18", dueDate: "2026-07-18" },
+      { id: "om5", patientId: "p5", patientName: "Jaylen Brooks", measureType: "CANS", score: 30, previousScore: 30, trend: "stable", dateAdministered: "2026-06-22", dueDate: "2026-07-22" },
+      { id: "om6", patientId: "p1", patientName: "Marcus Johnson", measureType: "YOQ", score: 42, previousScore: 48, trend: "improving", dateAdministered: "2026-06-01", dueDate: "2026-07-01" },
+      { id: "om7", patientId: "p2", patientName: "Destiny Williams", measureType: "CANS", score: 25, previousScore: 28, trend: "improving", dateAdministered: "2026-06-12", dueDate: "2026-07-12" },
+    ],
+  };
+  // ─── CCMG / MHTCM / MHRS ENDPOINTS ───────────────────────
+  if (procedure === "ccmg.bhcDashboard") return {
+    departments: {
+      bhc: { activePatients: 5, sessionsToday: 3, sessionsThisWeek: 8, highRiskCount: 1 },
+      mhtcm: { activePlans: 4, pendingIntakes: 1, avgCaseLoad: 8 },
+      mhrs: { activePrograms: 3, groupsThisWeek: 6 },
+    },
+    intakeQueue: [
+      { id: "iq1", youthName: "Trevon Miller", age: 14, referredBy: "Houston ISD Counselor", referralDate: "2026-06-25", status: "pending_assessment", priority: "high" },
+      { id: "iq2", youthName: "Keisha Thompson", age: 16, referredBy: "Texas CPS Region 6", referralDate: "2026-06-28", status: "scheduled", priority: "urgent", scheduledDate: "2026-07-01" },
+    ],
+  };
+  if (procedure === "mhtcm.mhtcmDashboard") return { activeCases: 8, newReferrals: 2, pendingIntakes: 1, caseReviewsDue: 3, dischargePlanning: 1, aftercareFollowups: 2 };
+  if (procedure === "mhrs.mhrsDashboard") return {
+    activeGroups: 3, sessionsThisWeek: 6, participantAttendance: 85,
+    groups: [
+      { id: "g1", name: "Adolescent CBT Group", facilitator: "Lilian Ike", schedule: "Mon/Wed 10:00 AM", participants: 4, maxParticipants: 8, status: "active" },
+      { id: "g2", name: "Substance Use Recovery", facilitator: "Dr. Sarah Kim", schedule: "Tue/Thu 2:00 PM", participants: 3, maxParticipants: 6, status: "active" },
+      { id: "g3", name: "Life Skills & Independent Living", facilitator: "Jonthan Guidry", schedule: "Mon/Wed/Fri 3:00 PM", participants: 5, maxParticipants: 10, status: "active" },
+    ],
+  };
+  // ─── REVENUE CYCLE ENDPOINTS ─────────────────────────────
+  if (procedure === "revenue.listClaims") return {
+    claims: [
+      { id: "rc1", claimNumber: "CLM-2026-001", patientName: "Marcus Johnson", serviceDate: "2026-06-01", amount: 12500, status: "approved", payer: "Superior HealthPlan", agingDays: 0 },
+      { id: "rc2", claimNumber: "CLM-2026-002", patientName: "Destiny Williams", serviceDate: "2026-06-05", amount: 18200, status: "submitted", payer: "Blue Cross Blue Shield TX", agingDays: 12 },
+      { id: "rc3", claimNumber: "CLM-2026-003", patientName: "Carlos Ramirez", serviceDate: "2026-06-08", amount: 22400, status: "draft", payer: "UnitedHealthcare", agingDays: 0 },
+      { id: "rc4", claimNumber: "CLM-2026-004", patientName: "Aaliyah Peterson", serviceDate: "2026-06-10", amount: 16800, status: "approved", payer: "Superior HealthPlan", agingDays: 5 },
+      { id: "rc5", claimNumber: "CLM-2026-005", patientName: "Jaylen Brooks", serviceDate: "2026-06-12", amount: 19600, status: "denied", payer: "Blue Cross Blue Shield TX", agingDays: 18 },
+      { id: "rc6", claimNumber: "CLM-2026-006", patientName: "Marcus Johnson", serviceDate: "2026-06-15", amount: 14200, status: "submitted", payer: "UnitedHealthcare", agingDays: 8 },
+      { id: "rc7", claimNumber: "CLM-2026-007", patientName: "Destiny Williams", serviceDate: "2026-06-20", amount: 20800, status: "draft", payer: "Superior HealthPlan", agingDays: 0 },
+      { id: "rc8", claimNumber: "CLM-2026-008", patientName: "Carlos Ramirez", serviceDate: "2026-06-22", amount: 25100, status: "approved", payer: "Blue Cross Blue Shield TX", agingDays: 2 },
+    ],
+  };
+  if (procedure === "revenue.agingReport") return {
+    totalOutstanding: 1250000,
+    byBucket: [
+      { bucket: "0-30", amount: 500000, count: 12 },
+      { bucket: "31-60", amount: 375000, count: 8 },
+      { bucket: "61-90", amount: 250000, count: 5 },
+      { bucket: "90+", amount: 125000, count: 3 },
+    ],
+  };
+  if (procedure === "revenue.agingQueueByPayer") return {
+    payers: [
+      { id: "py1", name: "Superior HealthPlan", totalOutstanding: 450000, buckets: { "0-30": 200000, "31-60": 150000, "61-90": 75000, "90+": 25000 }, claimCount: 8 },
+      { id: "py2", name: "Blue Cross Blue Shield TX", totalOutstanding: 380000, buckets: { "0-30": 150000, "31-60": 130000, "61-90": 60000, "90+": 40000 }, claimCount: 6 },
+      { id: "py3", name: "UnitedHealthcare", totalOutstanding: 270000, buckets: { "0-30": 100000, "31-60": 60000, "61-90": 70000, "90+": 40000 }, claimCount: 5 },
+      { id: "py4", name: "Aetna Better Health", totalOutstanding: 150000, buckets: { "0-30": 50000, "31-60": 35000, "61-90": 45000, "90+": 20000 }, claimCount: 3 },
+    ],
+  };
+  if (procedure === "revenue.listAuthorizations") return {
+    authorizations: [
+      { id: "ra1", patientName: "Marcus Johnson", authNumber: "AUTH-TX-88452", serviceType: "Residential Treatment", approvedUnits: 90, usedUnits: 62, startDate: "2026-04-01", endDate: "2026-09-30", status: "approved", payer: "Superior HealthPlan" },
+      { id: "ra2", patientName: "Destiny Williams", authNumber: "AUTH-TX-88471", serviceType: "Residential Treatment", approvedUnits: 90, usedUnits: 48, startDate: "2026-04-15", endDate: "2026-10-15", status: "approved", payer: "Blue Cross Blue Shield TX" },
+      { id: "ra3", patientName: "Carlos Ramirez", authNumber: "AUTH-TX-88503", serviceType: "Intensive Outpatient", approvedUnits: 60, usedUnits: 25, startDate: "2026-05-01", endDate: "2026-08-01", status: "approved", payer: "UnitedHealthcare" },
+      { id: "ra4", patientName: "Aaliyah Peterson", authNumber: "AUTH-TX-88520", serviceType: "Residential Treatment", approvedUnits: 0, usedUnits: 0, startDate: null, endDate: null, status: "pending", payer: "Superior HealthPlan" },
+      { id: "ra5", patientName: "Jaylen Brooks", authNumber: "AUTH-TX-88541", serviceType: "Residential Treatment", approvedUnits: 45, usedUnits: 45, startDate: "2026-03-01", endDate: "2026-06-01", status: "expired", payer: "Blue Cross Blue Shield TX" },
+    ],
+  };
+  if (procedure === "revenue.listSubmittableClaims") return {
+    claims: [
+      { id: "rc3", claimNumber: "CLM-2026-003", patientName: "Carlos Ramirez", serviceDate: "2026-06-08", amount: 22400, status: "draft", payer: "UnitedHealthcare", lastModified: "2026-06-28" },
+      { id: "rc7", claimNumber: "CLM-2026-007", patientName: "Destiny Williams", serviceDate: "2026-06-20", amount: 20800, status: "draft", payer: "Superior HealthPlan", lastModified: "2026-06-27" },
+      { id: "rc9", claimNumber: "CLM-2026-009", patientName: "Jaylen Brooks", serviceDate: "2026-06-25", amount: 18700, status: "draft", payer: "Blue Cross Blue Shield TX", lastModified: "2026-06-26" },
+    ],
+  };
+  if (procedure === "revenue.getClaim") return { id: "rc1", claimNumber: "CLM-2026-001", patientName: "Marcus Johnson", patientId: "p1", serviceDate: "2026-06-01", amount: 12500, status: "approved", payer: "Superior HealthPlan", agingDays: 0, diagnosisCodes: ["F90.0", "F91.1"], procedureCodes: ["H0019", "H0031"], provider: "Dr. Hall", submittedDate: "2026-06-03", paidDate: "2026-06-10", paidAmount: 11875, adjustmentAmount: 625 };
+  if (procedure === "revenue.stats") return { totalClaims: 24, pendingSubmission: 3, submitted: 8, approved: 6, denied: 2, totalBilled: 125000, totalCollected: 78000, collectionRate: 62, avgDaysToPayment: 18 };
+  // ─── DOCUMENT MANAGEMENT (M2) ENDPOINTS ──────────────────
+  if (procedure === "m2.stats") return { total: 24, draft: 3, inReview: 2, approved: 4, published: 12, archived: 3 };
+  if (procedure === "m2.listCategories") return {
+    categories: [
+      { id: "cat1", name: "HR Policies", code: "HR-POL", description: "Human resources policies and procedures", documentCount: 4 },
+      { id: "cat2", name: "Clinical Protocols", code: "CLN-PRO", description: "Clinical treatment protocols and procedures", documentCount: 3 },
+      { id: "cat3", name: "GRO Operations", code: "GRO-OPS", description: "Residential facility operations manuals", documentCount: 3 },
+      { id: "cat4", name: "QA & Compliance", code: "QA-COMP", description: "Quality assurance and compliance documentation", documentCount: 3 },
+      { id: "cat5", name: "Revenue Cycle", code: "REV-CYC", description: "Revenue cycle management documentation", documentCount: 2 },
+      { id: "cat6", name: "GAD Administration", code: "GAD-ADM", description: "General administration documentation", documentCount: 2 },
+      { id: "cat7", name: "Training Materials", code: "TRN-MAT", description: "Training and educational materials", documentCount: 3 },
+      { id: "cat8", name: "Incident Reports", code: "INC-RPT", description: "Incident and event reports", documentCount: 2 },
+      { id: "cat9", name: "Form Templates", code: "FRM-TPL", description: "Standard form templates", documentCount: 2 },
+    ],
+  };
+  if (procedure === "m2.list") return {
+    documents: [
+      { id: "d1", title: "Employee Handbook 2026", category: "HR Policies", status: "published", version: "3.2", author: "E. Russ Aideyan", createdAt: "2026-01-15", updatedAt: "2026-06-20" },
+      { id: "d2", title: "Crisis Intervention Protocol", category: "Clinical Protocols", status: "published", version: "2.1", author: "Dr. Hall", createdAt: "2026-02-10", updatedAt: "2026-06-18" },
+      { id: "d3", title: "Youth Rights & Advocacy Guide", category: "GRO Operations", status: "published", version: "1.5", author: "Lilian Ike", createdAt: "2026-03-05", updatedAt: "2026-06-15" },
+      { id: "d4", title: "CAPA Procedure Manual", category: "QA & Compliance", status: "published", version: "4.0", author: "E. Russ Aideyan", createdAt: "2026-01-20", updatedAt: "2026-06-22" },
+      { id: "d5", title: "Claims Submission Guide", category: "Revenue Cycle", status: "published", version: "2.3", author: "Jonthan Guidry", createdAt: "2026-04-12", updatedAt: "2026-06-10" },
+      { id: "d6", title: "Facility Maintenance SOP", category: "GAD Administration", status: "published", version: "1.8", author: "GRO Admin", createdAt: "2026-05-01", updatedAt: "2026-06-12" },
+      { id: "d7", title: "New Hire Orientation Manual", category: "Training Materials", status: "published", version: "3.0", author: "HR Director", createdAt: "2026-02-01", updatedAt: "2026-06-25" },
+      { id: "d8", title: "Restraint & Seclusion Documentation", category: "Incident Reports", status: "published", version: "2.2", author: "Dr. Hall", createdAt: "2026-03-20", updatedAt: "2026-06-08" },
+      { id: "d9", title: "Youth Assessment Intake Form", category: "Form Templates", status: "published", version: "5.1", author: "Lilian Ike", createdAt: "2026-01-10", updatedAt: "2026-06-28" },
+      { id: "d10", title: "Medication Administration Policy", category: "Clinical Protocols", status: "published", version: "3.4", author: "Dr. Sarah Kim", createdAt: "2026-04-01", updatedAt: "2026-06-05" },
+      { id: "d11", title: "Safety Inspection Checklist", category: "GRO Operations", status: "published", version: "1.2", author: "RCS Lead", createdAt: "2026-05-15", updatedAt: "2026-06-14" },
+      { id: "d12", title: "HIPAA Privacy Policy", category: "QA & Compliance", status: "published", version: "4.2", author: "E. Russ Aideyan", createdAt: "2026-01-05", updatedAt: "2026-06-01" },
+    ],
+    total: 12, page: 1, pageSize: 20,
+  };
+  if (procedure === "m2.getById") return { id: "d1", title: "Employee Handbook 2026", category: "HR Policies", status: "published", version: "3.2", author: "E. Russ Aideyan", createdAt: "2026-01-15", updatedAt: "2026-06-20", content: "This handbook outlines all policies and procedures for Adolbi Care employees...", fileUrl: "/documents/employee-handbook-2026.pdf", fileSize: 2450000, tags: ["hr", "policy", "onboarding"], approver: "E. Russ Aideyan", approvedAt: "2026-01-20", effectiveDate: "2026-01-20", expirationDate: "2027-01-20" };
+  // ─── M29 NIL GRAPH ENDPOINTS ─────────────────────────────
+  if (procedure === "m29.stats") return { totalEntities: 18, totalRelations: 24, byType: { youth: 5, staff: 8, facility: 2, document: 3, partner: 5 } };
+  if (procedure === "m29.search") return {
+    results: [
+      { id: "e1", type: "youth", name: "Marcus Johnson", description: "15yo male, ADHD/Conduct Disorder, admitted 2026-04-01" },
+      { id: "e2", type: "staff", name: "Dr. Hall", description: "Clinical Director, board-certified psychiatrist" },
+      { id: "e3", type: "facility", name: "Main Residential Unit", description: "8-bed main residential unit at Cypress campus" },
+      { id: "e4", type: "partner", name: "Houston ISD", description: "School district partnership, primary referral source" },
+      { id: "e5", type: "document", name: "Employee Handbook 2026", description: "Published HR policy document v3.2" },
+    ],
+  };
+  if (procedure === "m29.getEntity") return { id: "e1", type: "youth", name: "Marcus Johnson", description: "15yo male, ADHD/Conduct Disorder, admitted 2026-04-01", properties: { age: 15, gender: "M", admissionDate: "2026-04-01", room: "201A", guardian: "Tanya Johnson", diagnoses: ["F90.0 ADHD", "F91.1 Conduct Disorder"] }, relationships: [{ to: "e2", type: "treated_by", name: "Dr. Hall" }, { to: "e3", type: "resides_at", name: "Main Residential Unit" }, { to: "e4", type: "referred_by", name: "Houston ISD" }] };
+  if (procedure === "m29.getRelationships") return {
+    relationships: [
+      { id: "r1", fromEntity: "e1", toEntity: "e2", type: "treated_by", fromName: "Marcus Johnson", toName: "Dr. Hall", createdAt: "2026-04-01" },
+      { id: "r2", fromEntity: "e1", toEntity: "e3", type: "resides_at", fromName: "Marcus Johnson", toName: "Main Residential Unit", createdAt: "2026-04-01" },
+      { id: "r3", fromEntity: "e4", toEntity: "e1", type: "referred", fromName: "Houston ISD", toName: "Marcus Johnson", createdAt: "2026-03-28" },
+      { id: "r4", fromEntity: "e2", toEntity: "e3", type: "works_at", fromName: "Dr. Hall", toName: "Main Residential Unit", createdAt: "2026-01-15" },
+    ],
+  };
+  // ─── M19 CAMPUS CENSUS ENDPOINTS ─────────────────────────
+  if (procedure === "m19.getStageCensus") return {
+    stages: [
+      { id: "stage1", name: "Main Residential Unit", type: "residential", occupied: 8, capacity: 8, status: "full", youth: [{ id: "p1", name: "Marcus Johnson", bed: "201A" }, { id: "p2", name: "Destiny Williams", bed: "202A" }, { id: "p3", name: "Carlos Ramirez", bed: "203A" }, { id: "p4", name: "Aaliyah Peterson", bed: "204A" }, { id: "p5", name: "Jaylen Brooks", bed: "205A" }, { id: "p6", name: "Trevon Miller", bed: "206A" }, { id: "p7", name: "Keisha Thompson", bed: "207A" }, { id: "p8", name: "Darius Jackson", bed: "208A" }] },
+      { id: "stage2", name: "ECS (Emergency Care Shelter)", type: "emergency", occupied: 4, capacity: 8, status: "available", youth: [{ id: "p9", name: "Sofia Chen", bed: "ECS-01" }, { id: "p10", name: "Amari Wilson", bed: "ECS-02" }, { id: "p11", name: "Isabella Garcia", bed: "ECS-03" }, { id: "p12", name: "Malik Johnson", bed: "ECS-04" }] },
+      { id: "stage3", name: "Cypress", type: "planned", occupied: 0, capacity: 16, status: "offline", youth: [] },
+    ],
+    totals: { occupied: 12, capacity: 32, available: 20 },
+  };
+  if (procedure === "m19.listCampusStages") return {
+    stages: [
+      { id: "stage1", name: "Main Residential Unit", type: "residential", capacity: 8, occupied: 8, status: "full", manager: "RCS Lead", phone: "(713) 555-1000", youthCount: 8, avgAge: 14.5, avgLOS: 42 },
+      { id: "stage2", name: "ECS (Emergency Care Shelter)", type: "emergency", capacity: 8, occupied: 4, status: "available", manager: "Lilian Ike", phone: "(713) 555-1001", youthCount: 4, avgAge: 13.8, avgLOS: 18 },
+      { id: "stage3", name: "Cypress", type: "planned", capacity: 16, occupied: 0, status: "offline", manager: "TBD", phone: "(713) 555-1002", youthCount: 0, avgAge: 0, avgLOS: 0 },
+    ],
+  };
+  if (procedure === "m19.listCensusAlerts") return {
+    alerts: [
+      { id: "ca1", type: "capacity_warning", severity: "high", message: "Main Residential Unit at full capacity (8/8). Consider activating ECS overflow.", stage: "Main Residential Unit", createdAt: "2026-06-28" },
+      { id: "ca2", type: "upcoming_discharge", severity: "medium", message: "Carlos Ramirez discharge planned for 2026-07-05. Bed 203A will become available.", stage: "Main Residential Unit", youthId: "p3", createdAt: "2026-06-25" },
+    ],
+  };
+  // ─── GRO RESIDENTIAL ENDPOINTS ───────────────────────────
+  if (procedure === "gro.dashboardKPIs") return { census: 12, capacity: 16, occupancyRate: 75, activeReferrals: 3, partnerships: 5, conversionRate: 25, newAdmissions7d: 2, discharges7d: 1, incidents7d: 0, restraints7d: 0 };
+  if (procedure === "gro.listReferrals") return {
+    referrals: [
+      { id: "ref1", youthName: "Trevon Miller", age: 14, gender: "M", source: "Houston ISD", referringContact: "Maria Gonzalez, School Counselor", phone: "(713) 555-0100", status: "active", dateReceived: "2026-06-25", priority: "high", notes: "Behavioral issues at school, depression screening positive" },
+      { id: "ref2", youthName: "Keisha Thompson", age: 16, gender: "F", source: "Harris County Juvenile Probation", referringContact: "Deputy Chief Williams", phone: "(713) 555-0200", status: "active", dateReceived: "2026-06-22", priority: "urgent", notes: "Court-ordered residential placement, trauma history" },
+      { id: "ref3", youthName: "Malik Johnson", age: 13, gender: "M", source: "Texas CPS Region 6", referringContact: "Case Supervisor Torres", phone: "(713) 555-0500", status: "active", dateReceived: "2026-06-20", priority: "high", notes: "Foster care disruption, needs stabilization" },
+    ],
+  };
+  if (procedure === "gro.listPartnerships") return {
+    partnerships: [
+      { id: "part1", name: "Houston ISD", type: "School District", status: "active", primaryContact: "Maria Gonzalez", email: "m.gonzalez@houstonisd.org", phone: "(713) 555-0100", address: "4400 West 18th St, Houston, TX 77092", referralCount: 24, startDate: "2023-08-01", renewalDate: "2026-08-01" },
+      { id: "part2", name: "Harris County Juvenile Probation", type: "Government", status: "active", primaryContact: "Deputy Chief Williams", email: "d.williams@harriscountyjp.hctx.net", phone: "(713) 555-0200", address: "1200 Congress St, Houston, TX 77002", referralCount: 12, startDate: "2024-01-15", renewalDate: "2027-01-15" },
+      { id: "part3", name: "Legacy Community Health", type: "Healthcare", status: "active", primaryContact: "Dr. Sarah Kim", email: "s.kim@legacycommunityhealth.org", phone: "(832) 555-0300", address: "Various clinic locations, Houston, TX", referralCount: 18, startDate: "2024-03-01", renewalDate: "2027-03-01" },
+      { id: "part4", name: "Texas Childrens Hospital", type: "Healthcare", status: "active", primaryContact: "James Okafor", email: "j.okafor@texaschildrens.org", phone: "(832) 555-0400", address: "6621 Fannin St, Houston, TX 77030", referralCount: 8, startDate: "2025-01-10", renewalDate: "2026-12-31" },
+      { id: "part5", name: "Texas CPS Region 6", type: "Government", status: "active", primaryContact: "Case Supervisor Torres", email: "r.torres@dfps.texas.gov", phone: "(713) 555-0500", address: "2525 Murworth Dr, Houston, TX 77054", referralCount: 15, startDate: "2024-06-01", renewalDate: "2027-06-01" },
+    ],
+  };
+  if (procedure === "gro.listCampaigns") return {
+    campaigns: [
+      { id: "camp1", name: "Spring 2026 School Outreach", type: "community", status: "active", startDate: "2026-03-01", endDate: "2026-06-30", budget: 8000, leadsGenerated: 32, conversions: 8, roi: 2.4, description: "Outreach to Houston ISD and surrounding school districts targeting at-risk youth" },
+      { id: "camp2", name: "Pediatrician Partnership Program", type: "professional", status: "active", startDate: "2026-04-01", endDate: "2026-09-30", budget: 5000, leadsGenerated: 18, conversions: 5, roi: 1.8, description: "Direct partnership with pediatricians and community health centers for warm handoffs" },
+    ],
+  };
+  if (procedure === "groCompliance.groComplianceDashboard") return { overallScore: 88, incidents7d: 0, restraints7d: 0, overdueDocumentation: 1, overdueMedical: 0, recordRetentionAlerts: 2 };
+  if (procedure === "groCompliance.listRestraintIncidents") return {
+    incidents: [
+      { id: "ri1", youthName: "Marcus Johnson", date: "2026-05-15", type: "Physical Restraint", duration: 8, reason: "Imminent risk of elopement", staffInvolved: ["RCS Lead", "RCS Day Staff"], physicianNotified: true, parentNotified: true, reviewCompleted: true, followUpActions: "Additional de-escalation training scheduled for youth" },
+      { id: "ri2", youthName: "Jaylen Brooks", date: "2026-04-22", type: "Physical Restraint", duration: 12, reason: "Aggression toward peer", staffInvolved: ["Dr. Hall", "RCS Night Staff"], physicianNotified: true, parentNotified: true, reviewCompleted: true, followUpActions: "Anger management sessions increased to 2x weekly" },
+    ],
+  };
+  if (procedure === "groCompliance.listRecordRetention") return {
+    records: [
+      { id: "rr1", recordType: "Youth Clinical Notes", youthId: "p2", youthName: "Destiny Williams", retentionPeriod: "7 years", createdDate: "2020-01-15", expiryDate: "2027-01-15", daysUntilExpiry: 201, status: "active" },
+      { id: "rr2", recordType: "Incident Report", youthId: "p1", youthName: "Marcus Johnson", retentionPeriod: "7 years", createdDate: "2019-06-10", expiryDate: "2026-06-10", daysUntilExpiry: -18, status: "expiring_soon" },
+      { id: "rr3", recordType: "Treatment Plan", youthId: "p5", youthName: "Jaylen Brooks", retentionPeriod: "7 years", createdDate: "2019-03-01", expiryDate: "2026-03-01", daysUntilExpiry: -118, status: "overdue" },
+    ],
+  };
+  // ─── QA & COMPLIANCE (M3) ENDPOINTS ──────────────────────
+  if (procedure === "m3.sentinel") return { score: 91, openCAPs: 3, overdueCAPs: 1, openFindings: 0, riskItems: 0 };
+  if (procedure === "m3.complianceScore") return { overall: 94, hipaaPrivacy: 98, hipaaSecurity: 96, part2: 100, stateLicensure: 92, staffCredentials: 88, incidentReporting: 100, medicationMgmt: 95, youthRights: 97 };
+  if (procedure === "m3.capStats") return { open: 3, overdue: 1, pendingVerification: 0, completed30d: 2, totalClosed: 8 };
+  if (procedure === "m3.auditBinderStats") return { totalAudits: 4, completed: 2, inProgress: 1, scheduled: 1 };
+  if (procedure === "m3.evidenceStats") return { totalItems: 12, uploaded: 10, verified: 8, pending: 2 };
+  if (procedure === "m3.memoStats") return { totalIssued: 6, thisMonth: 1, pendingAcknowledgment: 2 };
+  if (procedure === "m3.deficiencyStats") return { openPOCPending: 1, inProgress: 2, corrected: 3, verifiedClosed: 5 };
+  // ─── WORKFLOW ENGINE ENDPOINTS ───────────────────────────
+  if (procedure === "workflow.dashboardKPIs") return { activeRules: 9, triggeredToday: 3, pendingApprovals: 2, avgProcessingTime: 4.2 };
+  if (procedure === "workflow.listRules") return {
+    rules: [
+      { id: "wr1", name: "New Admission Notification", trigger: "youth.admitted", actions: ["notify_clinical_team", "create_bed_assignment_task"], status: "active", createdBy: "E. Russ Aideyan", createdAt: "2026-01-15" },
+      { id: "wr2", name: "High Risk Alert Escalation", trigger: "clinical.high_risk", actions: ["notify_clinical_director", "create_safety_plan_task"], status: "active", createdBy: "Dr. Hall", createdAt: "2026-02-01" },
+      { id: "wr3", name: "Credential Expiry Warning", trigger: "credential.expiring_30d", actions: ["notify_hr", "notify_supervisor", "create_renewal_task"], status: "active", createdBy: "HR Director", createdAt: "2026-01-20" },
+      { id: "wr4", name: "Incident Report Required", trigger: "safety.incident", actions: ["notify_qa_officer", "create_incident_report_task"], status: "active", createdBy: "E. Russ Aideyan", createdAt: "2026-03-01" },
+      { id: "wr5", name: "Claim Denial Follow-up", trigger: "revenue.claim_denied", actions: ["notify_billing_manager", "create_appeal_task"], status: "active", createdBy: "Jonthan Guidry", createdAt: "2026-04-10" },
+      { id: "wr6", name: "CAP Overdue Escalation", trigger: "qa.cap_overdue", actions: ["notify_qa_director", "escalate_to_executive"], status: "active", createdBy: "E. Russ Aideyan", createdAt: "2026-01-10" },
+      { id: "wr7", name: "Discharge Planning Reminder", trigger: "youth.discharge_7d", actions: ["notify_case_manager", "create_discharge_plan_task"], status: "active", createdBy: "Lilian Ike", createdAt: "2026-05-01" },
+      { id: "wr8", name: "Medication Error Alert", trigger: "clinical.med_error", actions: ["notify_clinical_director", "notify_qa_officer", "create_review_task"], status: "active", createdBy: "Dr. Hall", createdAt: "2026-02-15" },
+      { id: "wr9", name: "Restraint Documentation Check", trigger: "safety.restraint_used", actions: ["notify_qa_officer", "create_review_task", "notify_physician"], status: "active", createdBy: "Dr. Hall", createdAt: "2026-03-20" },
+    ],
+  };
+  if (procedure === "workflow.listInstances") return {
+    instances: [
+      { id: "wi1", ruleName: "New Admission Notification", trigger: "youth.admitted", status: "completed", startedAt: "2026-06-28T08:00:00Z", completedAt: "2026-06-28T08:05:00Z", duration: 5, triggeredBy: "RCS Lead" },
+      { id: "wi2", ruleName: "High Risk Alert Escalation", trigger: "clinical.high_risk", status: "completed", startedAt: "2026-06-27T14:00:00Z", completedAt: "2026-06-27T14:15:00Z", duration: 15, triggeredBy: "Dr. Hall" },
+      { id: "wi3", ruleName: "Credential Expiry Warning", trigger: "credential.expiring_30d", status: "in_progress", startedAt: "2026-06-25T09:00:00Z", completedAt: null, duration: null, triggeredBy: "System" },
+      { id: "wi4", ruleName: "Incident Report Required", trigger: "safety.incident", status: "completed", startedAt: "2026-06-20T10:30:00Z", completedAt: "2026-06-20T10:45:00Z", duration: 15, triggeredBy: "RCS Day Staff" },
+      { id: "wi5", ruleName: "Claim Denial Follow-up", trigger: "revenue.claim_denied", status: "in_progress", startedAt: "2026-06-18T11:00:00Z", completedAt: null, duration: null, triggeredBy: "Billing System" },
+    ],
+  };
+  if (procedure === "workflow.listPendingApprovals") return {
+    approvals: [
+      { id: "wa1", instanceId: "wi3", ruleName: "Credential Expiry Warning", requester: "System", approverRole: "HR Director", description: "Approve renewal task for LPC License expiring in 30 days", requestedAt: "2026-06-25T09:00:00Z", priority: "high" },
+      { id: "wa2", instanceId: "wi5", ruleName: "Claim Denial Follow-up", requester: "Billing System", approverRole: "Revenue Manager", description: "Approve appeal for denied claim CLM-2026-005 ($19,600)", requestedAt: "2026-06-18T11:00:00Z", priority: "medium" },
+    ],
+  };
+  if (procedure === "workflow.auditLog") return {
+    entries: [
+      { id: "al1", action: "rule_triggered", actor: "System", target: "New Admission Notification", details: "Youth Keisha Thompson admitted to bed 207A", timestamp: "2026-06-28T08:00:00Z" },
+      { id: "al2", action: "task_completed", actor: "RCS Lead", target: "Bed Assignment", details: "Assigned Keisha Thompson to bed 207A in Main Residential Unit", timestamp: "2026-06-28T08:05:00Z" },
+      { id: "al3", action: "rule_triggered", actor: "Dr. Hall", target: "High Risk Alert Escalation", details: "Carlos Ramirez flagged as high risk due to escalating aggression", timestamp: "2026-06-27T14:00:00Z" },
+      { id: "al4", action: "approval_requested", actor: "System", target: "Credential Expiry Warning", details: "LPC License renewal approval requested for Jonthan Guidry", timestamp: "2026-06-25T09:00:00Z" },
+      { id: "al5", action: "rule_triggered", actor: "Billing System", target: "Claim Denial Follow-up", details: "Claim CLM-2026-005 denied by BCBS TX", timestamp: "2026-06-18T11:00:00Z" },
+      { id: "al6", action: "rule_modified", actor: "E. Russ Aideyan", target: "CAP Overdue Escalation", details: "Changed escalation threshold from 7 days to 5 days overdue", timestamp: "2026-06-15T16:00:00Z" },
+    ],
+  };
+  // ─── CREDENTIALS ENDPOINTS ───────────────────────────────
+  if (procedure === "credentials.dashboard") return { totalCredentials: 48, valid: 42, expiring30d: 2, expired: 1, expiring90d: 3, complianceRate: 88 };
+  // ─── ANALYTICS ENDPOINTS ─────────────────────────────────
+  if (procedure === "analytics.workforceOverview") return { totalStaff: 24, byDivision: { gro: 10, bhc: 8, gad: 4, eo: 2 }, turnoverRate: 12, avgTenure: 18 };
+  if (procedure === "analytics.revenueOverview") return { ytdRevenue: 2840000, ytdClaims: 142, avgClaimValue: 20000, collectionRate: 62, denialRate: 15 };
+  if (procedure === "analytics.residentialOverview") return { avgDailyCensus: 12, admissionsYTD: 18, dischargesYTD: 15, avgLOS: 45, occupancyRate: 75 };
+  // ─── CASE MANAGEMENT & YOUTH ENDPOINTS ───────────────────
+  if (procedure === "m13.listYouth") return {
+    youth: [
+      { id: "p1", firstName: "Marcus", lastName: "Johnson", age: 15, gender: "M", status: "active", admissionDate: "2026-04-01", diagnoses: ["F90.0 ADHD", "F91.1 Conduct Disorder"], assignedCaseManager: "Jonthan Guidry", room: "201A", guardian: "Tanya Johnson" },
+      { id: "p2", firstName: "Destiny", lastName: "Williams", age: 14, gender: "F", status: "active", admissionDate: "2026-04-15", diagnoses: ["F32.9 Major Depression", "F43.10 PTSD"], assignedCaseManager: "Lilian Ike", room: "202A", guardian: "Darnell Williams" },
+      { id: "p3", firstName: "Carlos", lastName: "Ramirez", age: 16, gender: "M", status: "active", admissionDate: "2026-05-01", diagnoses: ["F31.9 Bipolar II", "F19.10 Substance Use"], assignedCaseManager: "Dr. Hall", room: "203A", guardian: "Maria Ramirez" },
+      { id: "p4", firstName: "Aaliyah", lastName: "Peterson", age: 13, gender: "F", status: "active", admissionDate: "2026-05-20", diagnoses: ["F41.1 Generalized Anxiety", "F84.0 ASD Traits"], assignedCaseManager: "Lilian Ike", room: "204A", guardian: "Keisha Peterson" },
+      { id: "p5", firstName: "Jaylen", lastName: "Brooks", age: 15, gender: "M", status: "active", admissionDate: "2026-06-10", diagnoses: ["F43.10 PTSD", "F91.8 Oppositional Defiant"], assignedCaseManager: "Jonthan Guidry", room: "205A", guardian: "Angela Brooks" },
+    ],
+  };
+  if (procedure === "m16.listCases") return {
+    cases: [
+      { id: "case1", youthId: "p1", youthName: "Marcus Johnson", caseManager: "Jonthan Guidry", status: "active", openedDate: "2026-04-01", reviewDate: "2026-07-01", goals: 4, goalsCompleted: 2, riskLevel: "moderate" },
+      { id: "case2", youthId: "p2", youthName: "Destiny Williams", caseManager: "Lilian Ike", status: "active", openedDate: "2026-04-15", reviewDate: "2026-07-15", goals: 5, goalsCompleted: 2, riskLevel: "high" },
+      { id: "case3", youthId: "p4", youthName: "Aaliyah Peterson", caseManager: "Lilian Ike", status: "active", openedDate: "2026-05-20", reviewDate: "2026-08-20", goals: 4, goalsCompleted: 1, riskLevel: "moderate" },
+      { id: "case4", youthId: "p5", youthName: "Jaylen Brooks", caseManager: "Jonthan Guidry", status: "active", openedDate: "2026-06-10", reviewDate: "2026-09-10", goals: 3, goalsCompleted: 0, riskLevel: "high" },
+    ],
+  };
+  if (procedure === "m16.caseMgmtSummary") return { activeCases: 4, newThisMonth: 1, reviewsDue: 2, dischargesPlanned: 1 };
+  if (procedure === "m17.listCrises") return {
+    crises: [
+      { id: "cris1", youthId: "p3", youthName: "Carlos Ramirez", type: "Behavioral Escalation", severity: "high", description: "Physical altercation with peer in common area", response: "Physical restraint applied per protocol. Youth de-escalated after 12 minutes. No injuries.", respondedBy: "RCS Lead, Dr. Hall", status: "resolved", startedAt: "2026-06-25T16:00:00Z", resolvedAt: "2026-06-25T16:30:00Z", followUpRequired: true },
+      { id: "cris2", youthId: "p2", youthName: "Destiny Williams", type: "Suicidal Ideation", severity: "critical", description: "Youth disclosed suicidal thoughts to clinician during session", response: "1:1 supervision initiated. Safety plan reviewed. Emergency contact notified. Psychiatrist consulted.", respondedBy: "Lilian Ike, Dr. Hall", status: "resolved", startedAt: "2026-06-20T14:00:00Z", resolvedAt: "2026-06-20T18:00:00Z", followUpRequired: true },
+      { id: "cris3", youthId: "p5", youthName: "Jaylen Brooks", type: "Behavioral Escalation", severity: "moderate", description: "Refusal to participate in group therapy, verbal aggression toward staff", response: "De-escalation techniques applied. Youth agreed to individual session alternative.", respondedBy: "Jonthan Guidry", status: "active", startedAt: "2026-06-28T10:00:00Z", resolvedAt: null, followUpRequired: true },
+    ],
+  };
+  if (procedure === "m17.crisisSummary") return { totalThisMonth: 3, active: 1, resolved: 2, avgResponseTime: 4.5 };
+  if (procedure === "m18.listFamilyContacts") return {
+    contacts: [
+      { id: "fc1", youthId: "p1", youthName: "Marcus Johnson", guardianName: "Tanya Johnson", relationship: "Mother", phone: "(713) 555-0101", email: "tjohnson@email.com", lastContact: "2026-06-25", contactFrequency: "Weekly", notes: "Mother very engaged, attends all family sessions" },
+      { id: "fc2", youthId: "p2", youthName: "Destiny Williams", guardianName: "Darnell Williams", relationship: "Father", phone: "(713) 555-0201", email: "dwilliams@email.com", lastContact: "2026-06-22", contactFrequency: "Bi-weekly", notes: "Father works long hours, prefers evening calls" },
+      { id: "fc3", youthId: "p3", youthName: "Carlos Ramirez", guardianName: "Maria Ramirez", relationship: "Mother", phone: "(713) 555-0301", email: "mramirez@email.com", lastContact: "2026-06-28", contactFrequency: "Weekly", notes: "Spanish-speaking, interpreter provided for sessions" },
+      { id: "fc4", youthId: "p4", youthName: "Aaliyah Peterson", guardianName: "Keisha Peterson", relationship: "Grandmother", phone: "(713) 555-0401", email: "kpeterson@email.com", lastContact: "2026-06-20", contactFrequency: "Weekly", notes: "Legal guardian, very involved in treatment planning" },
+    ],
+  };
+  if (procedure === "m20.listAuthorizations") return {
+    authorizations: [
+      { id: "az1", patientName: "Marcus Johnson", authNumber: "AUTH-TX-88452", serviceType: "Residential Treatment", approvedUnits: 90, usedUnits: 62, startDate: "2026-04-01", endDate: "2026-09-30", status: "active", payer: "Superior HealthPlan" },
+      { id: "az2", patientName: "Destiny Williams", authNumber: "AUTH-TX-88471", serviceType: "Residential Treatment", approvedUnits: 90, usedUnits: 48, startDate: "2026-04-15", endDate: "2026-10-15", status: "active", payer: "Blue Cross Blue Shield TX" },
+      { id: "az3", patientName: "Carlos Ramirez", authNumber: "AUTH-TX-88503", serviceType: "Intensive Outpatient", approvedUnits: 60, usedUnits: 25, startDate: "2026-05-01", endDate: "2026-08-01", status: "active", payer: "UnitedHealthcare" },
+      { id: "az4", patientName: "Aaliyah Peterson", authNumber: "AUTH-TX-88520", serviceType: "Residential Treatment", approvedUnits: 0, usedUnits: 0, startDate: null, endDate: null, status: "pending", payer: "Superior HealthPlan" },
+      { id: "az5", patientName: "Jaylen Brooks", authNumber: "AUTH-TX-88541", serviceType: "Residential Treatment", approvedUnits: 45, usedUnits: 45, startDate: "2026-03-01", endDate: "2026-06-01", status: "expired", payer: "Blue Cross Blue Shield TX" },
+    ],
+  };
+  if (procedure === "m20.authSummary") return { total: 5, active: 3, pending: 1, expired: 1, expiring30d: 1 };
+  if (procedure === "m15.listMeetings") return {
+    meetings: [
+      { id: "mt1", title: "Weekly MDT — Marcus Johnson", type: "MDT", date: "2026-06-25", time: "10:00", attendees: ["Dr. Hall", "Lilian Ike", "Jonthan Guidry", "RCS Lead"], status: "completed", notes: "Reviewed progress on behavioral goals. Reduced CANS score from 32 to 28. Family session scheduled." },
+      { id: "mt2", title: "Weekly MDT — Destiny Williams", type: "MDT", date: "2026-06-26", time: "14:00", attendees: ["Dr. Hall", "Lilian Ike", "Dr. Sarah Kim"], status: "completed", notes: "Discussed PTSD treatment progress. EMDR therapy showing positive results. Safety plan remains active." },
+      { id: "mt3", title: "Quarterly MDT Review — All Youth", type: "Quarterly Review", date: "2026-07-05", time: "09:00", attendees: ["Dr. Hall", "Lilian Ike", "Jonthan Guidry", "E. Russ Aideyan"], status: "upcoming", notes: "Quarterly review of all active treatment plans and outcome measures" },
+    ],
+  };
+  if (procedure === "m1.getWorkQueue") return {
+    items: [
+      { id: "wq1", title: "Complete CANS assessment for Jaylen Brooks", type: "assessment", assignedTo: "Jonthan Guidry", priority: "high", dueDate: "2026-06-30", status: "pending", relatedEntity: "p5" },
+      { id: "wq2", title: "Review treatment plan — Carlos Ramirez", type: "review", assignedTo: "Dr. Hall", priority: "high", dueDate: "2026-07-01", status: "pending", relatedEntity: "p3" },
+      { id: "wq3", title: "Submit appeal for denied claim CLM-2026-005", type: "billing", assignedTo: "Jonthan Guidry", priority: "medium", dueDate: "2026-07-03", status: "pending", relatedEntity: "rc5" },
+      { id: "wq4", title: "LPC License renewal — Jonthan Guidry", type: "credential", assignedTo: "HR Director", priority: "high", dueDate: "2026-07-15", status: "in_progress", relatedEntity: "h4" },
+      { id: "wq5", title: "Quarterly MDT preparation", type: "administrative", assignedTo: "Lilian Ike", priority: "medium", dueDate: "2026-07-05", status: "pending", relatedEntity: "mt3" },
+    ],
+  };
+  // ─── MGMA SCORECARD ENDPOINTS ────────────────────────────
+  if (procedure === "m23.getDomainScores") return {
+    domains: [
+      { id: "dom1", name: "Operations", score: 78, benchmark: 82, trend: "improving" },
+      { id: "dom2", name: "Financial", score: 65, benchmark: 75, trend: "stable" },
+      { id: "dom3", name: "Patient Care", score: 88, benchmark: 85, trend: "improving" },
+      { id: "dom4", name: "Staffing", score: 72, benchmark: 80, trend: "declining" },
+      { id: "dom5", name: "Technology", score: 70, benchmark: 78, trend: "stable" },
+      { id: "dom6", name: "Compliance", score: 94, benchmark: 90, trend: "improving" },
+      { id: "dom7", name: "Growth", score: 68, benchmark: 72, trend: "stable" },
+    ],
+  };
+  if (procedure === "m23.getKPIDetails") return {
+    kpis: [
+      { id: "kpi1", domain: "Operations", name: "Average Wait Time", value: 12, benchmark: 15, unit: "minutes", trend: "improving" },
+      { id: "kpi2", domain: "Operations", name: "Bed Turnover Rate", value: 5.2, benchmark: 4.8, unit: "per month", trend: "stable" },
+      { id: "kpi3", domain: "Operations", name: "Admission Processing Time", value: 2.1, benchmark: 2.5, unit: "days", trend: "improving" },
+      { id: "kpi4", domain: "Operations", name: "Discharge Processing Time", value: 1.5, benchmark: 1.5, unit: "days", trend: "stable" },
+      { id: "kpi5", domain: "Operations", name: "Staff-to-Youth Ratio", value: 2.0, benchmark: 2.5, unit: "ratio", trend: "declining" },
+      { id: "kpi6", domain: "Operations", name: "Schedule Adherence", value: 92, benchmark: 90, unit: "percent", trend: "improving" },
+      { id: "kpi7", domain: "Financial", name: "Net Revenue per Patient", value: 48500, benchmark: 52000, unit: "dollars", trend: "stable" },
+      { id: "kpi8", domain: "Financial", name: "Days in Accounts Receivable", value: 18, benchmark: 15, unit: "days", trend: "declining" },
+      { id: "kpi9", domain: "Financial", name: "Claim Denial Rate", value: 15, benchmark: 8, unit: "percent", trend: "declining" },
+      { id: "kpi10", domain: "Financial", name: "Cost per Patient Day", value: 485, benchmark: 450, unit: "dollars", trend: "stable" },
+      { id: "kpi11", domain: "Financial", name: "Operating Margin", value: 8, benchmark: 12, unit: "percent", trend: "stable" },
+      { id: "kpi12", domain: "Financial", name: "Bad Debt Ratio", value: 4.2, benchmark: 3.5, unit: "percent", trend: "declining" },
+      { id: "kpi13", domain: "Patient Care", name: "Treatment Plan Completion Rate", value: 88, benchmark: 85, unit: "percent", trend: "improving" },
+      { id: "kpi14", domain: "Patient Care", name: "Patient Satisfaction Score", value: 4.2, benchmark: 4.0, unit: "out of 5", trend: "improving" },
+      { id: "kpi15", domain: "Patient Care", name: "Outcome Measure Improvement", value: 75, benchmark: 70, unit: "percent", trend: "improving" },
+      { id: "kpi16", domain: "Patient Care", name: "Readmission Rate (30-day)", value: 5, benchmark: 8, unit: "percent", trend: "improving" },
+      { id: "kpi17", domain: "Patient Care", name: "Medication Error Rate", value: 0.2, benchmark: 0.5, unit: "percent", trend: "improving" },
+      { id: "kpi18", domain: "Patient Care", name: "Safety Incident Rate", value: 1.5, benchmark: 2.0, unit: "per 1000 patient days", trend: "improving" },
+      { id: "kpi19", domain: "Staffing", name: "Employee Turnover Rate", value: 12, benchmark: 10, unit: "percent", trend: "declining" },
+      { id: "kpi20", domain: "Staffing", name: "Time to Fill Open Positions", value: 28, benchmark: 21, unit: "days", trend: "declining" },
+      { id: "kpi21", domain: "Staffing", name: "Overtime Hours per Employee", value: 8.5, benchmark: 6.0, unit: "hours per month", trend: "declining" },
+      { id: "kpi22", domain: "Staffing", name: "Training Completion Rate", value: 88, benchmark: 95, unit: "percent", trend: "stable" },
+      { id: "kpi23", domain: "Staffing", name: "Employee Satisfaction", value: 3.8, benchmark: 4.0, unit: "out of 5", trend: "stable" },
+      { id: "kpi24", domain: "Staffing", name: "Credential Compliance Rate", value: 88, benchmark: 95, unit: "percent", trend: "stable" },
+      { id: "kpi25", domain: "Technology", name: "EHR Uptime", value: 99.5, benchmark: 99.9, unit: "percent", trend: "stable" },
+      { id: "kpi26", domain: "Technology", name: "System Response Time", value: 2.1, benchmark: 1.5, unit: "seconds", trend: "stable" },
+      { id: "kpi27", domain: "Technology", name: "Digital Documentation Adoption", value: 85, benchmark: 90, unit: "percent", trend: "improving" },
+      { id: "kpi28", domain: "Technology", name: "Telehealth Utilization", value: 15, benchmark: 20, unit: "percent", trend: "stable" },
+      { id: "kpi29", domain: "Technology", name: "Data Backup Success Rate", value: 100, benchmark: 100, unit: "percent", trend: "stable" },
+      { id: "kpi30", domain: "Technology", name: "Cybersecurity Incident Count", value: 0, benchmark: 0, unit: "incidents", trend: "stable" },
+      { id: "kpi31", domain: "Compliance", name: "HIPAA Compliance Score", value: 98, benchmark: 95, unit: "percent", trend: "improving" },
+      { id: "kpi32", domain: "Compliance", name: "State Licensure Score", value: 92, benchmark: 90, unit: "percent", trend: "improving" },
+      { id: "kpi33", domain: "Compliance", name: "CAP Closure Rate", value: 85, benchmark: 80, unit: "percent", trend: "improving" },
+      { id: "kpi34", domain: "Compliance", name: "Audit Pass Rate", value: 94, benchmark: 90, unit: "percent", trend: "improving" },
+      { id: "kpi35", domain: "Compliance", name: "Incident Reporting Timeliness", value: 100, benchmark: 95, unit: "percent", trend: "improving" },
+      { id: "kpi36", domain: "Compliance", name: "Youth Rights Compliance", value: 97, benchmark: 95, unit: "percent", trend: "improving" },
+      { id: "kpi37", domain: "Growth", name: "Occupancy Rate", value: 75, benchmark: 85, unit: "percent", trend: "stable" },
+      { id: "kpi38", domain: "Growth", name: "New Referral Conversion Rate", value: 25, benchmark: 30, unit: "percent", trend: "stable" },
+      { id: "kpi39", domain: "Growth", name: "Average Length of Stay", value: 45, benchmark: 42, unit: "days", trend: "stable" },
+      { id: "kpi40", domain: "Growth", name: "Net Promoter Score", value: 32, benchmark: 40, unit: "score", trend: "stable" },
+      { id: "kpi41", domain: "Growth", name: "Community Partnerships", value: 5, benchmark: 6, unit: "count", trend: "stable" },
+      { id: "kpi42", domain: "Growth", name: "Revenue Growth Rate", value: 8, benchmark: 12, unit: "percent", trend: "stable" },
+    ],
+  };
+  if (procedure === "m23.getOverallScore") return { overallScore: 72, benchmark: 80, trend: "improving" };
   // ─── M1 ENDPOINTS ────────────────────────────────────────
   if (procedure === "m1.dashboardKPIs") return {
     totalInOnboarding: 5, modulesCompleted: 18, totalModules: 24,

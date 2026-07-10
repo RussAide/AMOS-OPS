@@ -1,97 +1,150 @@
 import { Component, type ReactNode } from "react";
-import { AlertTriangle, RotateCcw } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { AlertTriangle, RotateCcw, Home } from "lucide-react";
 
 interface Props {
   children: ReactNode;
-  fallback?: ReactNode;
 }
 
 interface State {
   hasError: boolean;
-  error?: Error;
+  error: Error | null;
+  showDetails: boolean;
+}
+
+/* ─── Router-aware retry helper (hooks can't live in classes) ─── */
+function ErrorActions({ onRetry }: { onRetry: () => void }) {
+  const navigate = useNavigate();
+
+  return (
+    <div className="flex flex-col sm:flex-row gap-3 mt-6">
+      <button
+        onClick={onRetry}
+        className="inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium text-white transition-colors hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[#245C5A] focus:ring-offset-2 focus:ring-offset-[#0a1628]"
+        style={{ backgroundColor: "#245C5A" }}
+      >
+        <RotateCcw size={16} />
+        Retry
+      </button>
+      <button
+        onClick={() => navigate("/")}
+        className="inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-[#245C5A] focus:ring-offset-2 focus:ring-offset-[#0a1628]"
+        style={{
+          backgroundColor: "rgba(36, 92, 90, 0.15)",
+          color: "#245C5A",
+          border: "1px solid rgba(36, 92, 90, 0.3)",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = "rgba(36, 92, 90, 0.25)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = "rgba(36, 92, 90, 0.15)";
+        }}
+      >
+        <Home size={16} />
+        Go to Dashboard
+      </button>
+    </div>
+  );
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null, showDetails: false };
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+    return { hasError: true, error, showDetails: false };
   }
 
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error("[AMOS-OPS Error Boundary]", error, info.componentStack);
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // Log to console in development; in production this could be a telemetry service
+    console.error("[ErrorBoundary] Caught an error:", error);
+    console.error("[ErrorBoundary] Component stack:", errorInfo.componentStack);
   }
 
-  handleReset = () => {
-    this.setState({ hasError: false, error: undefined });
+  handleRetry = () => {
+    window.location.reload();
   };
 
-  handleClearAndReload = () => {
-    try {
-      for (let i = localStorage.length - 1; i >= 0; i--) {
-        const key = localStorage.key(i);
-        if (key) localStorage.removeItem(key);
-      }
-      sessionStorage.clear();
-    } catch { /* ignore */ }
-    window.location.reload();
+  toggleDetails = () => {
+    this.setState((prev) => ({ showDetails: !prev.showDetails }));
   };
 
   render() {
     if (this.state.hasError) {
-      if (this.props.fallback) return this.props.fallback;
       return (
-        <div className="min-h-screen flex items-center justify-center p-6" style={{ backgroundColor: "var(--main-bg)" }}>
+        <div
+          className="flex min-h-screen items-center justify-center px-4"
+          style={{ backgroundColor: "#0a1628" }}
+        >
           <div className="max-w-md w-full text-center">
+            {/* AMOS-OPS Logo */}
+            <img
+              src="/assets/AMOS-OPS_Logo_Small.png"
+              alt="AMOS-OPS"
+              className="mx-auto mb-6 h-12 w-auto object-contain"
+            />
+
+            {/* Alert icon */}
             <div
-              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
-              style={{ backgroundColor: "#FEE2E2" }}
+              className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full"
+              style={{ backgroundColor: "rgba(220, 38, 38, 0.12)" }}
             >
-              <AlertTriangle size={28} style={{ color: "#DC2626" }} />
+              <AlertTriangle size={32} color="#EF4444" />
             </div>
-            <h2 className="text-[18px] font-bold mb-2" style={{ color: "var(--topbar-title)" }}>
+
+            {/* Heading */}
+            <h1
+              className="text-2xl font-bold tracking-tight"
+              style={{ color: "#ffffff" }}
+            >
               Something went wrong
-            </h2>
-            <p className="text-[13px] mb-4" style={{ color: "var(--topbar-subtitle)" }}>
-              An error occurred in the application. This has been logged for review.
+            </h1>
+
+            {/* Subtitle */}
+            <p
+              className="mt-2 text-sm leading-relaxed"
+              style={{ color: "rgba(255,255,255,0.6)" }}
+            >
+              An unexpected error occurred. Please try again or contact IT support.
             </p>
-            {this.state.error && (
-              <div
-                className="rounded-lg border p-3 mb-4 text-left"
-                style={{ borderColor: "#FEE2E2", backgroundColor: "#FEF2F2" }}
-              >
-                <p className="text-[11px] font-mono" style={{ color: "#991B1B" }}>
-                  {this.state.error.message}
-                </p>
-              </div>
-            )}
-            <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+
+            {/* Action buttons */}
+            <ErrorActions onRetry={this.handleRetry} />
+
+            {/* Collapsible error details */}
+            <div className="mt-6 text-left">
               <button
-                onClick={this.handleClearAndReload}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-medium text-white transition-all hover:shadow-md"
-                style={{ backgroundColor: "#DC2626" }}
+                onClick={this.toggleDetails}
+                className="text-xs font-medium underline underline-offset-2 transition-colors hover:opacity-80"
+                style={{ color: "rgba(255,255,255,0.4)" }}
               >
-                <RotateCcw size={14} />
-                Clear Data & Reload
+                {this.state.showDetails ? "Hide" : "Show"} Error Details
               </button>
-              <button
-                onClick={this.handleReset}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-medium transition-all hover:shadow-md"
-                style={{ backgroundColor: "transparent", border: "1px solid #2D5A58", color: "#B8D4D3" }}
-              >
-                Try Again
-              </button>
+
+              {this.state.showDetails && this.state.error && (
+                <div
+                  className="mt-2 rounded-lg p-3 text-left text-xs font-mono leading-relaxed overflow-auto"
+                  style={{
+                    backgroundColor: "rgba(255,255,255,0.06)",
+                    color: "rgba(255,255,255,0.5)",
+                    maxHeight: "200px",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                  }}
+                >
+                  {this.state.error.toString()}
+                </div>
+              )}
             </div>
-            <p style={{ color: "#5A7A78", fontSize: 11, marginTop: 16, textAlign: "center" }}>
-              If this keeps happening, add <code style={{ background: "#1a3a38", padding: "2px 6px", borderRadius: 4, color: "#7EC8CA" }}>?resetamos=true</code> to the URL
-            </p>
           </div>
         </div>
       );
     }
+
     return this.props.children;
   }
 }
+
+export default ErrorBoundary;
