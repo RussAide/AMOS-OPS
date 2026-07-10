@@ -2,130 +2,129 @@ import React, { useState } from "react";
 import {
   Search,
   Filter,
-  TrendingUp,
-  Clock,
-  AlertTriangle,
+  BookOpen,
   CheckCircle,
-  ToggleLeft,
-  Edit3,
-  History,
+  AlertTriangle,
+  Clock,
+  Plus,
+  Send,
+  PenLine,
 } from "lucide-react";
 
-const workflowData = [
+const trainingData = [
   {
-    ruleName: "Welcome Email",
-    trigger: "New Hire Record Created",
-    condition: "Employee status = 'Active' AND hire date = today",
-    action: "Send automated welcome email with login credentials",
-    status: "Enabled",
-    lastTriggered: "2025-04-18 09:14 AM",
+    employee: "Sarah Johnson",
+    module: "HIPAA Compliance",
+    assignedDate: "2025-04-01",
+    dueDate: "2025-04-15",
+    completionDate: "2025-04-10",
+    status: "Completed",
+    score: 95,
   },
   {
-    ruleName: "Manager Notification",
-    trigger: "New Hire Record Created",
-    condition: "Department is not empty",
-    action: "Notify direct manager of new team member",
-    status: "Enabled",
-    lastTriggered: "2025-04-18 09:14 AM",
+    employee: "Michael Chen",
+    module: "CPI Training",
+    assignedDate: "2025-04-02",
+    dueDate: "2025-04-16",
+    completionDate: "",
+    status: "Overdue",
+    score: null,
   },
   {
-    ruleName: "IT Setup Request",
-    trigger: "New Hire Record Created",
-    condition: "Role requires system access",
-    action: "Create IT ticket for laptop, email, VPN setup",
-    status: "Enabled",
-    lastTriggered: "2025-04-17 02:30 PM",
+    employee: "David Park",
+    module: "De-escalation Techniques",
+    assignedDate: "2025-04-05",
+    dueDate: "2025-04-19",
+    completionDate: "",
+    status: "In Progress",
+    score: null,
   },
   {
-    ruleName: "Badge Photo",
-    trigger: "First Day Check-In",
-    condition: "Badge photo field is empty",
-    action: "Schedule badge photo appointment with HR",
-    status: "Enabled",
-    lastTriggered: "2025-04-16 08:45 AM",
+    employee: "Emily Roberts",
+    module: "Medication Administration",
+    assignedDate: "2025-04-03",
+    dueDate: "2025-04-17",
+    completionDate: "2025-04-12",
+    status: "Completed",
+    score: 88,
   },
   {
-    ruleName: "Handbook Acknowledgment",
-    trigger: "First Day Check-In",
-    condition: "Acknowledgment status = 'Pending'",
-    action: "Send employee handbook and require e-signature",
-    status: "Enabled",
-    lastTriggered: "2025-04-15 10:22 AM",
+    employee: "James Wilson",
+    module: "Cultural Competency",
+    assignedDate: "2025-04-08",
+    dueDate: "2025-04-22",
+    completionDate: "",
+    status: "Assigned",
+    score: null,
   },
   {
-    ruleName: "Benefits Enrollment",
-    trigger: "Day 3 of Employment",
-    condition: "Benefits eligibility = 'Eligible'",
-    action: "Open benefits enrollment window in HR portal",
-    status: "Enabled",
-    lastTriggered: "2025-04-14 11:00 AM",
+    employee: "Lisa Thompson",
+    module: "Trauma-Informed Care",
+    assignedDate: "2025-04-01",
+    dueDate: "2025-04-15",
+    completionDate: "2025-04-14",
+    status: "Completed",
+    score: 92,
   },
   {
-    ruleName: "Training Schedule",
-    trigger: "Day 5 of Employment",
-    condition: "Training plan is assigned",
-    action: "Generate personalized 90-day training calendar",
-    status: "Disabled",
-    lastTriggered: "2025-04-10 03:15 PM",
+    employee: "Marcus Lee",
+    module: "Suicide Prevention",
+    assignedDate: "2025-04-06",
+    dueDate: "2025-04-20",
+    completionDate: "",
+    status: "Overdue",
+    score: null,
   },
   {
-    ruleName: "Policy Review",
-    trigger: "Day 7 of Employment",
-    condition: "Policy review status = 'Not Started'",
-    action: "Assign required policy review modules",
-    status: "Enabled",
-    lastTriggered: "2025-04-12 01:30 PM",
-  },
-  {
-    ruleName: "30-Day Check-in",
-    trigger: "30 Days After Hire",
-    condition: "Check-in meeting status = 'Pending'",
-    action: "Schedule 30-day check-in with HR and manager",
-    status: "Enabled",
-    lastTriggered: "2025-04-08 09:00 AM",
+    employee: "Aisha Patel",
+    module: "Documentation Standards",
+    assignedDate: "2025-04-10",
+    dueDate: "2025-04-24",
+    completionDate: "",
+    status: "Assigned",
+    score: null,
   },
 ];
 
 const kpiData = [
   {
-    label: "Active Rules",
-    value: 9,
-    icon: TrendingUp,
+    label: "Assigned",
+    value: 18,
+    icon: BookOpen,
     color: "text-[#7EC8CA]",
     bg: "bg-[#7EC8CA]/10",
   },
   {
-    label: "Triggered Today",
-    value: 3,
+    label: "Completed",
+    value: 12,
     icon: CheckCircle,
     color: "text-emerald-400",
     bg: "bg-emerald-400/10",
   },
   {
-    label: "Pending Approvals",
-    value: 2,
+    label: "Overdue",
+    value: 3,
     icon: AlertTriangle,
+    color: "text-red-400",
+    bg: "bg-red-400/10",
+  },
+  {
+    label: "Upcoming",
+    value: 5,
+    icon: Clock,
     color: "text-amber-400",
     bg: "bg-amber-400/10",
   },
-  {
-    label: "Avg Processing",
-    value: "4.2h",
-    icon: Clock,
-    color: "text-blue-400",
-    bg: "bg-blue-400/10",
-  },
 ];
 
-export default function OnboardingWorkflowPage() {
+export default function TrainingAssignmentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
 
-  const filtered = workflowData.filter((row) => {
+  const filtered = trainingData.filter((row) => {
     const matchSearch =
-      row.ruleName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      row.trigger.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      row.action.toLowerCase().includes(searchTerm.toLowerCase());
+      row.employee.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      row.module.toLowerCase().includes(searchTerm.toLowerCase());
     const matchStatus =
       statusFilter === "All" || row.status === statusFilter;
     return matchSearch && matchStatus;
@@ -133,10 +132,14 @@ export default function OnboardingWorkflowPage() {
 
   const statusBadge = (status: string) => {
     switch (status) {
-      case "Enabled":
+      case "Completed":
         return "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20";
-      case "Disabled":
-        return "bg-gray-500/15 text-gray-400 border border-gray-500/20";
+      case "In Progress":
+        return "bg-blue-500/15 text-blue-400 border border-blue-500/20";
+      case "Assigned":
+        return "bg-amber-500/15 text-amber-400 border border-amber-500/20";
+      case "Overdue":
+        return "bg-red-500/15 text-red-400 border border-red-500/20";
       default:
         return "bg-gray-500/15 text-gray-400 border border-gray-500/20";
     }
@@ -150,12 +153,12 @@ export default function OnboardingWorkflowPage() {
           className="text-3xl font-bold mb-2"
           style={{ color: "#7EC8CA" }}
         >
-          Onboarding Workflow Engine
+          Training Assignments
         </h1>
         <p className="text-gray-400 text-sm">
-          Automate and manage new hire onboarding workflows. Configure trigger
-          rules, set conditions, and track execution of onboarding tasks from
-          day one through the first 30 days.
+          Assign, track, and manage employee training modules. Monitor
+          completion rates, due dates, and certification scores across all
+          clinical and compliance training programs.
         </p>
       </div>
 
@@ -199,7 +202,7 @@ export default function OnboardingWorkflowPage() {
             />
             <input
               type="text"
-              placeholder="Search rule, trigger, or action..."
+              placeholder="Search employee or training module..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-[#0a1515] text-gray-200 text-sm rounded-lg pl-9 pr-3 py-2.5 border outline-none focus:ring-2"
@@ -213,22 +216,24 @@ export default function OnboardingWorkflowPage() {
             style={{ borderColor: "rgba(126,200,202,0.2)" }}
           >
             <option value="All">All Status</option>
-            <option value="Enabled">Enabled</option>
-            <option value="Disabled">Disabled</option>
+            <option value="Assigned">Assigned</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Completed">Completed</option>
+            <option value="Overdue">Overdue</option>
           </select>
         </div>
         <div className="flex gap-2">
           <button className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white transition-colors" style={{ backgroundColor: "#245C5A", borderColor: "rgba(126,200,202,0.2)" }}>
-            <ToggleLeft size={16} />
-            Enable / Disable
+            <Plus size={16} />
+            Assign Training
           </button>
           <button className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-300 border hover:text-white transition-colors" style={{ backgroundColor: "#0a1515", borderColor: "rgba(126,200,202,0.2)" }}>
-            <Edit3 size={16} />
-            Edit Rule
+            <Send size={16} />
+            Send Reminder
           </button>
           <button className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-300 border hover:text-white transition-colors" style={{ backgroundColor: "#0a1515", borderColor: "rgba(126,200,202,0.2)" }}>
-            <History size={16} />
-            View History
+            <PenLine size={16} />
+            Mark Complete
           </button>
         </div>
       </div>
@@ -249,12 +254,13 @@ export default function OnboardingWorkflowPage() {
                 style={{ borderColor: "rgba(126,200,202,0.15)" }}
               >
                 {[
-                  "Rule Name",
-                  "Trigger",
-                  "Condition",
-                  "Action",
+                  "Employee",
+                  "Training Module",
+                  "Assigned Date",
+                  "Due Date",
+                  "Completion Date",
                   "Status",
-                  "Last Triggered",
+                  "Score",
                 ].map((h) => (
                   <th
                     key={h}
@@ -272,29 +278,51 @@ export default function OnboardingWorkflowPage() {
                   className="hover:bg-[#1a3a38]/50 transition-colors"
                 >
                   <td className="py-3.5 px-4 font-medium text-gray-200">
-                    {row.ruleName}
+                    {row.employee}
                   </td>
-                  <td className="py-3.5 px-4 text-gray-300">{row.trigger}</td>
-                  <td className="py-3.5 px-4 text-gray-400 text-xs max-w-xs truncate">
-                    {row.condition}
+                  <td className="py-3.5 px-4 text-gray-300">{row.module}</td>
+                  <td className="py-3.5 px-4 text-gray-400">
+                    {row.assignedDate}
                   </td>
-                  <td className="py-3.5 px-4 text-gray-400 text-xs max-w-xs truncate">
-                    {row.action}
+                  <td className="py-3.5 px-4 text-gray-400">{row.dueDate}</td>
+                  <td className="py-3.5 px-4 text-gray-400">
+                    {row.completionDate || "—"}
                   </td>
                   <td className="py-3.5 px-4">
                     <span
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusBadge(row.status)}`}
                     >
-                      {row.status === "Enabled" ? (
+                      {row.status === "Completed" && (
                         <CheckCircle size={12} />
-                      ) : (
-                        <ToggleLeft size={12} />
+                      )}
+                      {row.status === "Overdue" && (
+                        <AlertTriangle size={12} />
+                      )}
+                      {row.status === "In Progress" && (
+                        <Clock size={12} />
+                      )}
+                      {row.status === "Assigned" && (
+                        <BookOpen size={12} />
                       )}
                       {row.status}
                     </span>
                   </td>
-                  <td className="py-3.5 px-4 text-gray-400 font-mono text-xs">
-                    {row.lastTriggered}
+                  <td className="py-3.5 px-4">
+                    {row.score !== null ? (
+                      <span
+                        className={`font-bold text-sm ${
+                          row.score >= 90
+                            ? "text-emerald-400"
+                            : row.score >= 80
+                              ? "text-amber-400"
+                              : "text-red-400"
+                        }`}
+                      >
+                        {row.score}%
+                      </span>
+                    ) : (
+                      <span className="text-gray-600">—</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -303,7 +331,7 @@ export default function OnboardingWorkflowPage() {
         </div>
         {filtered.length === 0 && (
           <div className="py-12 text-center text-gray-500 text-sm">
-            No workflow rules match your filters.
+            No training assignments match your filters.
           </div>
         )}
       </div>

@@ -2,130 +2,130 @@ import React, { useState } from "react";
 import {
   Search,
   Filter,
-  TrendingUp,
-  Clock,
+  Award,
   AlertTriangle,
   CheckCircle,
-  ToggleLeft,
-  Edit3,
-  History,
+  Clock,
+  Plus,
+  RefreshCw,
+  Download,
 } from "lucide-react";
 
-const workflowData = [
+const credentialsData = [
   {
-    ruleName: "Welcome Email",
-    trigger: "New Hire Record Created",
-    condition: "Employee status = 'Active' AND hire date = today",
-    action: "Send automated welcome email with login credentials",
-    status: "Enabled",
-    lastTriggered: "2025-04-18 09:14 AM",
+    employee: "Sarah Johnson",
+    type: "RN License",
+    licenseNumber: "RN-2019-TX-4821",
+    issueDate: "2023-01-15",
+    expiryDate: "2026-01-15",
+    status: "Valid",
+    daysLeft: 365,
   },
   {
-    ruleName: "Manager Notification",
-    trigger: "New Hire Record Created",
-    condition: "Department is not empty",
-    action: "Notify direct manager of new team member",
-    status: "Enabled",
-    lastTriggered: "2025-04-18 09:14 AM",
+    employee: "Michael Chen",
+    type: "LPHA Certification",
+    licenseNumber: "LPHA-2020-1138",
+    issueDate: "2024-03-10",
+    expiryDate: "2026-03-10",
+    status: "Valid",
+    daysLeft: 420,
   },
   {
-    ruleName: "IT Setup Request",
-    trigger: "New Hire Record Created",
-    condition: "Role requires system access",
-    action: "Create IT ticket for laptop, email, VPN setup",
-    status: "Enabled",
-    lastTriggered: "2025-04-17 02:30 PM",
+    employee: "David Park",
+    type: "QMHP Credential",
+    licenseNumber: "QMHP-2021-2056",
+    issueDate: "2024-06-01",
+    expiryDate: "2025-06-01",
+    status: "Valid",
+    daysLeft: 182,
   },
   {
-    ruleName: "Badge Photo",
-    trigger: "First Day Check-In",
-    condition: "Badge photo field is empty",
-    action: "Schedule badge photo appointment with HR",
-    status: "Enabled",
-    lastTriggered: "2025-04-16 08:45 AM",
+    employee: "Emily Roberts",
+    type: "CPI Certification",
+    licenseNumber: "CPI-2023-7712",
+    issueDate: "2023-11-20",
+    expiryDate: "2025-11-20",
+    status: "Expiring Soon",
+    daysLeft: 14,
   },
   {
-    ruleName: "Handbook Acknowledgment",
-    trigger: "First Day Check-In",
-    condition: "Acknowledgment status = 'Pending'",
-    action: "Send employee handbook and require e-signature",
-    status: "Enabled",
-    lastTriggered: "2025-04-15 10:22 AM",
+    employee: "James Wilson",
+    type: "First Aid / CPR",
+    licenseNumber: "CPR-2024-AHA-3391",
+    issueDate: "2024-08-05",
+    expiryDate: "2026-08-05",
+    status: "Valid",
+    daysLeft: 548,
   },
   {
-    ruleName: "Benefits Enrollment",
-    trigger: "Day 3 of Employment",
-    condition: "Benefits eligibility = 'Eligible'",
-    action: "Open benefits enrollment window in HR portal",
-    status: "Enabled",
-    lastTriggered: "2025-04-14 11:00 AM",
+    employee: "Lisa Thompson",
+    type: "TB Test Result",
+    licenseNumber: "TB-2025-0442",
+    issueDate: "2025-01-10",
+    expiryDate: "2026-01-10",
+    status: "Valid",
+    daysLeft: 360,
   },
   {
-    ruleName: "Training Schedule",
-    trigger: "Day 5 of Employment",
-    condition: "Training plan is assigned",
-    action: "Generate personalized 90-day training calendar",
-    status: "Disabled",
-    lastTriggered: "2025-04-10 03:15 PM",
+    employee: "Marcus Lee",
+    type: "RN License",
+    licenseNumber: "RN-2018-TX-3356",
+    issueDate: "2022-09-01",
+    expiryDate: "2025-06-01",
+    status: "Expired",
+    daysLeft: 0,
   },
   {
-    ruleName: "Policy Review",
-    trigger: "Day 7 of Employment",
-    condition: "Policy review status = 'Not Started'",
-    action: "Assign required policy review modules",
-    status: "Enabled",
-    lastTriggered: "2025-04-12 01:30 PM",
-  },
-  {
-    ruleName: "30-Day Check-in",
-    trigger: "30 Days After Hire",
-    condition: "Check-in meeting status = 'Pending'",
-    action: "Schedule 30-day check-in with HR and manager",
-    status: "Enabled",
-    lastTriggered: "2025-04-08 09:00 AM",
+    employee: "Aisha Patel",
+    type: "LPHA Certification",
+    licenseNumber: "LPHA-2022-4489",
+    issueDate: "2025-02-15",
+    expiryDate: "2027-02-15",
+    status: "Valid",
+    daysLeft: 730,
   },
 ];
 
 const kpiData = [
   {
-    label: "Active Rules",
-    value: 9,
-    icon: TrendingUp,
+    label: "Total Credentials",
+    value: 48,
+    icon: Award,
     color: "text-[#7EC8CA]",
     bg: "bg-[#7EC8CA]/10",
   },
   {
-    label: "Triggered Today",
-    value: 3,
+    label: "Valid",
+    value: 42,
     icon: CheckCircle,
     color: "text-emerald-400",
     bg: "bg-emerald-400/10",
   },
   {
-    label: "Pending Approvals",
+    label: "Expiring 30d",
     value: 2,
-    icon: AlertTriangle,
+    icon: Clock,
     color: "text-amber-400",
     bg: "bg-amber-400/10",
   },
   {
-    label: "Avg Processing",
-    value: "4.2h",
-    icon: Clock,
-    color: "text-blue-400",
-    bg: "bg-blue-400/10",
+    label: "Expired",
+    value: 1,
+    icon: AlertTriangle,
+    color: "text-red-400",
+    bg: "bg-red-400/10",
   },
 ];
 
-export default function OnboardingWorkflowPage() {
+export default function CredentialsTrackerPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
 
-  const filtered = workflowData.filter((row) => {
+  const filtered = credentialsData.filter((row) => {
     const matchSearch =
-      row.ruleName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      row.trigger.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      row.action.toLowerCase().includes(searchTerm.toLowerCase());
+      row.employee.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      row.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      row.licenseNumber.toLowerCase().includes(searchTerm.toLowerCase());
     const matchStatus =
       statusFilter === "All" || row.status === statusFilter;
     return matchSearch && matchStatus;
@@ -133,10 +133,12 @@ export default function OnboardingWorkflowPage() {
 
   const statusBadge = (status: string) => {
     switch (status) {
-      case "Enabled":
+      case "Valid":
         return "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20";
-      case "Disabled":
-        return "bg-gray-500/15 text-gray-400 border border-gray-500/20";
+      case "Expiring Soon":
+        return "bg-amber-500/15 text-amber-400 border border-amber-500/20";
+      case "Expired":
+        return "bg-red-500/15 text-red-400 border border-red-500/20";
       default:
         return "bg-gray-500/15 text-gray-400 border border-gray-500/20";
     }
@@ -150,12 +152,12 @@ export default function OnboardingWorkflowPage() {
           className="text-3xl font-bold mb-2"
           style={{ color: "#7EC8CA" }}
         >
-          Onboarding Workflow Engine
+          Credential Tracker
         </h1>
         <p className="text-gray-400 text-sm">
-          Automate and manage new hire onboarding workflows. Configure trigger
-          rules, set conditions, and track execution of onboarding tasks from
-          day one through the first 30 days.
+          Monitor and manage employee licenses, certifications, and credentials
+          across the organization. Track expiry dates and renewal status in
+          real-time.
         </p>
       </div>
 
@@ -199,7 +201,7 @@ export default function OnboardingWorkflowPage() {
             />
             <input
               type="text"
-              placeholder="Search rule, trigger, or action..."
+              placeholder="Search employee, credential, license #..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-[#0a1515] text-gray-200 text-sm rounded-lg pl-9 pr-3 py-2.5 border outline-none focus:ring-2"
@@ -213,22 +215,23 @@ export default function OnboardingWorkflowPage() {
             style={{ borderColor: "rgba(126,200,202,0.2)" }}
           >
             <option value="All">All Status</option>
-            <option value="Enabled">Enabled</option>
-            <option value="Disabled">Disabled</option>
+            <option value="Valid">Valid</option>
+            <option value="Expiring Soon">Expiring Soon</option>
+            <option value="Expired">Expired</option>
           </select>
         </div>
         <div className="flex gap-2">
           <button className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white transition-colors" style={{ backgroundColor: "#245C5A", borderColor: "rgba(126,200,202,0.2)" }}>
-            <ToggleLeft size={16} />
-            Enable / Disable
+            <Plus size={16} />
+            Add Credential
           </button>
           <button className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-300 border hover:text-white transition-colors" style={{ backgroundColor: "#0a1515", borderColor: "rgba(126,200,202,0.2)" }}>
-            <Edit3 size={16} />
-            Edit Rule
+            <RefreshCw size={16} />
+            Renew
           </button>
           <button className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-300 border hover:text-white transition-colors" style={{ backgroundColor: "#0a1515", borderColor: "rgba(126,200,202,0.2)" }}>
-            <History size={16} />
-            View History
+            <Download size={16} />
+            Export
           </button>
         </div>
       </div>
@@ -249,12 +252,13 @@ export default function OnboardingWorkflowPage() {
                 style={{ borderColor: "rgba(126,200,202,0.15)" }}
               >
                 {[
-                  "Rule Name",
-                  "Trigger",
-                  "Condition",
-                  "Action",
+                  "Employee",
+                  "Credential Type",
+                  "License Number",
+                  "Issue Date",
+                  "Expiry Date",
                   "Status",
-                  "Last Triggered",
+                  "Days Left",
                 ].map((h) => (
                   <th
                     key={h}
@@ -272,29 +276,50 @@ export default function OnboardingWorkflowPage() {
                   className="hover:bg-[#1a3a38]/50 transition-colors"
                 >
                   <td className="py-3.5 px-4 font-medium text-gray-200">
-                    {row.ruleName}
+                    {row.employee}
                   </td>
-                  <td className="py-3.5 px-4 text-gray-300">{row.trigger}</td>
-                  <td className="py-3.5 px-4 text-gray-400 text-xs max-w-xs truncate">
-                    {row.condition}
+                  <td className="py-3.5 px-4 text-gray-300">{row.type}</td>
+                  <td className="py-3.5 px-4 text-gray-400 font-mono text-xs">
+                    {row.licenseNumber}
                   </td>
-                  <td className="py-3.5 px-4 text-gray-400 text-xs max-w-xs truncate">
-                    {row.action}
+                  <td className="py-3.5 px-4 text-gray-400">
+                    {row.issueDate}
+                  </td>
+                  <td className="py-3.5 px-4 text-gray-400">
+                    {row.expiryDate}
                   </td>
                   <td className="py-3.5 px-4">
                     <span
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusBadge(row.status)}`}
                     >
-                      {row.status === "Enabled" ? (
+                      {row.status === "Valid" && (
                         <CheckCircle size={12} />
-                      ) : (
-                        <ToggleLeft size={12} />
+                      )}
+                      {row.status === "Expiring Soon" && (
+                        <Clock size={12} />
+                      )}
+                      {row.status === "Expired" && (
+                        <AlertTriangle size={12} />
                       )}
                       {row.status}
                     </span>
                   </td>
-                  <td className="py-3.5 px-4 text-gray-400 font-mono text-xs">
-                    {row.lastTriggered}
+                  <td className="py-3.5 px-4">
+                    {row.status === "Expired" ? (
+                      <span className="text-red-400 font-semibold">
+                        Expired
+                      </span>
+                    ) : (
+                      <span
+                        className={`font-semibold ${
+                          row.daysLeft <= 30
+                            ? "text-amber-400"
+                            : "text-gray-300"
+                        }`}
+                      >
+                        {row.daysLeft}d
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -303,7 +328,7 @@ export default function OnboardingWorkflowPage() {
         </div>
         {filtered.length === 0 && (
           <div className="py-12 text-center text-gray-500 text-sm">
-            No workflow rules match your filters.
+            No credentials match your filters.
           </div>
         )}
       </div>

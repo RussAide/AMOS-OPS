@@ -99,6 +99,34 @@ import TrainingAssignmentPage from "@/pages/hr/training-assignment-page";
 import RecruitmentOnboardingPage from "@/pages/recruitment-onboarding-page";
 import TrainingTrackerPage from "@/pages/training/training-tracker-page";
 
+// ─── HR WORKFORCE ACTIVATION (new) ───
+import RecruitmentPage from "@/pages/hr/recruitment-page";
+import ScreeningPage from "@/pages/hr/screening-page";
+import OffersPage from "@/pages/hr/offers-page";
+import OrientationPage from "@/pages/hr/orientation-page";
+import HrOnboardingPage from "@/pages/hr/onboarding-hr-page";
+
+// ─── HR WORKFORCE MANAGEMENT (new) ───
+import ClearancePage from "@/pages/hr/clearance-page";
+import HrCompliancePage from "@/pages/hr/hr-compliance-page";
+import SeparationPage from "@/pages/hr/separation-page";
+import SeparationsPage from "@/pages/hr/separations-page";
+
+// ─── HR TOOLS (new) ───
+import CredentialsTrackerPage from "@/pages/hr/credentials-tracker-page";
+import TrainingAssignmentsPage from "@/pages/hr/training-assignments-page";
+import PerformanceReviewsPage from "@/pages/hr/performance-reviews-page";
+import OnboardingWorkflowEnginePage from "@/pages/hr/onboarding-workflow-page";
+
+// ─── ADMIN (new) ───
+import AdminSettingsPage from "@/pages/admin/settings-page";
+import EnhancementRegisterPage from "@/pages/admin/enhancement-register-page";
+import WorkflowEnginePage from "@/pages/admin/workflow-engine-page";
+
+// ─── ONBOARDING ACADEMY (new) ───
+import OnboardingAcademyPage from "@/pages/onboarding/onboarding-academy-page";
+import UniversalOrientationPage from "@/pages/onboarding/universal-orientation-page";
+
 // ─── EXECUTIVE ───
 import ExecutiveDashboardPage from "@/pages/exec/executive-dashboard-page";
 import MgmaScorecardPage from "@/pages/exec/mgma-scorecard-page";
@@ -295,13 +323,29 @@ export function AppShell() {
             <Route path="/hr/personnel-files" element={<HrPersonProfilePage />} />
             <Route path="/hr/credentials" element={<CredentialTrackingPage />} />
             <Route path="/hr/performance" element={<PerformanceReviewPage />} />
-            <Route path="/hr/onboarding" element={<OnboardingWorkflowPage />} />
+            <Route path="/hr/onboarding" element={<HrOnboardingPage />} />
             <Route path="/hr/separation" element={<SeparationManagementPage />} />
             <Route path="/hr/module" element={<HrModulePage />} />
             <Route path="/hr/layout" element={<HrLayout />} />
             <Route path="/hr/training" element={<TrainingAssignmentPage />} />
-            <Route path="/hr/recruitment" element={<RecruitmentOnboardingPage />} />
+            <Route path="/hr/recruitment" element={<RecruitmentPage />} />
             <Route path="/hr/tracker" element={<TrainingTrackerPage />} />
+
+            {/* ─── HR WORKFORCE ACTIVATION (new) ─── */}
+            <Route path="/hr/screening" element={<ScreeningPage />} />
+            <Route path="/hr/offers" element={<OffersPage />} />
+            <Route path="/hr/orientation" element={<OrientationPage />} />
+
+            {/* ─── HR WORKFORCE MANAGEMENT (new) ─── */}
+            <Route path="/hr/clearance" element={<ClearancePage />} />
+            <Route path="/hr/compliance" element={<HrCompliancePage />} />
+            <Route path="/hr/separations" element={<SeparationsPage />} />
+
+            {/* ─── HR TOOLS (new) ─── */}
+            <Route path="/hr/credentials-tracker" element={<CredentialsTrackerPage />} />
+            <Route path="/hr/training-assignments" element={<TrainingAssignmentsPage />} />
+            <Route path="/hr/performance-reviews" element={<PerformanceReviewsPage />} />
+            <Route path="/hr/onboarding-workflow" element={<OnboardingWorkflowEnginePage />} />
 
             {/* ─── EXECUTIVE ─── */}
             <Route path="/executive" element={<ExecutiveDashboardPage />} />
@@ -332,8 +376,9 @@ export function AppShell() {
             <Route path="/my-work-today" element={<MyWorkTodayPage />} />
 
             {/* ─── ONBOARDING ─── */}
-            <Route path="/onboarding" element={<OnboardingHomePage />} />
+            <Route path="/onboarding" element={<OnboardingAcademyPage />} />
             <Route path="/onboarding/track" element={<OnboardingTrackPage />} />
+            <Route path="/onboarding/track/universal-orientation" element={<UniversalOrientationPage />} />
             <Route path="/onboarding/module" element={<OnboardingModulePage />} />
             <Route path="/onboarding/employee" element={<OnboardingEmployeePage />} />
             <Route path="/onboarding/supervisor" element={<OnboardingSupervisorPage />} />
@@ -342,10 +387,12 @@ export function AppShell() {
             <Route path="/onboarding/training" element={<OnboardingTrainingPage />} />
 
             {/* ─── ADMIN ─── */}
-            <Route path="/admin/settings" element={<SettingsPage />} />
+            <Route path="/admin/settings" element={<AdminSettingsPage />} />
             <Route path="/admin/workflow" element={<WorkflowAdminPage />} />
+            <Route path="/admin/workflows" element={<WorkflowEnginePage />} />
             <Route path="/admin/entra-id" element={<EntraIdPage />} />
             <Route path="/admin/enhancement-register" element={<EnhancementRegisterPage />} />
+            <Route path="/admin/enhancements" element={<EnhancementRegisterPage />} />
 
             {/* ─── AUTH ─── */}
             <Route path="/authorization" element={<AuthorizationPage />} />
