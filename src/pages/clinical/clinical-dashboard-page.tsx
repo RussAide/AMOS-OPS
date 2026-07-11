@@ -579,7 +579,7 @@ function OutcomeMeasureModal({ onClose }: { onClose: () => void }) {
             <div>
               <label className="block text-[12px] font-medium mb-1" style={{ color: "var(--topbar-subtitle)" }}>Select Measure *</label>
               <div className="grid grid-cols-1 gap-2">
-                {(measures ?? []).map((m) => (
+                {measures.map((m) => (
                   <button
                     key={m.id}
                     onClick={() => setMeasure(m.id)}
@@ -915,7 +915,7 @@ export function ClinicalDashboardPage() {
                   No upcoming sessions
                 </p>
               )}
-              {(upcomingSessions ?? []).map((session) => (
+              {upcomingSessions.map((session) => (
                 <div
                   key={session.id}
                   className="flex items-center gap-4 p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer"
@@ -951,7 +951,7 @@ export function ClinicalDashboardPage() {
                   No workload data
                 </p>
               )}
-              {(Array.isArray(workload) ? workload : []).map((w) => (
+              {Array.isArray(workload) ? workload.map((w) => (
                 <div key={w.clinicianId} className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-[13px] font-medium" style={{ color: "var(--topbar-title)" }}>
@@ -976,7 +976,7 @@ export function ClinicalDashboardPage() {
                     </span>
                   </div>
                 </div>
-              ))}
+              )) : []}
             </div>
           </div>
         </div>

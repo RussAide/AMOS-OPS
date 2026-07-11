@@ -570,14 +570,14 @@ export function GADDashboardPage() {
                 <div className="mb-3">
                   <div className="text-[10px] font-medium mb-2" style={{ color: "var(--topbar-subtitle)" }}>Checklist</div>
                   <div className="space-y-1">
-                    {(JSON.parse(safetyDetail.checklist_json) as any[]).map((item: any, idx: number) => (
+                    {Array.isArray(JSON.parse(safetyDetail.checklist_json)) ? (JSON.parse(safetyDetail.checklist_json) as any[]).map((item: any, idx: number) => (
                       <div key={idx} className="flex items-center gap-2 text-[11px]">
                         <span className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: item.pass ? "#ECFDF5" : "#FEF2F2" }}>
                           {item.pass ? <CheckCircle2 size={10} style={{ color: "#059669" }} /> : <XCircle size={10} style={{ color: "#DC2626" }} />}
                         </span>
                         <span style={{ color: item.pass ? "var(--topbar-title)" : "#DC2626" }}>{item.item}</span>
                       </div>
-                    ))}
+                    )) : null}
                   </div>
                 </div>
               )}

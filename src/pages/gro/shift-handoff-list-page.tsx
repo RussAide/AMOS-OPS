@@ -329,7 +329,7 @@ export default function ShiftHandoffListPage() {
                 <TabsContent value="youth" className="space-y-3">
                   {detail.youthStatusJson ? (
                     <div className="space-y-2">
-                      {(JSON.parse(detail.youthStatusJson) as any[]).map((y: any, i: number) => (
+                      {Array.isArray(JSON.parse(detail.youthStatusJson)) ? (JSON.parse(detail.youthStatusJson) as any[]).map((y: any, i: number) => (
                         <Card key={i}>
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between">
@@ -343,7 +343,7 @@ export default function ShiftHandoffListPage() {
                             {y.concerns && <p className="text-xs text-gray-500 mt-1">{y.concerns}</p>}
                           </CardContent>
                         </Card>
-                      ))}
+                      )) : null}
                     </div>
                   ) : (
                     <p className="text-sm text-gray-400 text-center py-8">No youth status recorded</p>

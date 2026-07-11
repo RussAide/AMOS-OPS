@@ -1525,6 +1525,350 @@ function getSingleDemoData(procedure: string): any {
     { id: "rec4", title: "Staff De-escalation Training", type: "training", priority: "low", source: "Incident Pattern Analysis" },
   ];
 
+  // ═══════════════════════════════════════════════════════════════
+  // COMPREHENSIVE DEMO DATA SEED — All module endpoints
+  // ═══════════════════════════════════════════════════════════════
+
+  // ─── TIER 1: BHC Clinical ───
+  if (procedure === "bhc.dashboardKPIs") return {
+    activePatients: 15, sessionsThisWeek: 42, totalPatients: 28, pendingApprovals: 3,
+    highRiskCount: 2, newReferrals: 5, dischargedThisMonth: 3,
+  };
+  if (procedure === "bhc.patients") return {
+    patients: [
+      { id: "p1", firstName: "Marcus", lastName: "Johnson", dateOfBirth: "2010-03-15", status: "active", gender: "Male", insuranceId: "INS001", assignedClinician: "Dr. Hall" },
+      { id: "p2", firstName: "Destiny", lastName: "Williams", dateOfBirth: "2011-07-22", status: "active", gender: "Female", insuranceId: "INS002", assignedClinician: "Lilian Ike" },
+      { id: "p3", firstName: "Carlos", lastName: "Ramirez", dateOfBirth: "2009-11-08", status: "active", gender: "Male", insuranceId: "INS003", assignedClinician: "Dr. Hall" },
+      { id: "p4", firstName: "Aaliyah", lastName: "Peterson", dateOfBirth: "2008-05-20", status: "active", gender: "Female", insuranceId: "INS004", assignedClinician: "Lilian Ike" },
+      { id: "p5", firstName: "Jaylen", lastName: "Brooks", dateOfBirth: "2010-09-14", status: "hold", gender: "Male", insuranceId: "INS005", assignedClinician: "Jonthan Guidry" },
+      { id: "p6", firstName: "Trevon", lastName: "Miller", dateOfBirth: "2011-02-28", status: "active", gender: "Male", insuranceId: "INS006", assignedClinician: "Dr. Hall" },
+      { id: "p7", firstName: "Keisha", lastName: "Thompson", dateOfBirth: "2009-08-10", status: "active", gender: "Female", insuranceId: "INS007", assignedClinician: "Lilian Ike" },
+      { id: "p8", firstName: "Darius", lastName: "Jackson", dateOfBirth: "2010-12-03", status: "pending", gender: "Male", insuranceId: "INS008", assignedClinician: "Jonthan Guidry" },
+    ],
+  };
+  if (procedure === "bhc.treatmentPlans") return {
+    plans: [
+      { id: "tp1", patientName: "Marcus Johnson", status: "active", startDate: "2026-04-01", goals: "4", completionPct: 65 },
+      { id: "tp2", patientName: "Destiny Williams", status: "active", startDate: "2026-04-15", goals: "5", completionPct: 45 },
+      { id: "tp3", patientName: "Carlos Ramirez", status: "active", startDate: "2026-05-01", goals: "6", completionPct: 30 },
+      { id: "tp4", patientName: "Aaliyah Peterson", status: "active", startDate: "2026-05-20", goals: "4", completionPct: 55 },
+      { id: "tp5", patientName: "Jaylen Brooks", status: "pending_review", startDate: "2026-06-10", goals: "3", completionPct: 10 },
+      { id: "tp6", patientName: "Trevon Miller", status: "active", startDate: "2026-06-15", goals: "5", completionPct: 20 },
+      { id: "tp7", patientName: "Keisha Thompson", status: "active", startDate: "2026-06-01", goals: "4", completionPct: 40 },
+      { id: "tp8", patientName: "Darius Jackson", status: "draft", startDate: "2026-06-25", goals: "3", completionPct: 0 },
+    ],
+  };
+  if (procedure === "bhc.sessions") return {
+    sessions: [
+      { id: "s1", patientName: "Marcus Johnson", date: "2026-06-30", type: "Individual Therapy", status: "scheduled", duration: 60, notes: "CBT session focusing on trauma processing" },
+      { id: "s2", patientName: "Destiny Williams", date: "2026-06-30", type: "Group Therapy", status: "completed", duration: 90, notes: "DBT skills group - emotion regulation" },
+      { id: "s3", patientName: "Carlos Ramirez", date: "2026-06-29", type: "Family Session", status: "completed", duration: 60, notes: "Family engagement with mother" },
+      { id: "s4", patientName: "Aaliyah Peterson", date: "2026-06-29", type: "Individual Therapy", status: "completed", duration: 60, notes: "Anxiety management techniques" },
+      { id: "s5", patientName: "Jaylen Brooks", date: "2026-06-28", type: "Psychosocial Rehab", status: "completed", duration: 45, notes: "Life skills training" },
+      { id: "s6", patientName: "Trevon Miller", date: "2026-06-30", type: "Intake Assessment", status: "scheduled", duration: 90, notes: "Initial clinical intake" },
+      { id: "s7", patientName: "Keisha Thompson", date: "2026-06-28", type: "Individual Therapy", status: "completed", duration: 60, notes: "Mood monitoring and coping skills" },
+      { id: "s8", patientName: "Marcus Johnson", date: "2026-06-28", type: "Case Management", status: "completed", duration: 30, notes: "Care coordination with school" },
+      { id: "s9", patientName: "Darius Jackson", date: "2026-07-01", type: "Initial Evaluation", status: "scheduled", duration: 60, notes: "First clinical contact" },
+      { id: "s10", patientName: "Aaliyah Peterson", date: "2026-07-01", type: "Group Therapy", status: "scheduled", duration: 90, notes: "Social skills group" },
+    ],
+  };
+  if (procedure === "bhc.outcomeMeasures") return {
+    measures: [
+      { id: "om1", patientName: "Marcus Johnson", measureType: "CANS", score: 28, date: "2026-06-15", trend: "improving" },
+      { id: "om2", patientName: "Destiny Williams", measureType: "PHQ-A", score: 14, date: "2026-06-10", trend: "improving" },
+      { id: "om3", patientName: "Carlos Ramirez", measureType: "CANS", score: 35, date: "2026-06-20", trend: "worsening" },
+      { id: "om4", patientName: "Aaliyah Peterson", measureType: "SCARED", score: 22, date: "2026-06-18", trend: "improving" },
+      { id: "om5", patientName: "Jaylen Brooks", measureType: "CANS", score: 30, date: "2026-06-22", trend: "stable" },
+      { id: "om6", patientName: "Trevon Miller", measureType: "YOQ", score: 42, date: "2026-06-25", trend: "improving" },
+      { id: "om7", patientName: "Keisha Thompson", measureType: "CANS", score: 25, date: "2026-06-12", trend: "improving" },
+    ],
+  };
+  if (procedure === "bhc.insurancePlans") return {
+    plans: [
+      { id: "ip1", payerName: "Superior HealthPlan", planType: "Medicaid Managed Care", memberCount: 12, authRequired: true },
+      { id: "ip2", payerName: "Blue Cross Blue Shield TX", planType: "Commercial", memberCount: 8, authRequired: true },
+      { id: "ip3", payerName: "UnitedHealthcare Community", planType: "Medicaid Managed Care", memberCount: 5, authRequired: true },
+      { id: "ip4", payerName: "Aetna Better Health", planType: "Medicaid Managed Care", memberCount: 3, authRequired: true },
+    ],
+  };
+  if (procedure === "bhc.referrals") return {
+    referrals: [
+      { id: "ref1", youthName: "Trevon Miller", referralDate: "2026-06-25", source: "Houston ISD", status: "active", assignedTo: "Jonthan Guidry" },
+      { id: "ref2", youthName: "Keisha Thompson", referralDate: "2026-06-22", source: "Texas CPS", status: "active", assignedTo: "Lilian Ike" },
+      { id: "ref3", youthName: "Darius Jackson", referralDate: "2026-06-20", source: "Harris County JP", status: "pending", assignedTo: "Dr. Hall" },
+      { id: "ref4", youthName: "Sofia Chen", referralDate: "2026-06-18", source: "Family Self-Referral", status: "active", assignedTo: "Jonthan Guidry" },
+      { id: "ref5", youthName: "Amari Wilson", referralDate: "2026-06-15", source: "Community Health Center", status: "converted", assignedTo: "Lilian Ike" },
+    ],
+  };
+  if (procedure === "bhc.cansAssessments") return {
+    assessments: [
+      { id: "ca1", youthName: "Marcus Johnson", assessmentDate: "2026-06-15", domainScores: { lifeFunctioning: 25, youthStrengths: 18, caregiverResources: 22, safety: 28, childBehavior: 30, depression: 24, substanceUse: 10 }, overallScore: 28 },
+      { id: "ca2", youthName: "Destiny Williams", assessmentDate: "2026-06-10", domainScores: { lifeFunctioning: 20, youthStrengths: 15, caregiverResources: 18, safety: 22, childBehavior: 25, depression: 30, substanceUse: 8 }, overallScore: 25 },
+      { id: "ca3", youthName: "Carlos Ramirez", assessmentDate: "2026-06-20", domainScores: { lifeFunctioning: 30, youthStrengths: 25, caregiverResources: 28, safety: 32, childBehavior: 35, depression: 28, substanceUse: 22 }, overallScore: 35 },
+      { id: "ca4", youthName: "Aaliyah Peterson", assessmentDate: "2026-06-18", domainScores: { lifeFunctioning: 22, youthStrengths: 20, caregiverResources: 24, safety: 20, childBehavior: 18, depression: 20, substanceUse: 5 }, overallScore: 22 },
+    ],
+  };
+  if (procedure === "bhc.services") return {
+    services: [
+      { id: "sv1", serviceName: "Individual Therapy", patientName: "Marcus Johnson", date: "2026-06-30", units: 4, status: "authorized" },
+      { id: "sv2", serviceName: "Group Therapy", patientName: "Destiny Williams", date: "2026-06-29", units: 6, status: "authorized" },
+      { id: "sv3", serviceName: "Family Session", patientName: "Carlos Ramirez", date: "2026-06-29", units: 2, status: "authorized" },
+      { id: "sv4", serviceName: "Case Management", patientName: "Marcus Johnson", date: "2026-06-28", units: 2, status: "billed" },
+      { id: "sv5", serviceName: "Psychosocial Rehab", patientName: "Jaylen Brooks", date: "2026-06-28", units: 3, status: "authorized" },
+      { id: "sv6", serviceName: "CANS Assessment", patientName: "Trevon Miller", date: "2026-06-25", units: 1, status: "completed" },
+    ],
+  };
+
+  // ─── TIER 2: GRO Residential ───
+  if (procedure === "gro.dashboardKPIs") return {
+    activeResidents: 8, bedOccupancy: 85, totalBeds: 12, facilities: 1,
+    incidentsThisMonth: 2, staffOnDuty: 6,
+  };
+  if (procedure === "gro.shiftLogs") return {
+    logs: [
+      { id: "sl1", shiftDate: "2026-06-30", shiftType: "Day", staffName: "Sarah Johnson", youthCount: 8, notes: "Normal operations. All meds administered on time.", status: "completed" },
+      { id: "sl2", shiftDate: "2026-06-30", shiftType: "Evening", staffName: "Mike Chen", youthCount: 8, notes: "Quiet evening. Group activity completed.", status: "in_progress" },
+      { id: "sl3", shiftDate: "2026-06-29", shiftType: "Night", staffName: "Tasha Williams", youthCount: 8, notes: "Uneventful night. Routine checks completed.", status: "completed" },
+      { id: "sl4", shiftDate: "2026-06-29", shiftType: "Day", staffName: "Sarah Johnson", youthCount: 8, notes: "Behavioral incident at lunch resolved with de-escalation.", status: "completed" },
+      { id: "sl5", shiftDate: "2026-06-28", shiftType: "Evening", staffName: "Robert Kim", youthCount: 8, notes: "Family visits scheduled. All youth accounted for.", status: "completed" },
+    ],
+  };
+  if (procedure === "gro.safetyRounds") return {
+    rounds: [
+      { id: "sr1", roundDate: "2026-06-30", conductedBy: "Sarah Johnson", findings: "All clear. Fire extinguishers inspected. No hazards.", status: "completed", followUp: null },
+      { id: "sr2", roundDate: "2026-06-29", conductedBy: "Mike Chen", findings: "Minor issue: loose handrail on stair B. Maintenance notified.", status: "completed", followUp: "Repair scheduled 7/1" },
+      { id: "sr3", roundDate: "2026-06-28", conductedBy: "Tasha Williams", findings: "Medication room secure. All logs current. Youth rooms clean.", status: "completed", followUp: null },
+    ],
+  };
+  if (procedure === "gro.careLogs") return {
+    logs: [
+      { id: "cl1", date: "2026-06-30", youthName: "Marcus Johnson", activity: "Morning hygiene", staffName: "Sarah Johnson", notes: "Completed independently. Good mood." },
+      { id: "cl2", date: "2026-06-30", youthName: "Destiny Williams", activity: "Breakfast", staffName: "Sarah Johnson", notes: "Ate full meal. Engaged in conversation." },
+      { id: "cl3", date: "2026-06-30", youthName: "Carlos Ramirez", activity: "School work", staffName: "Mike Chen", notes: "Completed math assignment with assistance." },
+      { id: "cl4", date: "2026-06-29", youthName: "Aaliyah Peterson", activity: "Recreation", staffName: "Tasha Williams", notes: "Participated in group art activity." },
+      { id: "cl5", date: "2026-06-29", youthName: "Jaylen Brooks", activity: "Evening routine", staffName: "Mike Chen", notes: "Needed prompting for bedtime hygiene." },
+      { id: "cl6", date: "2026-06-29", youthName: "Trevon Miller", activity: "Intake orientation", staffName: "Sarah Johnson", notes: "Reviewed house rules. Asked questions." },
+      { id: "cl7", date: "2026-06-28", youthName: "Keisha Thompson", activity: "Group activity", staffName: "Robert Kim", notes: "Led group discussion. Positive peer interaction." },
+      { id: "cl8", date: "2026-06-28", youthName: "Darius Jackson", activity: "Meal prep", staffName: "Tasha Williams", notes: "Helped prepare dinner. Good teamwork." },
+    ],
+  };
+  if (procedure === "gro.incidents") return {
+    incidents: [
+      { id: "gi1", date: "2026-06-25", youthName: "Jaylen Brooks", type: "Peer Conflict", severity: "moderate", status: "resolved", reportedBy: "Sarah Johnson" },
+      { id: "gi2", date: "2026-06-28", youthName: "Carlos Ramirez", type: "Property Damage", severity: "minor", status: "under_review", reportedBy: "Mike Chen" },
+    ],
+  };
+  if (procedure === "gro.supervision") return {
+    sessions: [
+      { id: "gs1", date: "2026-06-30", supervisor: "Dr. Hall", supervisee: "Jonthan Guidry", type: "Clinical Supervision", status: "scheduled" },
+      { id: "gs2", date: "2026-06-28", supervisor: "Lilian Ike", supervisee: "Sarah Johnson", type: "Administrative Supervision", status: "completed" },
+      { id: "gs3", date: "2026-06-25", supervisor: "E. Russ Aideyan", supervisee: "Mike Chen", type: "Performance Review", status: "completed" },
+    ],
+  };
+  if (procedure === "gro.handoffs") return {
+    handoffs: [
+      { id: "gh1", date: "2026-06-30", fromShift: "Day", toShift: "Evening", outgoingStaff: "Sarah Johnson", incomingStaff: "Mike Chen", status: "completed" },
+      { id: "gh2", date: "2026-06-30", fromShift: "Evening", toShift: "Night", outgoingStaff: "Mike Chen", incomingStaff: "Tasha Williams", status: "pending" },
+      { id: "gh3", date: "2026-06-29", fromShift: "Night", toShift: "Day", outgoingStaff: "Tasha Williams", incomingStaff: "Sarah Johnson", status: "completed" },
+      { id: "gh4", date: "2026-06-29", fromShift: "Day", toShift: "Evening", outgoingStaff: "Sarah Johnson", incomingStaff: "Robert Kim", status: "completed" },
+    ],
+  };
+  if (procedure === "gro.residents") return {
+    residents: [
+      { id: "r1", firstName: "Marcus", lastName: "Johnson", age: 16, admissionDate: "2026-04-01", status: "active", assignedBed: "101A" },
+      { id: "r2", firstName: "Destiny", lastName: "Williams", age: 14, admissionDate: "2026-04-15", status: "active", assignedBed: "102A" },
+      { id: "r3", firstName: "Carlos", lastName: "Ramirez", age: 16, admissionDate: "2026-05-01", status: "active", assignedBed: "103A" },
+      { id: "r4", firstName: "Aaliyah", lastName: "Peterson", age: 13, admissionDate: "2026-05-20", status: "active", assignedBed: "104A" },
+      { id: "r5", firstName: "Jaylen", lastName: "Brooks", age: 15, admissionDate: "2026-06-10", status: "active", assignedBed: "105A" },
+      { id: "r6", firstName: "Trevon", lastName: "Miller", age: 14, admissionDate: "2026-06-15", status: "active", assignedBed: "106A" },
+      { id: "r7", firstName: "Keisha", lastName: "Thompson", age: 16, admissionDate: "2026-06-01", status: "active", assignedBed: "107A" },
+      { id: "r8", firstName: "Darius", lastName: "Jackson", age: 15, admissionDate: "2026-06-20", status: "active", assignedBed: "108A" },
+    ],
+  };
+
+  // ─── TIER 3: QA, GAD, Revenue, Documents ───
+  if (procedure === "qa.dashboardKPIs") return {
+    totalAudits: 5, openCAPs: 3, auditScore: 87, compliantItems: 45,
+    openIncidents: 2, upcomingAudits: 2,
+  };
+  if (procedure === "qa.audits") return {
+    audits: [
+      { id: "qa1", auditDate: "2026-06-15", auditor: "Dr. Hall", department: "Clinical", findings: "2 minor documentation gaps", status: "completed", score: 94 },
+      { id: "qa2", auditDate: "2026-06-20", auditor: "Lilian Ike", department: "GRO Residential", findings: "Fire extinguisher expired in Wing B", status: "completed", score: 97 },
+      { id: "qa3", auditDate: "2026-06-25", auditor: "E. Russ Aideyan", department: "Revenue Cycle", findings: "3 claims missing authorization numbers", status: "in_progress", score: 91 },
+      { id: "qa4", auditDate: "2026-07-01", auditor: "HR Director", department: "Human Resources", findings: "Pending verification", status: "scheduled", score: null },
+      { id: "qa5", auditDate: "2026-06-10", auditor: "Jonthan Guidry", department: "Clinical", findings: "Treatment plan review overdue for 1 patient", status: "completed", score: 88 },
+    ],
+  };
+  if (procedure === "qa.caps") return {
+    caps: [
+      { id: "cap1", capNumber: "CAP-2026-001", issueDate: "2026-06-18", department: "Clinical", description: "Implement dual-signature medication check", status: "in_progress", dueDate: "2026-07-20" },
+      { id: "cap2", capNumber: "CAP-2026-002", issueDate: "2026-06-26", department: "GRO", description: "Update visitor sign-in procedures to require photo ID", status: "open", dueDate: "2026-07-05" },
+      { id: "cap3", capNumber: "CAP-2026-003", issueDate: "2026-06-23", department: "Revenue", description: "Implement pre-submission authorization verification for all claims", status: "in_progress", dueDate: "2026-07-15" },
+    ],
+  };
+  if (procedure === "gad.dashboardKPIs") return {
+    openWorkOrders: 4, vendorCount: 8, facilityCount: 1,
+    pendingApprovals: 2, maintenanceScore: 92,
+  };
+  if (procedure === "gad.workOrders") return {
+    orders: [
+      { id: "wo1", orderNumber: "WO-2026-001", description: "HVAC Repair - Wing B", vendor: "Cypress Mechanical", status: "in_progress", priority: "high", createdDate: "2026-06-25" },
+      { id: "wo2", orderNumber: "WO-2026-002", description: "Replace fire extinguisher", vendor: "Houston Safety Supply", status: "completed", priority: "urgent", createdDate: "2026-06-18" },
+      { id: "wo3", orderNumber: "WO-2026-003", description: "Kitchen sink plumbing leak", vendor: "Cypress Plumbing", status: "open", priority: "medium", createdDate: "2026-06-27" },
+      { id: "wo4", orderNumber: "WO-2026-004", description: "Security camera upgrade", vendor: "SecureView Systems", status: "pending_parts", priority: "medium", createdDate: "2026-06-20" },
+    ],
+  };
+  if (procedure === "revenue.stats") return {
+    totalClaims: 15, collectionRate: 78, totalBilled: 250000, totalCollected: 195000,
+    pendingClaims: 8, deniedClaims: 2,
+  };
+  if (procedure === "revenue.claims") return {
+    claims: [
+      { id: "rc1", claimNumber: "CLM-2026-001", patientName: "Marcus Johnson", serviceDate: "2026-06-01", status: "paid", billedAmount: 12500, paidAmount: 11875, payer: "Superior HealthPlan" },
+      { id: "rc2", claimNumber: "CLM-2026-002", patientName: "Destiny Williams", serviceDate: "2026-06-05", status: "submitted", billedAmount: 18200, paidAmount: 0, payer: "BCBS TX" },
+      { id: "rc3", claimNumber: "CLM-2026-003", patientName: "Carlos Ramirez", serviceDate: "2026-06-08", status: "draft", billedAmount: 22400, paidAmount: 0, payer: "UnitedHealthcare" },
+      { id: "rc4", claimNumber: "CLM-2026-004", patientName: "Aaliyah Peterson", serviceDate: "2026-06-10", status: "paid", billedAmount: 16800, paidAmount: 16200, payer: "Superior HealthPlan" },
+      { id: "rc5", claimNumber: "CLM-2026-005", patientName: "Jaylen Brooks", serviceDate: "2026-06-12", status: "denied", billedAmount: 19600, paidAmount: 0, payer: "BCBS TX" },
+      { id: "rc6", claimNumber: "CLM-2026-006", patientName: "Trevon Miller", serviceDate: "2026-06-15", status: "submitted", billedAmount: 14200, paidAmount: 0, payer: "UnitedHealthcare" },
+      { id: "rc7", claimNumber: "CLM-2026-007", patientName: "Keisha Thompson", serviceDate: "2026-06-18", status: "approved", billedAmount: 20800, paidAmount: 0, payer: "Superior HealthPlan" },
+      { id: "rc8", claimNumber: "CLM-2026-008", patientName: "Darius Jackson", serviceDate: "2026-06-20", status: "draft", billedAmount: 17500, paidAmount: 0, payer: "Aetna Better Health" },
+      { id: "rc9", claimNumber: "CLM-2026-009", patientName: "Marcus Johnson", serviceDate: "2026-06-22", status: "submitted", billedAmount: 13100, paidAmount: 0, payer: "BCBS TX" },
+      { id: "rc10", claimNumber: "CLM-2026-010", patientName: "Destiny Williams", serviceDate: "2026-06-25", status: "appealed", billedAmount: 18900, paidAmount: 0, payer: "Aetna Better Health" },
+    ],
+  };
+  if (procedure === "documents.list") return {
+    documents: [
+      { id: "doc1", title: "Employee Handbook 2026", category: "HR Policies", status: "published", author: "E. Russ Aideyan", createdDate: "2026-01-15", version: "3.2" },
+      { id: "doc2", title: "Crisis Intervention Protocol", category: "Clinical Protocols", status: "published", author: "Dr. Hall", createdDate: "2026-02-10", version: "2.1" },
+      { id: "doc3", title: "Youth Rights & Advocacy Guide", category: "GRO Operations", status: "published", author: "Lilian Ike", createdDate: "2026-03-05", version: "1.5" },
+      { id: "doc4", title: "CAPA Procedure Manual", category: "QA & Compliance", status: "published", author: "E. Russ Aideyan", createdDate: "2026-01-20", version: "4.0" },
+      { id: "doc5", title: "Claims Submission Guide", category: "Revenue Cycle", status: "published", author: "Jonthan Guidry", createdDate: "2026-04-12", version: "2.3" },
+      { id: "doc6", title: "Facility Maintenance SOP", category: "GAD Administration", status: "published", author: "GRO Admin", createdDate: "2026-05-01", version: "1.8" },
+      { id: "doc7", title: "Medication Administration Policy", category: "Clinical Protocols", status: "published", author: "Dr. Sarah Kim", createdDate: "2026-04-01", version: "3.4" },
+      { id: "doc8", title: "Safety Inspection Checklist", category: "GRO Operations", status: "published", author: "RCS Lead", createdDate: "2026-05-15", version: "1.2" },
+    ],
+  };
+
+  // ─── TIER 4: MGMA, 42 CFR, Campus, NIL ───
+  if (procedure === "mgma.domains") return {
+    domains: [
+      { id: "dom1", name: "Operations", score: 78, kpis: [{ name: "Avg Wait Time", value: "12 min" }, { name: "Bed Turnover", value: "5.2/mo" }, { name: "Staff-Youth Ratio", value: "1:4" }], trend: "improving" },
+      { id: "dom2", name: "Financial", score: 65, kpis: [{ name: "Net Rev/Patient", value: "$48,500" }, { name: "Days in AR", value: "18" }, { name: "Denial Rate", value: "15%" }], trend: "stable" },
+      { id: "dom3", name: "HR", score: 72, kpis: [{ name: "Turnover Rate", value: "12%" }, { name: "Time to Fill", value: "28 days" }, { name: "Training Completion", value: "88%" }], trend: "declining" },
+      { id: "dom4", name: "Compliance", score: 94, kpis: [{ name: "HIPAA Score", value: "98%" }, { name: "State Licensure", value: "92%" }, { name: "CAP Closure", value: "85%" }], trend: "improving" },
+      { id: "dom5", name: "Clinical", score: 88, kpis: [{ name: "Plan Completion", value: "88%" }, { name: "Patient Satisfaction", value: "4.2/5" }, { name: "Readmission Rate", value: "5%" }], trend: "improving" },
+      { id: "dom6", name: "Technology", score: 70, kpis: [{ name: "EHR Uptime", value: "99.5%" }, { name: "Response Time", value: "2.1s" }, { name: "Digital Adoption", value: "85%" }], trend: "stable" },
+      { id: "dom7", name: "Governance", score: 68, kpis: [{ name: "Occupancy Rate", value: "75%" }, { name: "Conversion Rate", value: "25%" }, { name: "NPS Score", value: "32" }], trend: "stable" },
+    ],
+  };
+  if (procedure === "cfr42.records") return {
+    records: [
+      { id: "sud1", patientName: "Marcus Johnson", consentDate: "2026-04-01", consentType: "SUD Treatment Consent", status: "active" },
+      { id: "sud2", patientName: "Destiny Williams", consentDate: "2026-04-15", consentType: "SUD Treatment Consent", status: "active" },
+      { id: "sud3", patientName: "Carlos Ramirez", consentDate: "2026-05-01", consentType: "SUD Treatment Consent", status: "active" },
+    ],
+    consents: [
+      { id: "con1", patientName: "Marcus Johnson", consentType: "General Treatment", dateSigned: "2026-04-01", status: "valid" },
+      { id: "con2", patientName: "Marcus Johnson", consentType: "Medication", dateSigned: "2026-04-01", status: "valid" },
+      { id: "con3", patientName: "Destiny Williams", consentType: "General Treatment", dateSigned: "2026-04-15", status: "valid" },
+      { id: "con4", patientName: "Carlos Ramirez", consentType: "General Treatment", dateSigned: "2026-05-01", status: "valid" },
+      { id: "con5", patientName: "Aaliyah Peterson", consentType: "General Treatment", dateSigned: "2026-05-20", status: "valid" },
+    ],
+    agreements: [
+      { id: "qsoa1", partnerName: "Legacy Community Health", agreementType: "QSOA", status: "active", signedDate: "2026-03-01" },
+      { id: "qsoa2", partnerName: "Texas Childrens Hospital", agreementType: "QSOA", status: "pending", signedDate: null },
+    ],
+  };
+  if (procedure === "campus.census") return {
+    totalBeds: 12, occupiedBeds: 10, buildings: 1, avgLOS: 45, occupancyRate: 83,
+  };
+  if (procedure === "nil.entities") return {
+    entities: [
+      { id: "ne1", name: "Marcus Johnson", type: "patient", module: "clinical" },
+      { id: "ne2", name: "Dr. Hall", type: "clinician", module: "clinical" },
+      { id: "ne3", name: "Lilian Ike", type: "clinician", module: "clinical" },
+      { id: "ne4", name: "Jonthan Guidry", type: "clinician", module: "clinical" },
+      { id: "ne5", name: "E. Russ Aideyan", type: "administrator", module: "executive" },
+      { id: "ne6", name: "Main Residential Unit", type: "facility", module: "gro" },
+      { id: "ne7", name: "Superior HealthPlan", type: "payer", module: "revenue" },
+      { id: "ne8", name: "Houston ISD", type: "partner", module: "gro" },
+      { id: "ne9", name: "Employee Handbook 2026", type: "document", module: "documents" },
+      { id: "ne10", name: "CAP-2026-001", type: "cap", module: "qa" },
+    ],
+    relations: [
+      { id: "rel1", sourceId: "ne1", targetId: "ne2", type: "treated_by" },
+      { id: "rel2", sourceId: "ne1", targetId: "ne6", type: "resides_at" },
+      { id: "rel3", sourceId: "ne1", targetId: "ne7", type: "covered_by" },
+      { id: "rel4", sourceId: "ne1", targetId: "ne8", type: "referred_by" },
+      { id: "rel5", sourceId: "ne2", targetId: "ne5", type: "reports_to" },
+      { id: "rel6", sourceId: "ne3", targetId: "ne1", type: "manages_case" },
+      { id: "rel7", sourceId: "ne4", targetId: "ne1", type: "manages_case" },
+      { id: "rel8", sourceId: "ne6", targetId: "ne5", type: "managed_by" },
+      { id: "rel9", sourceId: "ne9", targetId: "ne5", type: "authored_by" },
+      { id: "rel10", sourceId: "ne10", targetId: "ne4", type: "assigned_to" },
+      { id: "rel11", sourceId: "ne2", targetId: "ne3", type: "supervises" },
+      { id: "rel12", sourceId: "ne7", targetId: "ne1", type: "covers" },
+      { id: "rel13", sourceId: "ne8", targetId: "ne1", type: "referred" },
+      { id: "rel14", sourceId: "ne10", targetId: "ne5", type: "reviewed_by" },
+      { id: "rel15", sourceId: "ne3", targetId: "ne2", type: "reports_to" },
+    ],
+  };
+
+  // ─── TIER 5: HR ───
+  if (procedure === "hr.performanceReviews") return {
+    reviews: [
+      { id: "pr1", employeeName: "Dr. Hall", reviewType: "Annual", reviewDate: "2026-06-15", status: "completed", rating: 4.5, goals: "5" },
+      { id: "pr2", employeeName: "Lilian Ike", reviewType: "Annual", reviewDate: "2026-06-10", status: "completed", rating: 4.2, goals: "5" },
+      { id: "pr3", employeeName: "Jonthan Guidry", reviewType: "Quarterly", reviewDate: "2026-06-20", status: "in_progress", rating: null, goals: "3" },
+      { id: "pr4", employeeName: "Sarah Johnson", reviewType: "Annual", reviewDate: "2026-05-28", status: "completed", rating: 4.0, goals: "4" },
+      { id: "pr5", employeeName: "Mike Chen", reviewType: "Probation", reviewDate: "2026-07-01", status: "scheduled", rating: null, goals: "3" },
+      { id: "pr6", employeeName: "Tasha Williams", reviewType: "Annual", reviewDate: "2026-06-05", status: "completed", rating: 4.3, goals: "4" },
+    ],
+  };
+  if (procedure === "hr.trainingModules") return {
+    modules: [
+      { id: "tm1", title: "HIPAA Privacy & Security", category: "Compliance", required: true, duration: 120, completionRate: 90 },
+      { id: "tm2", title: "Crisis Intervention", category: "Clinical", required: true, duration: 240, completionRate: 85 },
+      { id: "tm3", title: "Youth Rights & Advocacy", category: "Clinical", required: true, duration: 90, completionRate: 88 },
+      { id: "tm4", title: "Medication Administration", category: "Clinical", required: true, duration: 180, completionRate: 92 },
+      { id: "tm5", title: "Restraint & Seclusion", category: "Safety", required: true, duration: 120, completionRate: 78 },
+      { id: "tm6", title: "Diversity, Equity & Inclusion", category: "HR", required: true, duration: 60, completionRate: 95 },
+    ],
+  };
+  if (procedure === "hr.credentials") return {
+    credentials: [
+      { id: "cred1", employeeName: "Dr. Hall", credentialType: "Medical License", issueDate: "2015-03-01", expiryDate: "2027-03-01", status: "valid" },
+      { id: "cred2", employeeName: "Lilian Ike", credentialType: "LCSW License", issueDate: "2018-06-15", expiryDate: "2026-09-15", status: "expiring_soon" },
+      { id: "cred3", employeeName: "Jonthan Guidry", credentialType: "LPC License", issueDate: "2020-01-10", expiryDate: "2026-08-15", status: "expiring_soon" },
+      { id: "cred4", employeeName: "Sarah Johnson", credentialType: "CPR Certification", issueDate: "2026-01-05", expiryDate: "2027-01-05", status: "valid" },
+      { id: "cred5", employeeName: "Mike Chen", credentialType: "CPI Certification", issueDate: "2025-08-20", expiryDate: "2026-08-20", status: "expiring_soon" },
+      { id: "cred6", employeeName: "Tasha Williams", credentialType: "RN License", issueDate: "2019-04-12", expiryDate: "2027-04-12", status: "valid" },
+      { id: "cred7", employeeName: "Robert Kim", credentialType: "CPR Certification", issueDate: "2026-02-10", expiryDate: "2027-02-10", status: "valid" },
+      { id: "cred8", employeeName: "Dr. Sarah Kim", credentialType: "Psychiatric Board Cert", issueDate: "2016-07-01", expiryDate: "2028-07-01", status: "valid" },
+    ],
+  };
+  if (procedure === "hr.personnel") return {
+    people: [
+      { id: "h1", firstName: "E. Russ", lastName: "Aideyan", employeeId: "EMP001", role: "CEO", department: "Executive", status: "active", hireDate: "2026-01-01" },
+      { id: "h2", firstName: "Dr.", lastName: "Hall", employeeId: "EMP002", role: "Clinical Director", department: "Clinical", status: "active", hireDate: "2026-01-15" },
+      { id: "h3", firstName: "Lilian", lastName: "Ike", employeeId: "EMP003", role: "Case Manager", department: "Clinical", status: "active", hireDate: "2026-02-01" },
+      { id: "h4", firstName: "Jonthan", lastName: "Guidry", employeeId: "EMP004", role: "Case Manager", department: "Clinical", status: "active", hireDate: "2026-03-01" },
+      { id: "h5", firstName: "Sarah", lastName: "Johnson", employeeId: "EMP005", role: "RCS Lead", department: "GRO", status: "active", hireDate: "2026-02-15" },
+      { id: "h6", firstName: "Mike", lastName: "Chen", employeeId: "EMP006", role: "RCS Staff", department: "GRO", status: "active", hireDate: "2026-04-01" },
+      { id: "h7", firstName: "Tasha", lastName: "Williams", employeeId: "EMP007", role: "Night RCS", department: "GRO", status: "active", hireDate: "2026-03-15" },
+      { id: "h8", firstName: "Robert", lastName: "Kim", employeeId: "EMP008", role: "RCS Staff", department: "GRO", status: "active", hireDate: "2026-05-01" },
+      { id: "h9", firstName: "Dr. Sarah", lastName: "Kim", employeeId: "EMP009", role: "Psychiatrist", department: "Clinical", status: "active", hireDate: "2026-01-20" },
+      { id: "h10", firstName: "HR", lastName: "Director", employeeId: "EMP010", role: "HR Director", department: "HR", status: "active", hireDate: "2026-01-10" },
+    ],
+  };
+  // ─── hr.separations (verify existing) ───
+  if (procedure === "hr.separations") return [
+    { id: "sep1", employeeName: "Jessica Adams", separationDate: "2026-05-15", reason: "Voluntary resignation", status: "completed", exitInterview: true },
+    { id: "sep2", employeeName: "David Park", separationDate: "2026-06-01", reason: "Relocation", status: "in_progress", exitInterview: false },
+    { id: "sep3", employeeName: "Nicole Brown", separationDate: "2026-06-30", reason: "End of contract", status: "scheduled", exitInterview: false },
+  ];
+
   // ─── Catch-all for any remaining list/search endpoints ───
   if (procedure.includes("list") || procedure.includes("search")) return [];
   return null;

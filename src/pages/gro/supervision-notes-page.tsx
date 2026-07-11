@@ -309,12 +309,12 @@ export default function SupervisionNotesPage() {
                   <div>
                     <Label className="text-xs text-gray-500">Action Items</Label>
                     <div className="mt-1 space-y-1">
-                      {JSON.parse(detail.actionItems).map((item: any, i: number) => (
+                      {Array.isArray(JSON.parse(detail.actionItems)) ? (JSON.parse(detail.actionItems) as any[]).map((item: any, i: number) => (
                         <div key={i} className="text-xs p-2 border rounded flex justify-between">
                           <span>{item.task}</span>
                           {item.due && <Badge variant="outline" className="text-[9px]">Due: {item.due}</Badge>}
                         </div>
-                      ))}
+                      )) : null}
                     </div>
                   </div>
                 )}

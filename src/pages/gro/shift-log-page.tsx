@@ -406,23 +406,23 @@ export default function ShiftLogPage() {
                 <TabsContent value="related" className="space-y-3">
                   <div>
                     <h4 className="text-xs font-semibold text-gray-500 mb-2">Safety Rounds ({detail.safetyRounds?.length ?? 0})</h4>
-                    {detail.safetyRounds?.map((r) => (
+                    {Array.isArray(detail?.safetyRounds) ? detail.safetyRounds.map((r) => (
                       <div key={r.id} className="text-xs p-2 border rounded mb-1 flex justify-between">
                         <span>{r.area}</span>
                         <Badge variant="outline" className={cn("text-[9px]", r.allItemsPassed ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700")}>
                           {r.itemsPassed}/{r.itemsTotal}
                         </Badge>
                       </div>
-                    )) ?? <p className="text-xs text-gray-400">None</p>}
+                    )) : <p className="text-xs text-gray-400">None</p>}
                   </div>
                   <Separator />
                   <div>
                     <h4 className="text-xs font-semibold text-gray-500 mb-2">Care Logs ({detail.careLogs?.length ?? 0})</h4>
-                    {detail.careLogs?.map((c) => (
+                    {Array.isArray(detail?.careLogs) ? detail.careLogs.map((c) => (
                       <div key={c.id} className="text-xs p-2 border rounded mb-1">
                         <span className="font-medium">{c.youthName}</span> — <Badge variant="outline" className="text-[9px]">{c.careType}</Badge>
                       </div>
-                    )) ?? <p className="text-xs text-gray-400">None</p>}
+                    )) : <p className="text-xs text-gray-400">None</p>}
                   </div>
                 </TabsContent>
               </Tabs>

@@ -858,7 +858,7 @@ export function GRODashboardPage() {
             </div>
             <div className="space-y-3">
               {(!referrals || referrals.length === 0) && <p className="text-[13px] py-4 text-center" style={{ color: "var(--topbar-subtitle)" }}>No referrals found</p>}
-              {referrals?.map((ref: any) => (
+              {Array.isArray(referrals) ? referrals.map((ref: any) => (
                 <div key={ref.id} className="flex items-start justify-between p-3 rounded-lg border" style={{ borderColor: "var(--card-border)" }}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -875,7 +875,7 @@ export function GRODashboardPage() {
                     <p className="text-[10px]" style={{ color: "var(--topbar-subtitle)" }}>{new Date(ref.created_at).toLocaleDateString()}</p>
                   </div>
                 </div>
-              ))}
+              )) : []}
             </div>
           </div>
 
@@ -887,7 +887,7 @@ export function GRODashboardPage() {
               </h2>
               <div className="space-y-3">
                 {(!partnerships || partnerships.length === 0) && <p className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>No partnerships</p>}
-                {partnerships?.map((p: any) => (
+                {Array.isArray(partnerships) ? partnerships.map((p: any) => (
                   <div key={p.id} className="p-3 rounded-lg border" style={{ borderColor: "var(--card-border)" }}>
                     <div className="flex items-center justify-between mb-1">
                       <p className="text-[13px] font-medium" style={{ color: "var(--topbar-title)" }}>{p.organization_name}</p>
@@ -896,7 +896,7 @@ export function GRODashboardPage() {
                     <p className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>{p.partnership_type}</p>
                     {p.contact_name && <p className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>{p.contact_name}</p>}
                   </div>
-                ))}
+                )) : []}
               </div>
             </div>
 
@@ -906,7 +906,7 @@ export function GRODashboardPage() {
               </h2>
               <div className="space-y-3">
                 {(!campaigns || campaigns.length === 0) && <p className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>No campaigns</p>}
-                {campaigns?.map((c: any) => (
+                {Array.isArray(campaigns) ? campaigns.map((c: any) => (
                   <div key={c.id} className="space-y-1">
                     <div className="flex items-center justify-between">
                       <p className="text-[13px] font-medium" style={{ color: "var(--topbar-title)" }}>{c.campaign_name}</p>
@@ -920,7 +920,7 @@ export function GRODashboardPage() {
                       <span className="text-[10px]" style={{ color: "var(--topbar-subtitle)" }}>{Math.round((c.conversions / Math.max(c.leads_generated, 1)) * 100)}% rate</span>
                     </div>
                   </div>
-                ))}
+                )) : []}
               </div>
             </div>
           </div>

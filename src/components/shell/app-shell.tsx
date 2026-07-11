@@ -1,10 +1,14 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/hooks/use-auth";
+import { trpc } from "@/providers/trpc";
 import ErrorBoundary from "@/components/error-boundary";
 import { AppSidebar } from "./app-sidebar";
-import { Menu, X } from "lucide-react";
-import { useState } from "react";
+import {
+  Menu, X, Search, Moon, Sun, Keyboard, LogOut, User,
+  Command, ChevronRight, Users, FileText, DollarSign, Stethoscope,
+} from "lucide-react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 
 // ─── HOME / DASHBOARD ───
 import DashboardPage from "@/pages/dashboard-page";
@@ -116,7 +120,15 @@ import SeparationsPage from "@/pages/hr/separations-page";
 import CredentialsTrackerPage from "@/pages/hr/credentials-tracker-page";
 import TrainingAssignmentsPage from "@/pages/hr/training-assignments-page";
 import PerformanceReviewsPage from "@/pages/hr/performance-reviews-page";
-import OnboardingWorkflowEnginePage from "@/pages/hr/onboarding-workflow-page";
+
+// ─── NEW PAGE COMPONENTS ───
+import PersonnelFilesPage from "@/pages/hr/personnel-files-page";
+import CredentialTrackerPage from "@/pages/hr/credential-tracker-page";
+import OnboardingFlowPage from "@/pages/hr/onboarding-flow-page";
+import AdminNilGraphPage from "@/pages/admin/nil-graph-page";
+import EntraSyncPage from "@/pages/admin/entra-sync-page";
+import StrategicProjectsPage from "@/pages/executive/strategic-projects-page";
+import SiteReviewPage from "@/pages/executive/site-review-page";
 
 // ─── ADMIN (new) ───
 import AdminSettingsPage from "@/pages/admin/settings-page";
@@ -164,12 +176,6 @@ import OnboardingManagementPage from "@/pages/onboarding/management-page";
 import OnboardingEvidencePage from "@/pages/onboarding/evidence-page";
 import OnboardingTrainingPage from "@/pages/onboarding/training-page";
 
-// ─── ADMIN ───
-import SettingsPage from "@/pages/admin/settings-page";
-import WorkflowAdminPage from "@/pages/admin/workflow-page";
-import EntraIdPage from "@/pages/admin/entra-id-page";
-import EnhancementRegisterPage from "@/pages/admin/enhancement-register-page";
-
 // ─── AUTH ───
 import LoginPage from "@/pages/login-page";
 import AuthorizationPage from "@/pages/auth/authorization-page";
@@ -182,6 +188,32 @@ import SOPKnowledgePage from "@/pages/sop-knowledge-page";
 
 // ─── INTAKE ASSESSMENT ───
 import IntakeAssessmentAltPage from "@/pages/intake-assessment-page";
+
+/* ═══════════════════════════════════════════════════════════════
+   Search Result Types
+   ═══════════════════════════════════════════════════════════════ */
+interface SearchResult {
+  id: string;
+  label: string;
+  sublabel: string;
+  category: "Patients" | "Staff" | "Documents" | "Claims";
+  icon: React.ElementType;
+  path: string;
+  color: string;
+}
+
+const SHORTCUTS = [
+  { keys: ["?"], description: "Show keyboard shortcuts help" },
+  { keys: ["/"], description: "Focus global search" },
+  { keys: ["g", "d"], description: "Go to Dashboard" },
+  { keys: ["g", "h"], description: "Go to HR" },
+  { keys: ["g", "c"], description: "Go to Clinical" },
+  { keys: ["Escape"], description: "Close modal / clear search" },
+];
+
+/* ═══════════════════════════════════════════════════════════════
+   AppShell Component
+   ═══════════════════════════════════════════════════════════════ */
 
 export function AppShell() {
   const { user, isLoading } = useAuth();
@@ -203,10 +235,258 @@ export function AppShell() {
     );
   }
 
+  return <AppShellAuthenticated />;
+}
+
+function AppShellAuthenticated() {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // ─── Dark Mode ───
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("amos-dark-mode") === "true";
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDarkMode) {
+      root.classList.add("dark");
+      root.style.setProperty("--topbar-bg", "#0a0e1a");
+      root.style.setProperty("--card-bg", "#111827");
+      root.style.setProperty("--topbar-title", "#e5e7eb");
+      root.style.setProperty("--topbar-subtitle", "#9ca3af");
+      root.style.setProperty("--card-border", "#1f2937");
+      root.style.setProperty("--background", "#0a0e1a");
+    } else {
+      root.classList.remove("dark");
+      root.style.setProperty("--topbar-bg", "#ffffff");
+      root.style.setProperty("--card-bg", "#ffffff");
+      root.style.setProperty("--topbar-title", "#1a1a2e");
+      root.style.setProperty("--topbar-subtitle", "#6b7280");
+      root.style.setProperty("--card-border", "#e5e7eb");
+      root.style.setProperty("--background", "#f8fafc");
+    }
+    localStorage.setItem("amos-dark-mode", String(isDarkMode));
+  }, [isDarkMode]);
+
+  // ─── Search State ───
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showResults, setShowResults] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+
+  // ─── Keyboard Shortcuts Modal ───
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [keySequence, setKeySequence] = useState<string[]>([]);
+
+  // ─── User Dropdown ───
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+
+  // ─── tRPC Data Queries ───
+  const { data: patientsData } = trpc.bhc.listPatients.useQuery(undefined, { enabled: showResults });
+  const { data: staffData } = trpc.hr.listPeople.useQuery(undefined, { enabled: showResults });
+  const { data: documentsData } = trpc.m2.list.useQuery(undefined, { enabled: showResults });
+  const { data: claimsData } = trpc.revenue.listClaims.useQuery(undefined, { enabled: showResults });
+
+  // ─── Build Search Results ───
+  const results: SearchResult[] = useMemo(() => {
+    if (!searchQuery || searchQuery.length < 2) return [];
+    const q = searchQuery.toLowerCase();
+    const matches: SearchResult[] = [];
+
+    // Patients
+    const patients = (patientsData as any)?.patients ?? [];
+    patients.forEach((p: any) => {
+      const name = `${p.firstName} ${p.lastName}`;
+      if (name.toLowerCase().includes(q) || (p.diagnoses?.join(" ") ?? "").toLowerCase().includes(q)) {
+        matches.push({
+          id: `pat-${p.id}`,
+          label: name,
+          sublabel: `${p.age ?? ""}yo ${p.gender ?? ""} · ${p.diagnoses?.join(", ") ?? ""}`,
+          category: "Patients",
+          icon: Stethoscope,
+          path: `/clinical/patient/${p.id}`,
+          color: "#245C5A",
+        });
+      }
+    });
+
+    // Staff
+    const staff = Array.isArray(staffData) ? staffData : [];
+    staff.forEach((s: any) => {
+      const name = `${s.firstName} ${s.lastName}`;
+      if (name.toLowerCase().includes(q) || (s.role ?? "").toLowerCase().includes(q) || (s.department ?? "").toLowerCase().includes(q)) {
+        matches.push({
+          id: `stf-${s.id}`,
+          label: name,
+          sublabel: `${s.role} · ${s.department}`,
+          category: "Staff",
+          icon: Users,
+          path: `/hr/personnel-files`,
+          color: "#2563EB",
+        });
+      }
+    });
+
+    // Documents
+    const documents = (documentsData as any)?.documents ?? [];
+    documents.forEach((d: any) => {
+      if ((d.title ?? "").toLowerCase().includes(q) || (d.category ?? "").toLowerCase().includes(q)) {
+        matches.push({
+          id: `doc-${d.id}`,
+          label: d.title,
+          sublabel: `${d.category} · v${d.version}`,
+          category: "Documents",
+          icon: FileText,
+          path: `/documents`,
+          color: "#D97706",
+        });
+      }
+    });
+
+    // Claims
+    const claims = (claimsData as any)?.claims ?? [];
+    claims.forEach((c: any) => {
+      if ((c.claimNumber ?? "").toLowerCase().includes(q) || (c.patientName ?? "").toLowerCase().includes(q)) {
+        matches.push({
+          id: `clm-${c.id}`,
+          label: c.claimNumber ?? c.id,
+          sublabel: `${c.patientName} · $${(c.amount ?? c.totalAmount ?? 0).toLocaleString()} · ${c.status}`,
+          category: "Claims",
+          icon: DollarSign,
+          path: `/revenue/claims`,
+          color: "#059669",
+        });
+      }
+    });
+
+    return matches.slice(0, 12);
+  }, [searchQuery, patientsData, staffData, documentsData, claimsData]);
+
+  // ─── Keyboard Shortcuts Handler ───
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+
+      // Escape - close modals / clear search
+      if (e.key === "Escape") {
+        setShowShortcuts(false);
+        setShowResults(false);
+        setSearchQuery("");
+        setKeySequence([]);
+        if (document.activeElement === searchRef.current) {
+          (searchRef.current as HTMLInputElement)?.blur();
+        }
+        return;
+      }
+
+      // ? - Show shortcuts (not in inputs)
+      if (e.key === "?" && !isInput) {
+        e.preventDefault();
+        setShowShortcuts((prev) => !prev);
+        return;
+      }
+
+      // / - Focus search (not in inputs)
+      if (e.key === "/" && !isInput) {
+        e.preventDefault();
+        searchRef.current?.focus();
+        setShowResults(true);
+        return;
+      }
+
+      // g + {key} navigation sequence
+      if (!isInput && e.key === "g" && keySequence.length === 0) {
+        e.preventDefault();
+        setKeySequence(["g"]);
+        // Reset sequence after 1.5s
+        setTimeout(() => setKeySequence([]), 1500);
+        return;
+      }
+
+      if (keySequence[0] === "g" && !isInput) {
+        if (e.key === "d") { navigate("/"); setKeySequence([]); }
+        else if (e.key === "h") { navigate("/hr"); setKeySequence([]); }
+        else if (e.key === "c") { navigate("/clinical"); setKeySequence([]); }
+        else if (e.key === "w") { navigate("/workflows"); setKeySequence([]); }
+        else if (e.key === "k") { navigate("/knowledge"); setKeySequence([]); }
+        else { setKeySequence([]); }
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [navigate, keySequence]);
+
+  // ─── Navigation on result click ───
+  const handleResultClick = (path: string) => {
+    navigate(path);
+    setShowResults(false);
+    setSearchQuery("");
+  };
+
+  // ─── Arrow key navigation in search results ───
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!showResults || results.length === 0) return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev + 1) % results.length);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev - 1 + results.length) % results.length);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const selected = results[selectedIndex];
+        if (selected) handleResultClick(selected.path);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showResults, results, selectedIndex]);
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [searchQuery]);
+
+  // ─── Click outside to close search results ───
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        resultsRef.current &&
+        !resultsRef.current.contains(e.target as Node) &&
+        searchRef.current &&
+        !searchRef.current.contains(e.target as Node)
+      ) {
+        setShowResults(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // ─── Group results by category ───
+  const groupedResults = useMemo(() => {
+    const groups: Record<string, SearchResult[]> = {};
+    results.forEach((r) => {
+      if (!groups[r.category]) groups[r.category] = [];
+      groups[r.category].push(r);
+    });
+    return groups;
+  }, [results]);
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background relative">
+    <div
+      className="flex h-screen w-screen overflow-hidden relative"
+      style={{ backgroundColor: "var(--background, #f8fafc)" }}
+    >
       {/* Mobile sidebar overlay */}
       {mobileMenuOpen && (
         <div
@@ -216,190 +496,459 @@ export function AppShell() {
       )}
 
       {/* Sidebar - hidden on mobile unless toggled */}
-      <div className={`${mobileMenuOpen ? 'fixed left-0 top-0 z-50 h-screen' : 'hidden lg:flex'} flex-shrink-0`}>
+      <div className={`${mobileMenuOpen ? "fixed left-0 top-0 z-50 h-screen" : "hidden lg:flex"} flex-shrink-0`}>
         <AppSidebar mobile={mobileMenuOpen} onNavigate={() => setMobileMenuOpen(false)} />
       </div>
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Mobile top bar with hamburger */}
-        <div className="flex items-center gap-3 px-4 py-2 border-b lg:hidden" style={{ backgroundColor: 'var(--topbar-bg, #fff)' }}>
+        {/* ═══════ TOP HEADER BAR ═══════ */}
+        <header
+          className="flex items-center gap-3 px-4 py-2 border-b flex-shrink-0 z-30"
+          style={{
+            backgroundColor: "var(--topbar-bg, #fff)",
+            borderColor: "var(--card-border, #E2E8F0)",
+          }}
+        >
+          {/* Mobile hamburger */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="flex items-center justify-center w-10 h-10 rounded-lg border"
-            style={{ borderColor: 'var(--role-badge-border, #E2E8F0)' }}
+            className="flex items-center justify-center w-10 h-10 rounded-lg border lg:hidden"
+            style={{ borderColor: "var(--role-badge-border, #E2E8F0)" }}
             aria-label="Toggle menu"
           >
             {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
-          <span className="text-[16px] font-semibold" style={{ color: 'var(--topbar-title, #1a1a2e)' }}>AMOS Intranet</span>
-        </div>
 
+          {/* Brand (desktop only, hidden when sidebar visible) */}
+          <span
+            className="text-[16px] font-semibold hidden lg:block"
+            style={{ color: "var(--topbar-title, #1a1a2e)" }}
+          >
+            AMOS Intranet
+          </span>
+
+          {/* ─── Global Search Bar ─── */}
+          <div className="relative flex-1 max-w-lg mx-auto">
+            <div className="relative">
+              <Search
+                size={14}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ color: "var(--topbar-subtitle)" }}
+              />
+              <input
+                ref={searchRef}
+                type="text"
+                placeholder="Search patients, staff, documents, claims... (press / to focus)"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setShowResults(e.target.value.length >= 2);
+                }}
+                onFocus={() => {
+                  if (searchQuery.length >= 2) setShowResults(true);
+                }}
+                className="w-full pl-8 pr-8 py-1.5 text-[12px] rounded-md border transition-all"
+                style={{
+                  borderColor: showResults ? "#245C5A" : "var(--card-border)",
+                  backgroundColor: isDarkMode ? "#1f2937" : "#f8fafc",
+                  color: "var(--topbar-title)",
+                }}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => {
+                    setSearchQuery("");
+                    setShowResults(false);
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2"
+                >
+                  <X size={12} style={{ color: "var(--topbar-subtitle)" }} />
+                </button>
+              )}
+              {!searchQuery && (
+                <span
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-1 py-0.5 rounded hidden sm:block"
+                  style={{
+                    backgroundColor: isDarkMode ? "#1f2937" : "#e2e8f0",
+                    color: "var(--topbar-subtitle)",
+                  }}
+                >
+                  /
+                </span>
+              )}
+            </div>
+
+            {/* Search Results Dropdown */}
+            {showResults && (
+              <div
+                ref={resultsRef}
+                className="absolute left-0 right-0 mt-1.5 rounded-lg border shadow-lg overflow-hidden z-50"
+                style={{
+                  backgroundColor: isDarkMode ? "#111827" : "#ffffff",
+                  borderColor: "var(--card-border)",
+                }}
+              >
+                {results.length === 0 ? (
+                  <div className="px-4 py-6 text-center">
+                    <Search size={20} className="mx-auto mb-1" style={{ color: "var(--topbar-subtitle)" }} />
+                    <p className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>
+                      No results for "{searchQuery}"
+                    </p>
+                  </div>
+                ) : (
+                  <div className="max-h-[360px] overflow-y-auto py-1">
+                    {Object.entries(groupedResults).map(([category, items]) => (
+                      <div key={category}>
+                        <div
+                          className="px-3 py-1 text-[9px] font-semibold uppercase tracking-wider"
+                          style={{ color: "var(--topbar-subtitle)", backgroundColor: isDarkMode ? "#0a0e1a" : "#f8fafc" }}
+                        >
+                          {category} ({items.length})
+                        </div>
+                        {items.map((item, idx) => {
+                          const globalIdx = results.indexOf(item);
+                          const Icon = item.icon;
+                          return (
+                            <button
+                              key={item.id}
+                              onClick={() => handleResultClick(item.path)}
+                              onMouseEnter={() => setSelectedIndex(globalIdx)}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors border-none"
+                              style={{
+                                backgroundColor:
+                                  globalIdx === selectedIndex
+                                    ? (isDarkMode ? "#1f2937" : "#f0fdfa")
+                                    : "transparent",
+                              }}
+                            >
+                              <div
+                                className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
+                                style={{ backgroundColor: item.color + "15" }}
+                              >
+                                <Icon size={14} style={{ color: item.color }} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[11px] font-medium truncate" style={{ color: "var(--topbar-title)" }}>
+                                  {item.label}
+                                </p>
+                                <p className="text-[10px] truncate" style={{ color: "var(--topbar-subtitle)" }}>
+                                  {item.sublabel}
+                                </p>
+                              </div>
+                              <ChevronRight size={12} style={{ color: "var(--topbar-subtitle)" }} />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ─── Right Side: Keyboard Hint + User Dropdown ─── */}
+          <div className="flex items-center gap-2">
+            {/* Keyboard shortcut hint */}
+            <button
+              onClick={() => setShowShortcuts(true)}
+              className="hidden md:flex items-center gap-1 text-[10px] px-2 py-1 rounded-md transition-colors"
+              style={{
+                backgroundColor: isDarkMode ? "#1f2937" : "#f1f5f9",
+                color: "var(--topbar-subtitle)",
+              }}
+              title="Keyboard shortcuts"
+            >
+              <Command size={10} />
+              <span>?</span>
+            </button>
+
+            {/* Dark Mode Toggle */}
+            <button
+              onClick={() => setIsDarkMode((prev) => !prev)}
+              className="flex items-center justify-center w-8 h-8 rounded-md transition-colors"
+              style={{
+                backgroundColor: isDarkMode ? "#f59e0b15" : "#f1f5f9",
+                color: isDarkMode ? "#f59e0b" : "#6b7280",
+              }}
+              title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {isDarkMode ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
+
+            {/* User Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setUserDropdownOpen((prev) => !prev)}
+                onBlur={() => setTimeout(() => setUserDropdownOpen(false), 200)}
+                className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-md border-none transition-colors"
+                style={{ backgroundColor: isDarkMode ? "#1f2937" : "#f1f5f9" }}
+              >
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                  style={{ backgroundColor: "#245C5A" }}
+                >
+                  {user?.firstName?.[0]}{user?.lastName?.[0]}
+                </div>
+                <span
+                  className="text-[11px] font-medium hidden sm:block max-w-[80px] truncate"
+                  style={{ color: "var(--topbar-title)" }}
+                >
+                  {user?.name ?? user?.email}
+                </span>
+                <ChevronRight
+                  size={10}
+                  style={{
+                    color: "var(--topbar-subtitle)",
+                    transform: userDropdownOpen ? "rotate(90deg)" : "none",
+                    transition: "transform 0.15s",
+                  }}
+                />
+              </button>
+
+              {userDropdownOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1.5 rounded-lg py-1 z-50 min-w-[200px]"
+                  style={{
+                    backgroundColor: isDarkMode ? "#111827" : "#ffffff",
+                    border: `1px solid ${isDarkMode ? "#1f2937" : "#e5e7eb"}`,
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+                  }}
+                >
+                  <div className="px-3 py-2 border-b" style={{ borderColor: isDarkMode ? "#1f2937" : "#e5e7eb" }}>
+                    <p className="text-[12px] font-medium" style={{ color: "var(--topbar-title)" }}>
+                      {user?.name}
+                    </p>
+                    <p className="text-[10px]" style={{ color: "var(--topbar-subtitle)" }}>
+                      {user?.email}
+                    </p>
+                    <p className="text-[9px] mt-0.5 px-1.5 py-0.5 rounded-full inline-block" style={{ backgroundColor: "#245C5A18", color: "#245C5A" }}>
+                      {user?.role}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setIsDarkMode((prev) => !prev)}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-left border-none transition-colors"
+                    style={{ backgroundColor: "transparent", cursor: "pointer" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = isDarkMode ? "#1f2937" : "#f8fafc"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                  >
+                    {isDarkMode ? <Sun size={13} style={{ color: "#f59e0b" }} /> : <Moon size={13} style={{ color: "#6b7280" }} />}
+                    <span className="text-[11px]" style={{ color: "var(--topbar-title)" }}>
+                      {isDarkMode ? "Light Mode" : "Dark Mode"}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => { setShowShortcuts(true); setUserDropdownOpen(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-left border-none transition-colors"
+                    style={{ backgroundColor: "transparent", cursor: "pointer" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = isDarkMode ? "#1f2937" : "#f8fafc"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                  >
+                    <Keyboard size={13} style={{ color: "#6b7280" }} />
+                    <span className="text-[11px]" style={{ color: "var(--topbar-title)" }}>Keyboard Shortcuts</span>
+                  </button>
+
+                  <div className="border-t mt-1 pt-1" style={{ borderColor: isDarkMode ? "#1f2937" : "#e5e7eb" }}>
+                    <button
+                      onClick={logout}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left border-none transition-colors"
+                      style={{ backgroundColor: "transparent", cursor: "pointer" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = isDarkMode ? "#1f2937" : "#f8fafc"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                    >
+                      <LogOut size={13} style={{ color: "#DC2626" }} />
+                      <span className="text-[11px]" style={{ color: "#DC2626" }}>Logout</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* ─── Main Content ─── */}
         <main className="flex-1 overflow-auto p-4 md:p-6">
           <ErrorBoundary>
             <Routes>
               {/* ─── HOME ─── */}
               <Route path="/" element={<DashboardPage />} />
 
-            {/* ─── CLINICAL / BHC ─── */}
-            <Route path="/clinical" element={<ClinicalDashboardPage />} />
-            <Route path="/clinical/sessions" element={<ClinicalSessionsPage />} />
-            <Route path="/clinical/treatment-plans" element={<TreatmentPlansPage />} />
-            <Route path="/clinical/cans-assessments" element={<CansAssessmentPage />} />
-            <Route path="/clinical/outcome-measures" element={<OutcomeMeasuresPage />} />
-            <Route path="/clinical/insurance-plans" element={<InsurancePlansPage />} />
-            <Route path="/clinical/referrals" element={<ReferralIntakePage />} />
-            <Route path="/clinical/service-delivery" element={<ServiceDeliveryPage />} />
-            <Route path="/clinical/patients" element={<PatientListPage />} />
-            <Route path="/clinical/patient/:id" element={<PatientProfilePage />} />
-            <Route path="/clinical/workspace" element={<ClinicalWorkspacePage />} />
+              {/* ─── CLINICAL / BHC ─── */}
+              <Route path="/clinical" element={<ClinicalDashboardPage />} />
+              <Route path="/clinical/sessions" element={<ClinicalSessionsPage />} />
+              <Route path="/clinical/treatment-plans" element={<TreatmentPlansPage />} />
+              <Route path="/clinical/cans-assessments" element={<CansAssessmentPage />} />
+              <Route path="/clinical/outcome-measures" element={<OutcomeMeasuresPage />} />
+              <Route path="/clinical/insurance-plans" element={<InsurancePlansPage />} />
+              <Route path="/clinical/referrals" element={<ReferralIntakePage />} />
+              <Route path="/clinical/service-delivery" element={<ServiceDeliveryPage />} />
+              <Route path="/clinical/patients" element={<PatientListPage />} />
+              <Route path="/clinical/patient/:id" element={<PatientProfilePage />} />
+              <Route path="/clinical/workspace" element={<ClinicalWorkspacePage />} />
 
-            {/* ─── BHC DASHBOARD ─── */}
-            <Route path="/bhc" element={<BhcDashboardPage />} />
+              {/* ─── BHC DASHBOARD ─── */}
+              <Route path="/bhc" element={<BhcDashboardPage />} />
 
-            {/* ─── INTAKE ─── */}
-            <Route path="/intake" element={<IntakePipelinePage />} />
-            <Route path="/intake/pipeline" element={<IntakePipelinePage />} />
-            <Route path="/intake/assessment" element={<IntakeAssessmentPage />} />
+              {/* ─── INTAKE ─── */}
+              <Route path="/intake" element={<IntakePipelinePage />} />
+              <Route path="/intake/pipeline" element={<IntakePipelinePage />} />
+              <Route path="/intake/assessment" element={<IntakeAssessmentPage />} />
 
-            {/* ─── CRISIS / CASE ─── */}
-            <Route path="/crisis" element={<CrisisResponsePage />} />
-            <Route path="/cases" element={<CaseManagementPage />} />
+              {/* ─── CRISIS / CASE ─── */}
+              <Route path="/crisis" element={<CrisisResponsePage />} />
+              <Route path="/cases" element={<CaseManagementPage />} />
 
-            {/* ─── GRO / RESIDENTIAL ─── */}
-            <Route path="/gro" element={<GroDashboardPage />} />
-            <Route path="/gro/workspace" element={<GroWorkspacePage />} />
-            <Route path="/gro/compliance" element={<GroComplianceDashboardPage />} />
-            <Route path="/gro/incidents" element={<IncidentReportPage />} />
-            <Route path="/gro/shift-logs" element={<ShiftLogPage />} />
-            <Route path="/gro/safety-rounds" element={<SafetyRoundPage />} />
-            <Route path="/gro/care-logs" element={<YouthCareLogPage />} />
-            <Route path="/gro/supervision" element={<SupervisionNotesPage />} />
-            <Route path="/gro/handoffs" element={<ShiftHandoffListPage />} />
+              {/* ─── GRO / RESIDENTIAL ─── */}
+              <Route path="/gro" element={<GroDashboardPage />} />
+              <Route path="/gro/workspace" element={<GroWorkspacePage />} />
+              <Route path="/gro/compliance" element={<GroComplianceDashboardPage />} />
+              <Route path="/gro/incidents" element={<IncidentReportPage />} />
+              <Route path="/gro/shift-logs" element={<ShiftLogPage />} />
+              <Route path="/gro/safety-rounds" element={<SafetyRoundPage />} />
+              <Route path="/gro/care-logs" element={<YouthCareLogPage />} />
+              <Route path="/gro/supervision" element={<SupervisionNotesPage />} />
+              <Route path="/gro/handoffs" element={<ShiftHandoffListPage />} />
 
-            {/* ─── RESIDENTIAL ─── */}
-            <Route path="/residential" element={<ResidentialDashboardV2Page />} />
-            <Route path="/medications" element={<MedicationAdminPage />} />
-            <Route path="/mobile-mar" element={<MobileMarPage />} />
-            <Route path="/mar-facility" element={<MarFacilityViewPage />} />
-            <Route path="/family" element={<FamilyContactPage />} />
-            <Route path="/handoffs" element={<ShiftHandoffPage />} />
-            <Route path="/residential/analytics" element={<PredictiveAnalyticsPage />} />
+              {/* ─── RESIDENTIAL ─── */}
+              <Route path="/residential" element={<ResidentialDashboardV2Page />} />
+              <Route path="/medications" element={<MedicationAdminPage />} />
+              <Route path="/mobile-mar" element={<MobileMarPage />} />
+              <Route path="/mar-facility" element={<MarFacilityViewPage />} />
+              <Route path="/family" element={<FamilyContactPage />} />
+              <Route path="/handoffs" element={<ShiftHandoffPage />} />
+              <Route path="/residential/analytics" element={<PredictiveAnalyticsPage />} />
 
-            {/* ─── COORDINATION ─── */}
-            <Route path="/observations" element={<DailyObservationsPage />} />
-            <Route path="/meetings" element={<MeetingCadencePage />} />
-            <Route path="/escalation-ladder" element={<EscalationLadderPage />} />
+              {/* ─── COORDINATION ─── */}
+              <Route path="/observations" element={<DailyObservationsPage />} />
+              <Route path="/meetings" element={<MeetingCadencePage />} />
+              <Route path="/escalation-ladder" element={<EscalationLadderPage />} />
 
-            {/* ─── CAMPUS ─── */}
-            <Route path="/campus" element={<CampusCensusDashboardPage />} />
+              {/* ─── CAMPUS ─── */}
+              <Route path="/campus" element={<CampusCensusDashboardPage />} />
 
-            {/* ─── QA / COMPLIANCE ─── */}
-            <Route path="/qa" element={<QaDashboardPage />} />
-            <Route path="/qa/list" element={<QaListPage />} />
-            <Route path="/qa/audit-binder" element={<AuditBinderPage />} />
-            <Route path="/qa/cap-tracker" element={<CapTrackerPage />} />
-            <Route path="/qa/compliance-memo" element={<ComplianceMemoPage />} />
-            <Route path="/qa/deficiency-tracking" element={<DeficiencyTrackingPage />} />
-            <Route path="/qa/evidence-matrix" element={<EvidenceMatrixPage />} />
-            <Route path="/compliance/hhsc-export" element={<HhscExportPage />} />
-            <Route path="/compliance/part2" element={<Part2DashboardPage />} />
+              {/* ─── QA / COMPLIANCE ─── */}
+              <Route path="/qa" element={<QaDashboardPage />} />
+              <Route path="/qa/list" element={<QaListPage />} />
+              <Route path="/qa/audit-binder" element={<AuditBinderPage />} />
+              <Route path="/qa/cap-tracker" element={<CapTrackerPage />} />
+              <Route path="/qa/compliance-memo" element={<ComplianceMemoPage />} />
+              <Route path="/qa/deficiency-tracking" element={<DeficiencyTrackingPage />} />
+              <Route path="/qa/evidence-matrix" element={<EvidenceMatrixPage />} />
+              <Route path="/compliance/hhsc-export" element={<HhscExportPage />} />
+              <Route path="/compliance/part2" element={<Part2DashboardPage />} />
 
-            {/* ─── TOOLKITS ─── */}
-            <Route path="/toolkits/chart-audit" element={<ChartAuditPage />} />
-            <Route path="/toolkits" element={<ToolkitHubPage />} />
+              {/* ─── TOOLKITS ─── */}
+              <Route path="/toolkits/chart-audit" element={<ChartAuditPage />} />
+              <Route path="/toolkits" element={<ToolkitHubPage />} />
 
-            {/* ─── REVENUE ─── */}
-            <Route path="/revenue" element={<RevenueDashboardPage />} />
-            <Route path="/revenue/claims" element={<ClaimsListPage />} />
-            <Route path="/revenue/claim-submission" element={<ClaimSubmissionPage />} />
-            <Route path="/revenue/denials" element={<DenialManagementPage />} />
-            <Route path="/authorizations" element={<AuthorizationManagementPage />} />
-            <Route path="/revenue/aging" element={<AgingQueuePage />} />
-            <Route path="/revenue/proof-of-service" element={<ProofOfServiceGatePage />} />
-            <Route path="/revenue/payer-packets" element={<PayerPacketBuilderPage />} />
+              {/* ─── REVENUE ─── */}
+              <Route path="/revenue" element={<RevenueDashboardPage />} />
+              <Route path="/revenue/claims" element={<ClaimsListPage />} />
+              <Route path="/revenue/claim-submission" element={<ClaimSubmissionPage />} />
+              <Route path="/revenue/denials" element={<DenialManagementPage />} />
+              <Route path="/authorizations" element={<AuthorizationManagementPage />} />
+              <Route path="/revenue/aging" element={<AgingQueuePage />} />
+              <Route path="/revenue/proof-of-service" element={<ProofOfServiceGatePage />} />
+              <Route path="/revenue/payer-packets" element={<PayerPacketBuilderPage />} />
 
-            {/* ─── HR ─── */}
-            <Route path="/hr" element={<HrCommandCenterPage />} />
-            <Route path="/hr/personnel-files" element={<HrPersonProfilePage />} />
-            <Route path="/hr/credentials" element={<CredentialTrackingPage />} />
-            <Route path="/hr/performance" element={<PerformanceReviewPage />} />
-            <Route path="/hr/onboarding" element={<HrOnboardingPage />} />
-            <Route path="/hr/separation" element={<SeparationManagementPage />} />
-            <Route path="/hr/module" element={<HrModulePage />} />
-            <Route path="/hr/layout" element={<HrLayout />} />
-            <Route path="/hr/training" element={<TrainingAssignmentPage />} />
-            <Route path="/hr/recruitment" element={<RecruitmentPage />} />
-            <Route path="/hr/tracker" element={<TrainingTrackerPage />} />
+              {/* ─── HR ─── */}
+              <Route path="/hr" element={<HrCommandCenterPage />} />
+              <Route path="/hr/personnel-files" element={<HrPersonProfilePage />} />
+              <Route path="/hr/credentials" element={<CredentialTrackingPage />} />
+              <Route path="/hr/performance" element={<PerformanceReviewPage />} />
+              <Route path="/hr/onboarding" element={<HrOnboardingPage />} />
+              <Route path="/hr/separation" element={<SeparationManagementPage />} />
+              <Route path="/hr/module" element={<HrModulePage />} />
+              <Route path="/hr/layout" element={<HrLayout />} />
+              <Route path="/hr/training" element={<TrainingAssignmentPage />} />
+              <Route path="/hr/recruitment" element={<RecruitmentPage />} />
+              <Route path="/hr/tracker" element={<TrainingTrackerPage />} />
 
-            {/* ─── HR WORKFORCE ACTIVATION (new) ─── */}
-            <Route path="/hr/screening" element={<ScreeningPage />} />
-            <Route path="/hr/offers" element={<OffersPage />} />
-            <Route path="/hr/orientation" element={<OrientationPage />} />
+              {/* ─── HR WORKFORCE ACTIVATION (new) ─── */}
+              <Route path="/hr/screening" element={<ScreeningPage />} />
+              <Route path="/hr/offers" element={<OffersPage />} />
+              <Route path="/hr/orientation" element={<OrientationPage />} />
 
-            {/* ─── HR WORKFORCE MANAGEMENT (new) ─── */}
-            <Route path="/hr/clearance" element={<ClearancePage />} />
-            <Route path="/hr/compliance" element={<HrCompliancePage />} />
-            <Route path="/hr/separations" element={<SeparationsPage />} />
+              {/* ─── HR WORKFORCE MANAGEMENT (new) ─── */}
+              <Route path="/hr/clearance" element={<ClearancePage />} />
+              <Route path="/hr/compliance" element={<HrCompliancePage />} />
+              <Route path="/hr/separations" element={<SeparationsPage />} />
 
-            {/* ─── HR TOOLS (new) ─── */}
-            <Route path="/hr/credentials-tracker" element={<CredentialsTrackerPage />} />
-            <Route path="/hr/training-assignments" element={<TrainingAssignmentsPage />} />
-            <Route path="/hr/performance-reviews" element={<PerformanceReviewsPage />} />
-            <Route path="/hr/onboarding-workflow" element={<OnboardingWorkflowEnginePage />} />
+              {/* ─── HR TOOLS (new) ─── */}
+              <Route path="/hr/credentials-tracker" element={<CredentialsTrackerPage />} />
+              <Route path="/hr/training-assignments" element={<TrainingAssignmentsPage />} />
+              <Route path="/hr/performance-reviews" element={<PerformanceReviewsPage />} />
+              <Route path="/hr/onboarding-workflow" element={<OnboardingWorkflowPage />} />
 
-            {/* ─── EXECUTIVE ─── */}
-            <Route path="/executive" element={<ExecutiveDashboardPage />} />
-            <Route path="/executive/mgma" element={<MgmaScorecardPage />} />
-            <Route path="/executive/strategic-projects" element={<StrategicProjectsHubPage />} />
-            <Route path="/executive/marketing-review" element={<MarketingSiteReviewPage />} />
+              {/* ─── NEW HR ROUTES ─── */}
+              <Route path="/hr/personnel" element={<PersonnelFilesPage />} />
+              <Route path="/hr/credential-tracker" element={<CredentialTrackerPage />} />
+              <Route path="/hr/onboarding-flow" element={<OnboardingFlowPage />} />
 
-            {/* ─── GAD ─── */}
-            <Route path="/gad" element={<GadDashboardPage />} />
+              {/* ─── EXECUTIVE ─── */}
+              <Route path="/executive" element={<ExecutiveDashboardPage />} />
+              <Route path="/executive/mgma" element={<MgmaScorecardPage />} />
+              <Route path="/executive/strategic-projects" element={<StrategicProjectsHubPage />} />
+              <Route path="/executive/marketing-review" element={<MarketingSiteReviewPage />} />
 
-            {/* ─── ANALYTICS ─── */}
-            <Route path="/analytics" element={<AnalyticsPage />} />
+              {/* ─── GAD ─── */}
+              <Route path="/gad" element={<GadDashboardPage />} />
 
-            {/* ─── DOCUMENTS / DMS ─── */}
-            <Route path="/documents" element={<DocumentStudioPage />} />
-            <Route path="/documents/*" element={<DocumentStudioPage />} />
+              {/* ─── NEW EXECUTIVE ROUTES ─── */}
+              <Route path="/mgma" element={<MgmaScorecardPage />} />
+              <Route path="/strategic-projects" element={<StrategicProjectsPage />} />
+              <Route path="/site-review" element={<SiteReviewPage />} />
 
-            {/* ─── KNOWLEDGE ─── */}
-            <Route path="/knowledge" element={<KnowledgePage />} />
-            <Route path="/sop-knowledge" element={<SOPKnowledgePage />} />
+              {/* ─── ANALYTICS ─── */}
+              <Route path="/analytics" element={<AnalyticsPage />} />
 
-            {/* ─── NIL ─── */}
-            <Route path="/nil" element={<NilSearchPage />} />
-            <Route path="/nil/graph" element={<NilGraphPage />} />
+              {/* ─── DOCUMENTS / DMS ─── */}
+              <Route path="/documents" element={<DocumentStudioPage />} />
+              <Route path="/documents/*" element={<DocumentStudioPage />} />
 
-            {/* ─── WORKFLOWS ─── */}
-            <Route path="/workflows" element={<WorkflowsPage />} />
-            <Route path="/my-work-today" element={<MyWorkTodayPage />} />
+              {/* ─── KNOWLEDGE ─── */}
+              <Route path="/knowledge" element={<KnowledgePage />} />
+              <Route path="/sop-knowledge" element={<SOPKnowledgePage />} />
 
-            {/* ─── ONBOARDING ─── */}
-            <Route path="/onboarding" element={<OnboardingAcademyPage />} />
-            <Route path="/onboarding/track" element={<OnboardingTrackPage />} />
-            <Route path="/onboarding/track/universal-orientation" element={<UniversalOrientationPage />} />
-            <Route path="/onboarding/module" element={<OnboardingModulePage />} />
-            <Route path="/onboarding/employee" element={<OnboardingEmployeePage />} />
-            <Route path="/onboarding/supervisor" element={<OnboardingSupervisorPage />} />
-            <Route path="/onboarding/management" element={<OnboardingManagementPage />} />
-            <Route path="/onboarding/evidence" element={<OnboardingEvidencePage />} />
-            <Route path="/onboarding/training" element={<OnboardingTrainingPage />} />
+              {/* ─── NIL ─── */}
+              <Route path="/nil" element={<NilSearchPage />} />
+              <Route path="/nil/graph" element={<NilGraphPage />} />
 
-            {/* ─── ADMIN ─── */}
-            <Route path="/admin/settings" element={<AdminSettingsPage />} />
-            <Route path="/admin/workflow" element={<WorkflowAdminPage />} />
-            <Route path="/admin/workflows" element={<WorkflowEnginePage />} />
-            <Route path="/admin/entra-id" element={<EntraIdPage />} />
-            <Route path="/admin/enhancement-register" element={<EnhancementRegisterPage />} />
-            <Route path="/admin/enhancements" element={<EnhancementRegisterPage />} />
+              {/* ─── WORKFLOWS ─── */}
+              <Route path="/workflows" element={<WorkflowsPage />} />
+              <Route path="/my-work-today" element={<MyWorkTodayPage />} />
 
-            {/* ─── AUTH ─── */}
-            <Route path="/authorization" element={<AuthorizationPage />} />
+              {/* ─── ONBOARDING ─── */}
+              <Route path="/onboarding" element={<OnboardingAcademyPage />} />
+              <Route path="/onboarding/track" element={<OnboardingTrackPage />} />
+              <Route path="/onboarding/track/universal-orientation" element={<UniversalOrientationPage />} />
+              <Route path="/onboarding/module" element={<OnboardingModulePage />} />
+              <Route path="/onboarding/employee" element={<OnboardingEmployeePage />} />
+              <Route path="/onboarding/supervisor" element={<OnboardingSupervisorPage />} />
+              <Route path="/onboarding/management" element={<OnboardingManagementPage />} />
+              <Route path="/onboarding/evidence" element={<OnboardingEvidencePage />} />
+              <Route path="/onboarding/training" element={<OnboardingTrainingPage />} />
 
-            {/* ─── MY SHIFT / PERSONAL ─── */}
-            <Route path="/my-shift" element={<MyShiftPage />} />
-            <Route path="/meetings-escalations" element={<MeetingsEscalationsPage />} />
+              {/* ─── ADMIN ─── */}
+              <Route path="/admin/settings" element={<AdminSettingsPage />} />
+              <Route path="/admin/workflow" element={<WorkflowEnginePage />} />
+              <Route path="/admin/workflows" element={<Navigate to="/workflows" replace />} />
+              <Route path="/admin/entra-id" element={<EntraSyncPage />} />
+              <Route path="/admin/enhancement-register" element={<EnhancementRegisterPage />} />
+              <Route path="/admin/enhancements" element={<EnhancementRegisterPage />} />
+              <Route path="/admin/enhancement" element={<EnhancementRegisterPage />} />
+              <Route path="/admin/nil-graph" element={<AdminNilGraphPage />} />
+              <Route path="/admin/entra-sync" element={<EntraSyncPage />} />
+
+              {/* ─── AUTH ─── */}
+              <Route path="/authorization" element={<AuthorizationPage />} />
+
+              {/* ─── MY SHIFT / PERSONAL ─── */}
+              <Route path="/my-shift" element={<MyShiftPage />} />
+              <Route path="/meetings-escalations" element={<MeetingsEscalationsPage />} />
 
               {/* ─── FALLBACK ─── */}
               <Route path="*" element={<DashboardPage />} />
@@ -408,6 +957,79 @@ export function AppShell() {
         </main>
       </div>
       <Toaster />
+
+      {/* ═══════ KEYBOARD SHORTCUTS MODAL ═══════ */}
+      {showShortcuts && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowShortcuts(false)}
+        >
+          <div
+            className="rounded-lg shadow-xl max-w-md w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: isDarkMode ? "#111827" : "#ffffff",
+              border: `1px solid ${isDarkMode ? "#1f2937" : "#e5e7eb"}`,
+            }}
+          >
+            <div
+              className="flex items-center justify-between px-5 py-4 border-b"
+              style={{ borderColor: isDarkMode ? "#1f2937" : "#e5e7eb" }}
+            >
+              <h3 className="text-[14px] font-bold flex items-center gap-2" style={{ color: "var(--topbar-title)" }}>
+                <Keyboard size={16} style={{ color: "#245C5A" }} />
+                Keyboard Shortcuts
+              </h3>
+              <button
+                onClick={() => setShowShortcuts(false)}
+                className="p-1 rounded cursor-pointer border-none"
+                style={{ backgroundColor: isDarkMode ? "#1f2937" : "#f3f4f6" }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <div className="p-4">
+              <div className="space-y-1">
+                {SHORTCUTS.map((shortcut, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between py-2 px-3 rounded"
+                    style={{ backgroundColor: i % 2 === 0 ? (isDarkMode ? "#0a0e1a" : "#f8fafc") : "transparent" }}
+                  >
+                    <span className="text-[12px]" style={{ color: "var(--topbar-title)" }}>
+                      {shortcut.description}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      {shortcut.keys.map((key, ki) => (
+                        <span key={ki}>
+                          <kbd
+                            className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium"
+                            style={{
+                              backgroundColor: isDarkMode ? "#1f2937" : "#f1f5f9",
+                              color: "var(--topbar-subtitle)",
+                              border: `1px solid ${isDarkMode ? "#374151" : "#d1d5db"}`,
+                            }}
+                          >
+                            {key}
+                          </kbd>
+                          {ki < shortcut.keys.length - 1 && (
+                            <span className="text-[10px] mx-0.5" style={{ color: "var(--topbar-subtitle)" }}>+</span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 pt-3 border-t" style={{ borderColor: isDarkMode ? "#1f2937" : "#e5e7eb" }}>
+                <p className="text-[10px] text-center" style={{ color: "var(--topbar-subtitle)" }}>
+                  Press <kbd className="px-1 py-0.5 rounded text-[9px]" style={{ backgroundColor: isDarkMode ? "#1f2937" : "#f1f5f9" }}>Escape</kbd> to close this dialog
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
