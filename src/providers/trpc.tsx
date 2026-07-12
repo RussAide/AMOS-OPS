@@ -1909,6 +1909,24 @@ const trpcClient = trpc.createClient({
           if (!contentType || contentType.includes("text/html")) {
             return buildDemoResponse(url.toString());
           }
+          // If backend returns error status or error JSON, use demo data
+          if (!response.ok || response.status >= 400) {
+            return buildDemoResponse(url.toString());
+          }
+          // Check if response body contains tRPC errors or null data
+          const cloned = response.clone();
+          try {
+            const body = await cloned.json();
+            if (Array.isArray(body) && body.some((item: any) => item && item.error)) {
+              return buildDemoResponse(url.toString());
+            }
+            // Fall back if all results are null (backend has no data for this endpoint)
+            if (Array.isArray(body) && body.every((item: any) => item && item.result && item.result.data && item.result.data.json === null)) {
+              return buildDemoResponse(url.toString());
+            }
+          } catch {
+            // Not valid JSON array, return original response
+          }
           return response;
         } catch (err) {
           return buildDemoResponse(url.toString());
