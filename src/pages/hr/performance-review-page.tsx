@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { trpc } from "@/providers/trpc";
 import {
   TrendingUp, ArrowLeft, Star, ClipboardCheck, Search,
-  CheckCircle2, AlertTriangle, X, Filter, Users, FileText
+  CheckCircle2, AlertTriangle, X, Filter
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -166,7 +166,7 @@ export function PerformanceReviewPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-[10px]">Type</Label>
-                  <Select value={formData.reviewType} onValueChange={(v) => setFormData({ ...formData, reviewType: v as any })}>
+                    <Select value={formData.reviewType} onValueChange={(v) => setFormData({ ...formData, reviewType: v as typeof formData.reviewType })}>
                     <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="30-day" className="text-xs">30-Day</SelectItem>
@@ -208,7 +208,7 @@ export function PerformanceReviewPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-[10px]">Overall Rating *</Label>
-                  <Select value={formData.overallRating} onValueChange={(v) => setFormData({ ...formData, overallRating: v })}>
+                  <Select value={formData.overallRating} onValueChange={(v) => setFormData({ ...formData, overallRating: v as typeof formData.overallRating })}>
                     <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
                     <SelectContent>
                       {Object.entries(RATING_COLORS).map(([key, val]) => (

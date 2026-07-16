@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import {
   CloudSync, Users, CheckCircle2, Clock, AlertTriangle, Search, Filter,
-  ArrowUpDown, ArrowUp, ArrowDown, Eye, RefreshCw, Plus, X,
+  ArrowUpDown, ArrowUp, ArrowDown, Eye, RefreshCw, X,
   Mail, Shield, Calendar,
 } from "lucide-react";
 
@@ -27,23 +27,32 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 
 // ─── Demo Data ─────────────────────────────────────────────────
 const DEMO_USERS: EntraUser[] = [
-  { id: "1", name: "Sarah Johnson", email: "s.johnson@amos.org", adStatus: "synced", lastSync: "2025-06-15T10:30:00Z", syncStatus: "Directory synced", roles: ["Clinical-Staff"], department: "Clinical" },
-  { id: "2", name: "Michael Chen", email: "m.chen@amos.org", adStatus: "synced", lastSync: "2025-06-15T10:30:00Z", syncStatus: "Directory synced", roles: ["Clinical-Staff", "LPHA"], department: "Clinical" },
-  { id: "3", name: "David Park", email: "d.park@amos.org", adStatus: "pending", lastSync: "2025-06-14T08:15:00Z", syncStatus: "Awaiting group assignment", roles: ["QMHP"], department: "Clinical" },
-  { id: "4", name: "Emily Roberts", email: "e.roberts@amos.org", adStatus: "synced", lastSync: "2025-06-15T10:30:00Z", syncStatus: "Directory synced", roles: ["GRO-Staff"], department: "GRO" },
-  { id: "5", name: "James Wilson", email: "j.wilson@amos.org", adStatus: "error", lastSync: "2025-06-10T14:20:00Z", syncStatus: "License conflict detected", roles: ["GRO-Staff"], department: "GRO" },
-  { id: "6", name: "Lisa Thompson", email: "l.thompson@amos.org", adStatus: "synced", lastSync: "2025-06-15T10:30:00Z", syncStatus: "Directory synced", roles: ["BHC-Staff"], department: "BHC" },
-  { id: "7", name: "Marcus Lee", email: "m.lee@amos.org", adStatus: "synced", lastSync: "2025-06-15T10:30:00Z", syncStatus: "Directory synced", roles: ["Revenue-Staff"], department: "Revenue" },
-  { id: "8", name: "Aisha Patel", email: "a.patel@amos.org", adStatus: "pending", lastSync: "2025-06-13T09:45:00Z", syncStatus: "Provisioning in progress", roles: ["HR-Admin"], department: "HR" },
-  { id: "9", name: "Carlos Mendez", email: "c.mendez@amos.org", adStatus: "synced", lastSync: "2025-06-15T10:30:00Z", syncStatus: "Directory synced", roles: ["GAD-Staff"], department: "GAD" },
-  { id: "10", name: "Rachel Kim", email: "r.kim@amos.org", adStatus: "disabled", lastSync: "2025-05-01T11:00:00Z", syncStatus: "Account disabled", roles: ["Revenue-Manager"], department: "Revenue" },
-  { id: "11", name: "James Rodriguez", email: "j.rodriguez@amos.org", adStatus: "synced", lastSync: "2025-06-15T10:30:00Z", syncStatus: "Directory synced", roles: ["GRO-Supervisor"], department: "GRO" },
-  { id: "12", name: "Lilian Ike", email: "l.ike@amos.org", adStatus: "error", lastSync: "2025-06-12T16:30:00Z", syncStatus: "Duplicate UPN found", roles: ["Clinical-Staff"], department: "Clinical" },
+  { id: "1", name: "Synthetic Staff 01", email: "s.johnson@example.invalid", adStatus: "synced", lastSync: "2025-06-15T10:30:00Z", syncStatus: "Directory synced", roles: ["Clinical-Staff"], department: "Clinical" },
+  { id: "2", name: "Michael Chen", email: "m.chen@example.invalid", adStatus: "synced", lastSync: "2025-06-15T10:30:00Z", syncStatus: "Directory synced", roles: ["Clinical-Staff", "LPHA"], department: "Clinical" },
+  { id: "3", name: "Synthetic Staff 04", email: "d.park@example.invalid", adStatus: "pending", lastSync: "2025-06-14T08:15:00Z", syncStatus: "Awaiting group assignment", roles: ["QMHP"], department: "Clinical" },
+  { id: "4", name: "Synthetic-Person-037 Roberts", email: "e.roberts@example.invalid", adStatus: "synced", lastSync: "2025-06-15T10:30:00Z", syncStatus: "Directory synced", roles: ["GRO-Staff"], department: "GRO" },
+  { id: "5", name: "Synthetic Staff 09", email: "j.wilson@example.invalid", adStatus: "error", lastSync: "2025-06-10T14:20:00Z", syncStatus: "License conflict detected", roles: ["GRO-Staff"], department: "GRO" },
+  { id: "6", name: "Lisa Thompson", email: "l.thompson@example.invalid", adStatus: "synced", lastSync: "2025-06-15T10:30:00Z", syncStatus: "Directory synced", roles: ["BHC-Staff"], department: "BHC" },
+  { id: "7", name: "Synthetic-Person-001 Lee", email: "m.lee@example.invalid", adStatus: "synced", lastSync: "2025-06-15T10:30:00Z", syncStatus: "Directory synced", roles: ["Revenue-Staff"], department: "Revenue" },
+  { id: "8", name: "Aisha Patel", email: "a.patel@example.invalid", adStatus: "pending", lastSync: "2025-06-13T09:45:00Z", syncStatus: "Provisioning in progress", roles: ["HR-Admin"], department: "HR" },
+  { id: "9", name: "Synthetic-Person-004 Mendez", email: "c.mendez@example.invalid", adStatus: "synced", lastSync: "2025-06-15T10:30:00Z", syncStatus: "Directory synced", roles: ["GAD-Staff"], department: "GAD" },
+  { id: "10", name: "Rachel Kim", email: "r.kim@example.invalid", adStatus: "disabled", lastSync: "2025-05-01T11:00:00Z", syncStatus: "Account disabled", roles: ["Revenue-Manager"], department: "Revenue" },
+  { id: "11", name: "James Rodriguez", email: "j.rodriguez@example.invalid", adStatus: "synced", lastSync: "2025-06-15T10:30:00Z", syncStatus: "Directory synced", roles: ["GRO-Supervisor"], department: "GRO" },
+  { id: "12", name: "Demo Clinical Lead", email: "clinical.lead@amos-ops.invalid", adStatus: "error", lastSync: "2025-06-12T16:30:00Z", syncStatus: "Duplicate UPN found", roles: ["Clinical-Staff"], department: "Clinical" },
 ];
 
 // ─── Sort ──────────────────────────────────────────────────────
 type SortField = "name" | "email" | "adStatus" | "lastSync" | "department";
 type SortDir = "asc" | "desc";
+
+function renderSortIcon(field: SortField, activeField: SortField, direction: SortDir) {
+  if (activeField !== field) {
+    return <ArrowUpDown size={12} className="ml-1" style={{ color: "#9CA3AF" }} />;
+  }
+  return direction === "asc"
+    ? <ArrowUp size={12} className="ml-1" style={{ color: "#245C5A" }} />
+    : <ArrowDown size={12} className="ml-1" style={{ color: "#245C5A" }} />;
+}
 
 export default function EntraSyncPage() {
   const [users] = useState<EntraUser[]>(DEMO_USERS);
@@ -94,13 +103,6 @@ export default function EntraSyncPage() {
     pending: users.filter((r) => r.adStatus === "pending").length,
     errors: users.filter((r) => r.adStatus === "error").length,
   }), [users]);
-
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return <ArrowUpDown size={12} className="ml-1" style={{ color: "#9CA3AF" }} />;
-    return sortDir === "asc"
-      ? <ArrowUp size={12} className="ml-1" style={{ color: "#245C5A" }} />
-      : <ArrowDown size={12} className="ml-1" style={{ color: "#245C5A" }} />;
-  };
 
   const hasFilters = searchQuery || statusFilter !== "all";
 
@@ -188,19 +190,19 @@ export default function EntraSyncPage() {
             <thead>
               <tr style={{ borderBottom: "2px solid var(--card-border)", backgroundColor: "rgba(36,92,90,0.03)" }}>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("name")}>
-                  <span className="flex items-center">User <SortIcon field="name" /></span>
+                  <span className="flex items-center">User {renderSortIcon("name", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("email")}>
-                  <span className="flex items-center">Email <SortIcon field="email" /></span>
+                  <span className="flex items-center">Email {renderSortIcon("email", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("department")}>
-                  <span className="flex items-center">Department <SortIcon field="department" /></span>
+                  <span className="flex items-center">Department {renderSortIcon("department", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("adStatus")}>
-                  <span className="flex items-center">AD Status <SortIcon field="adStatus" /></span>
+                  <span className="flex items-center">AD Status {renderSortIcon("adStatus", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("lastSync")}>
-                  <span className="flex items-center">Last Sync <SortIcon field="lastSync" /></span>
+                  <span className="flex items-center">Last Sync {renderSortIcon("lastSync", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold" style={{ color: "var(--topbar-subtitle)" }}>Actions</th>
               </tr>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
-import { Package, ArrowLeft, FileText, CheckCircle, AlertTriangle, X, ChevronRight, FolderOpen, Plus } from "lucide-react";
+import { Package, ArrowLeft, FileText, CheckCircle, AlertTriangle, X, FolderOpen } from "lucide-react";
 
 const DOC_CATEGORIES: Record<string, { label: string; color: string }> = {
   billing: { label: "Billing", color: "#2563EB" },
@@ -45,7 +45,7 @@ export function PayerPacketBuilderPage() {
   // Initialize documents from requirements when payer changes
   useState(() => {
     if (packetData?.requirements) {
-      setDocuments(packetData.requirements.map((r: any) => ({
+      setDocuments(packetData.requirements.map((r) => ({
         documentType: r.document,
         status: r.required ? "missing" : "waived",
         notes: "",
@@ -105,7 +105,7 @@ export function PayerPacketBuilderPage() {
                 setSelectedPayer(e.target.value);
                 // Init documents from requirements
                 if (packetData?.requirements) {
-                  setDocuments(packetData.requirements.map((r: any) => ({
+                  setDocuments(packetData.requirements.map((r) => ({
                     documentType: r.document,
                     status: r.required ? "missing" : "waived",
                     notes: "",
@@ -190,9 +190,7 @@ export function PayerPacketBuilderPage() {
             )}
             <div className="space-y-2">
               {documents.map((doc, idx) => {
-                const statusConfig = DOC_STATUSES.find((s) => s.value === doc.status) ?? DOC_STATUSES[2];
                 const category = Object.entries(DOC_CATEGORIES).find(([, v]) => v.label.toLowerCase() === (packetData?.requirements[idx]?.category ?? ""))?.[1];
-                const StatusIcon = statusConfig.icon;
                 return (
                   <div key={idx} className="flex items-center gap-3 p-3 rounded-lg border" style={{ borderColor: "var(--card-border)", backgroundColor: doc.status === "missing" ? "#FEE2E208" : doc.status === "included" ? "#ECFDF508" : "transparent" }}>
                     <div className="flex-1">
@@ -217,7 +215,7 @@ export function PayerPacketBuilderPage() {
                       {DOC_STATUSES.map((s) => (
                         <button
                           key={s.value}
-                          onClick={() => updateDocStatus(idx, s.value as any)}
+                          onClick={() => updateDocStatus(idx, s.value as Parameters<typeof updateDocStatus>[1])}
                           className="px-2 py-1 rounded text-[10px] font-medium transition-all"
                           style={{
                             backgroundColor: doc.status === s.value ? s.color + "20" : "transparent",

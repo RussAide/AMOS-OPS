@@ -3,7 +3,8 @@ import { trpc } from "@/providers/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "../../../api/router";
 
 const STAGE_COLORS: Record<string, string> = {
   readiness: "bg-yellow-100 text-yellow-700",
@@ -35,7 +36,9 @@ const READINESS_ITEMS = [
   { key: "readiness_guardian_consent", label: "Guardian consent on file" },
   { key: "readiness_ub04_clean", label: "UB-04 claim clean" },
   { key: "readiness_excluded_services", label: "Excluded services identified" },
-];
+] as const;
+
+type AuthorizationRecord = inferRouterOutputs<AppRouter>["m20"]["listAuthorizations"][number];
 
 export function AuthorizationPage() {
   const [selectedAuthId, setSelectedAuthId] = useState<string | null>(null);
@@ -43,9 +46,9 @@ export function AuthorizationPage() {
   const { data: auths = [] } = trpc.m20.listAuthorizations.useQuery();
   const { data: summary } = trpc.m20.authSummary.useQuery();
 
-  const activeAuths = auths.filter((a: any) => a.status !== "closed" && a.status !== "expired");
-  const closedAuths = auths.filter((a: any) => a.status === "closed" || a.status === "expired");
-  const selectedAuth = auths.find((a: any) => a.id === selectedAuthId);
+  const activeAuths = auths.filter((a) => a.status !== "closed" && a.status !== "expired");
+  const closedAuths = auths.filter((a) => a.status === "closed" || a.status === "expired");
+  const selectedAuth = auths.find((a) => a.id === selectedAuthId);
 
   return (
     <>
@@ -84,13 +87,13 @@ export function AuthorizationPage() {
         </TabsList>
 
         <TabsContent value="all" className="mt-4 space-y-2">
-          {auths.map((a: any) => <AuthCard key={a.id} auth={a} selected={selectedAuthId === a.id} onClick={() => setSelectedAuthId(a.id === selectedAuthId ? null : a.id)} />)}
+          {auths.map((a) => <AuthCard key={a.id} auth={a} selected={selectedAuthId === a.id} onClick={() => setSelectedAuthId(a.id === selectedAuthId ? null : a.id)} />)}
         </TabsContent>
         <TabsContent value="active" className="mt-4 space-y-2">
-          {activeAuths.map((a: any) => <AuthCard key={a.id} auth={a} selected={selectedAuthId === a.id} onClick={() => setSelectedAuthId(a.id === selectedAuthId ? null : a.id)} />)}
+          {activeAuths.map((a) => <AuthCard key={a.id} auth={a} selected={selectedAuthId === a.id} onClick={() => setSelectedAuthId(a.id === selectedAuthId ? null : a.id)} />)}
         </TabsContent>
         <TabsContent value="closed" className="mt-4 space-y-2">
-          {closedAuths.map((a: any) => <AuthCard key={a.id} auth={a} selected={selectedAuthId === a.id} onClick={() => setSelectedAuthId(a.id === selectedAuthId ? null : a.id)} />)}
+          {closedAuths.map((a) => <AuthCard key={a.id} auth={a} selected={selectedAuthId === a.id} onClick={() => setSelectedAuthId(a.id === selectedAuthId ? null : a.id)} />)}
         </TabsContent>
       </Tabs>
 
@@ -100,7 +103,7 @@ export function AuthorizationPage() {
   );
 }
 
-function AuthCard({ auth: a, selected, onClick }: { auth: any; selected: boolean; onClick: () => void }) {
+function AuthCard({ auth: a, selected, onClick }: { auth: AuthorizationRecord; selected: boolean; onClick: () => void }) {
   const readinessCount = READINESS_ITEMS.filter(item => a[item.key] === 1).length;
   return (
     <Card className={`cursor-pointer ${selected ? "border-[#2e8b8b] ring-1 ring-[#2e8b8b]" : a.status === "appealed" ? "border-orange-300" : a.days_until_expiration && a.days_until_expiration <= 14 ? "border-yellow-300" : ""}`} onClick={onClick}>
@@ -125,7 +128,7 @@ function AuthCard({ auth: a, selected, onClick }: { auth: any; selected: boolean
   );
 }
 
-function AuthDetail({ auth: a }: { auth: any }) {
+function AuthDetail({ auth: a }: { auth: AuthorizationRecord }) {
   const readinessCount = READINESS_ITEMS.filter(item => a[item.key] === 1).length;
   const allReady = readinessCount === 10;
 

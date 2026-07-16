@@ -1,10 +1,36 @@
-import { useState } from "react";
-import { ClipboardList, AlertTriangle, CheckCircle, Clock, FileCheck, ShieldCheck, TrendingUp, Package, Award } from "lucide-react";
+import { ClipboardList, AlertTriangle, CheckCircle, ShieldCheck } from "lucide-react";
+import { readNullableString, readString, toRecords } from "@/components/data/record-utils";
 import { trpc } from "@/providers/trpc";
+
+interface WorkTask {
+  id: string;
+  priority: string;
+  task_title: string;
+  task_type: string;
+  entity_type: string | null;
+  status: string;
+}
+
+function normalizeWorkTask(value: Record<string, unknown>): WorkTask | null {
+  const id = readString(value, "id");
+  if (!id) return null;
+  return {
+    id,
+    priority: readString(value, "priority", "medium"),
+    task_title: readString(value, "task_title", "Untitled task"),
+    task_type: readString(value, "task_type", "Task"),
+    entity_type: readNullableString(value, "entity_type"),
+    status: readString(value, "status", "pending"),
+  };
+}
 
 export function MyWorkToday() {
   const { data: kpis } = trpc.m1.dashboardKPIs.useQuery();
-  const { data: tasks } = trpc.m1.getWorkQueue.useQuery({});
+  const { data: rawTasks } = trpc.m1.getWorkQueue.useQuery({});
+  const tasks = toRecords(rawTasks).flatMap((task) => {
+    const normalized = normalizeWorkTask(task);
+    return normalized ? [normalized] : [];
+  });
 
   const stats = [
     { label: "Pending Tasks", value: kpis?.pendingTasks ?? 0, icon: ClipboardList, color: "#D97706" },
@@ -46,7 +72,7 @@ export function MyWorkToday() {
               <p className="text-[12px]" style={{ color: "var(--topbar-subtitle)" }}>No pending tasks</p>
             </div>
           ) : (
-            (tasks as any[]).map((task: any) => (
+            tasks.map((task) => (
               <div key={task.id} className="flex items-center gap-3 p-3 border-b last:border-b-0" style={{ borderColor: "var(--card-border)" }}>
                 <div className="w-2 h-2 rounded-full flex-shrink-0" style={{
                   backgroundColor: task.priority === "urgent" ? "#DC2626" : task.priority === "high" ? "#D97706" : "#059669"

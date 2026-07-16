@@ -1,37 +1,83 @@
 import { z } from "zod";
-import { createRouter, publicQuery, authedQuery, adminQuery, auditLog } from "../middleware";
-import { getDb } from "../queries/connection";
-import { eq, like, and, or, desc } from "drizzle-orm";
+import { createRouter, publicQuery, authedQuery, auditLog } from "../middleware";
 import { randomUUID } from "crypto";
 
 // ─── M6: GRO — Growth & Outreach ───────────────────────────
 
 // In-memory storage for GRO (no dedicated schema tables yet)
-const referralsStore: any[] = [];
-const partnershipsStore: any[] = [];
-const campaignsStore: any[] = [];
+interface ReferralRecord {
+  id: string;
+  referral_number: string;
+  patient_name: string;
+  contact_phone: string | null;
+  contact_email: string | null;
+  referral_source: string;
+  source_detail: string | null;
+  referral_type: string;
+  status: string;
+  assigned_to: string | null;
+  notes: string | null;
+  outcome: string | null;
+  converted_patient_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface PartnershipRecord {
+  id: string;
+  organization_name: string;
+  partnership_type: string;
+  status: string;
+  contact_name: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  address: string | null;
+  notes: string | null;
+  start_date: string | null;
+  renewal_date: string | null;
+  referral_count: number;
+  created_at: string;
+}
+
+interface CampaignRecord {
+  id: string;
+  campaign_name: string;
+  campaign_type: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+  budget: number;
+  leads_generated: number;
+  conversions: number;
+  notes: string;
+  created_at: string;
+}
+
+const referralsStore: ReferralRecord[] = [];
+const partnershipsStore: PartnershipRecord[] = [];
+const campaignsStore: CampaignRecord[] = [];
 
 // Seed initial data
 function seedGRO() {
   if (referralsStore.length === 0) {
     referralsStore.push(
-      { id: "r1", referral_number: "REF-2026-001", patient_name: "Kaden Williams", contact_phone: "(713) 555-1001", contact_email: "parent1@email.com", referral_source: "HISD School Counselor", source_detail: "Kashmere High School", referral_type: "adolescent", status: "active", assigned_to: "rcs-lead@adolbi.com", notes: "15-year-old male, depression and anxiety, parents seeking residential care", outcome: null, converted_patient_id: null, created_at: "2026-06-15T10:00:00Z", updated_at: "2026-06-15T10:00:00Z" },
-      { id: "r2", referral_number: "REF-2026-002", patient_name: "Mia Rodriguez", contact_phone: "(281) 555-2002", contact_email: "parent2@email.com", referral_source: "Pediatrician", source_detail: "Dr. Elena Vasquez", referral_type: "intake", status: "in_review", assigned_to: "clinical-director@adolbi.com", notes: "14-year-old female, trauma history, self-harm behaviors. Awaiting clinical assessment.", outcome: null, converted_patient_id: null, created_at: "2026-06-18T09:30:00Z", updated_at: "2026-06-20T14:00:00Z" },
-      { id: "r3", referral_number: "REF-2026-003", patient_name: "Jaylen Brown", contact_phone: "(832) 555-3003", contact_email: "parent3@email.com", referral_source: "Juvenile Court Probation", source_detail: "Harris County JJP", referral_type: "mandatory", status: "active", assigned_to: "gro.admin@adolbi.com", notes: "Court-ordered residential placement. Aggressive behavior, prior group home disruption.", outcome: null, converted_patient_id: null, created_at: "2026-06-22T11:00:00Z", updated_at: "2026-06-22T11:00:00Z" },
-      { id: "r4", referral_number: "REF-2026-004", patient_name: "Sophia Chen", contact_phone: "(713) 555-4004", contact_email: "parent4@email.com", referral_source: "Family Self-Referral", source_detail: "Website inquiry", referral_type: "crisis", status: "new", assigned_to: null, notes: "16-year-old female, suicidal ideation with plan. Parent called crisis line. Needs immediate assessment.", outcome: null, converted_patient_id: null, created_at: "2026-06-27T08:15:00Z", updated_at: "2026-06-27T08:15:00Z" },
-      { id: "r5", referral_number: "REF-2026-005", patient_name: "Aiden Thompson", contact_phone: "(281) 555-5005", contact_email: "parent5@email.com", referral_source: "DCF Caseworker", source_detail: "Texas CPS Region 6", referral_type: "adolescent", status: "converted", assigned_to: "rcs-lead@adolbi.com", notes: "Foster care placement disrupted. Maltreatment history. Successfully converted to patient MRN-2026-4521.", outcome: "converted", converted_patient_id: "p1", created_at: "2026-05-20T13:00:00Z", updated_at: "2026-06-01T10:00:00Z" },
-      { id: "r6", referral_number: "REF-2026-006", patient_name: "Zara Mitchell", contact_phone: "(832) 555-6006", contact_email: "parent6@email.com", referral_source: "Community Mental Health Center", source_detail: "Legacy Community Health", referral_type: "educational", status: "deferred", assigned_to: "rcs-day@adolbi.com", notes: "Not currently appropriate for residential. Referred to outpatient IOP. Follow up in 90 days.", outcome: "deferred", converted_patient_id: null, created_at: "2026-05-10T15:00:00Z", updated_at: "2026-05-25T09:00:00Z" },
-      { id: "r7", referral_number: "REF-2026-007", patient_name: "Darius Jackson", contact_phone: "(713) 555-7007", contact_email: "parent7@email.com", referral_source: "Hospital Discharge Planner", source_detail: "Texas Childrens Hospital", referral_type: "crisis", status: "closed", assigned_to: "clinical-director@adolbi.com", notes: "Crisis stabilization completed. Family opted for outpatient care closer to home.", outcome: "closed", converted_patient_id: null, created_at: "2026-04-05T10:00:00Z", updated_at: "2026-04-12T16:00:00Z" },
-      { id: "r8", referral_number: "REF-2026-008", patient_name: "Emma Patel", contact_phone: "(281) 555-8008", contact_email: "parent8@email.com", referral_source: "Community Event", source_detail: "Mental Health Awareness Fair", referral_type: "community", status: "active", assigned_to: "gro.admin@adolbi.com", notes: "Parents attended community fair. 13-year-old female, social anxiety, school refusal.", outcome: null, converted_patient_id: null, created_at: "2026-06-25T14:00:00Z", updated_at: "2026-06-25T14:00:00Z" },
+      { id: "r1", referral_number: "REF-2026-001", patient_name: "Synthetic Youth 029", contact_phone: "(713) 555-1001", contact_email: "parent1@example.invalid", referral_source: "HISD School Counselor", source_detail: "Kashmere High School", referral_type: "adolescent", status: "active", assigned_to: "rcs-lead@amos-ops.invalid", notes: "15-year-old male, depression and anxiety, parents seeking residential care", outcome: null, converted_patient_id: null, created_at: "2026-06-15T10:00:00Z", updated_at: "2026-06-15T10:00:00Z" },
+      { id: "r2", referral_number: "REF-2026-002", patient_name: "Synthetic Youth 028", contact_phone: "(281) 555-2002", contact_email: "parent2@example.invalid", referral_source: "Pediatrician", source_detail: "Dr. Elena Vasquez", referral_type: "intake", status: "in_review", assigned_to: "clinical-director@amos-ops.invalid", notes: "14-year-old female, trauma history, self-harm behaviors. Awaiting clinical assessment.", outcome: null, converted_patient_id: null, created_at: "2026-06-18T09:30:00Z", updated_at: "2026-06-20T14:00:00Z" },
+      { id: "r3", referral_number: "REF-2026-003", patient_name: "Synthetic Youth 031", contact_phone: "(832) 555-3003", contact_email: "parent3@example.invalid", referral_source: "Juvenile Court Probation", source_detail: "Harris County JJP", referral_type: "mandatory", status: "active", assigned_to: "gro.admin@amos-ops.invalid", notes: "Court-ordered residential placement. Aggressive behavior, prior group home disruption.", outcome: null, converted_patient_id: null, created_at: "2026-06-22T11:00:00Z", updated_at: "2026-06-22T11:00:00Z" },
+      { id: "r4", referral_number: "REF-2026-004", patient_name: "Synthetic Youth 017", contact_phone: "(713) 555-4004", contact_email: "parent4@example.invalid", referral_source: "Family Self-Referral", source_detail: "Website inquiry", referral_type: "crisis", status: "new", assigned_to: null, notes: "16-year-old female, suicidal ideation with plan. Parent called crisis line. Needs immediate assessment.", outcome: null, converted_patient_id: null, created_at: "2026-06-27T08:15:00Z", updated_at: "2026-06-27T08:15:00Z" },
+      { id: "r5", referral_number: "REF-2026-005", patient_name: "Synthetic Youth 033", contact_phone: "(281) 555-5005", contact_email: "parent5@example.invalid", referral_source: "DCF Caseworker", source_detail: "Texas CPS Region 6", referral_type: "adolescent", status: "converted", assigned_to: "rcs-lead@amos-ops.invalid", notes: "Foster care placement disrupted. Maltreatment history. Successfully converted to patient SYNTH-REC-4521.", outcome: "converted", converted_patient_id: "p1", created_at: "2026-05-20T13:00:00Z", updated_at: "2026-06-01T10:00:00Z" },
+      { id: "r6", referral_number: "REF-2026-006", patient_name: "Synthetic Youth 026", contact_phone: "(832) 555-6006", contact_email: "parent6@example.invalid", referral_source: "Community Mental Health Center", source_detail: "Legacy Community Health", referral_type: "educational", status: "deferred", assigned_to: "rcs-day@amos-ops.invalid", notes: "Not currently appropriate for residential. Referred to outpatient IOP. Follow up in 90 days.", outcome: "deferred", converted_patient_id: null, created_at: "2026-05-10T15:00:00Z", updated_at: "2026-05-25T09:00:00Z" },
+      { id: "r7", referral_number: "REF-2026-007", patient_name: "Synthetic Youth 012", contact_phone: "(713) 555-7007", contact_email: "parent7@example.invalid", referral_source: "Hospital Discharge Planner", source_detail: "Texas Childrens Hospital", referral_type: "crisis", status: "closed", assigned_to: "clinical-director@amos-ops.invalid", notes: "Crisis stabilization completed. Family opted for outpatient care closer to home.", outcome: "closed", converted_patient_id: null, created_at: "2026-04-05T10:00:00Z", updated_at: "2026-04-12T16:00:00Z" },
+      { id: "r8", referral_number: "REF-2026-008", patient_name: "Synthetic Youth 032", contact_phone: "(281) 555-8008", contact_email: "parent8@example.invalid", referral_source: "Community Event", source_detail: "Mental Health Awareness Fair", referral_type: "community", status: "active", assigned_to: "gro.admin@amos-ops.invalid", notes: "Parents attended community fair. 13-year-old female, social anxiety, school refusal.", outcome: null, converted_patient_id: null, created_at: "2026-06-25T14:00:00Z", updated_at: "2026-06-25T14:00:00Z" },
     );
   }
   if (partnershipsStore.length === 0) {
     partnershipsStore.push(
-      { id: "part1", organization_name: "Houston ISD", partnership_type: "school_district", status: "active", contact_name: "Maria Gonzalez", contact_phone: "(713) 555-0100", contact_email: "m.gonzalez@houstonisd.org", address: "4400 West 18th St, Houston, TX", notes: "Primary referral source. Quarterly check-ins with counseling department.", start_date: "2025-09-01", renewal_date: "2026-09-01", referral_count: 12, created_at: "2025-09-01" },
-      { id: "part2", organization_name: "Harris County Juvenile Probation", partnership_type: "government", status: "active", contact_name: "Deputy Chief Williams", contact_phone: "(713) 555-0200", contact_email: "d.williams@harriscountyjp.hctx.net", address: "1200 Congress St, Houston, TX", notes: "Court-ordered placements. Monthly reporting required.", start_date: "2026-01-15", renewal_date: "2027-01-15", referral_count: 4, created_at: "2026-01-15" },
-      { id: "part3", organization_name: "Legacy Community Health", partnership_type: "healthcare", status: "active", contact_name: "Dr. Sarah Kim", contact_phone: "(832) 555-0300", contact_email: "s.kim@legacycommunityhealth.org", address: " various clinic locations", notes: "Coordinated care referrals. Shared care plans for dual-enrolled patients.", start_date: "2026-03-01", renewal_date: "2027-03-01", referral_count: 6, created_at: "2026-03-01" },
-      { id: "part4", organization_name: "Texas Childrens Hospital", partnership_type: "healthcare", status: "pending", contact_name: "James Okafor", contact_phone: "(832) 555-0400", contact_email: "j.okafor@texaschildrens.org", address: "6621 Fannin St, Houston, TX", notes: "Crisis discharge planning partnership. MOU under legal review.", start_date: null, renewal_date: null, referral_count: 2, created_at: "2026-06-10" },
-      { id: "part5", organization_name: "Texas CPS Region 6", partnership_type: "government", status: "active", contact_name: "Case Supervisor Torres", contact_phone: "(713) 555-0500", contact_email: "r.torres@dfps.texas.gov", address: "2525 Murworth Dr, Houston, TX", notes: "Foster care placement referrals. 24-hour response requirement.", start_date: "2026-02-01", renewal_date: "2027-02-01", referral_count: 3, created_at: "2026-02-01" },
+      { id: "part1", organization_name: "Houston ISD", partnership_type: "school_district", status: "active", contact_name: "Maria Gonzalez", contact_phone: "(713) 555-0100", contact_email: "m.gonzalez@example.invalid", address: "4400 West 18th St, Houston, TX", notes: "Primary referral source. Quarterly check-ins with counseling department.", start_date: "2025-09-01", renewal_date: "2026-09-01", referral_count: 12, created_at: "2025-09-01" },
+      { id: "part2", organization_name: "Harris County Juvenile Probation", partnership_type: "government", status: "active", contact_name: "Deputy Chief Williams", contact_phone: "(713) 555-0200", contact_email: "d.williams@example.invalid", address: "1200 Congress St, Houston, TX", notes: "Court-ordered placements. Monthly reporting required.", start_date: "2026-01-15", renewal_date: "2027-01-15", referral_count: 4, created_at: "2026-01-15" },
+      { id: "part3", organization_name: "Legacy Community Health", partnership_type: "healthcare", status: "active", contact_name: "Dr. Sarah Kim", contact_phone: "(832) 555-0300", contact_email: "s.kim@example.invalid", address: " various clinic locations", notes: "Coordinated care referrals. Shared care plans for dual-enrolled patients.", start_date: "2026-03-01", renewal_date: "2027-03-01", referral_count: 6, created_at: "2026-03-01" },
+      { id: "part4", organization_name: "Texas Childrens Hospital", partnership_type: "healthcare", status: "pending", contact_name: "James Okafor", contact_phone: "(832) 555-0400", contact_email: "j.okafor@example.invalid", address: "6621 Fannin St, Houston, TX", notes: "Crisis discharge planning partnership. MOU under legal review.", start_date: null, renewal_date: null, referral_count: 2, created_at: "2026-06-10" },
+      { id: "part5", organization_name: "Texas CPS Region 6", partnership_type: "government", status: "active", contact_name: "Case Supervisor Torres", contact_phone: "(713) 555-0500", contact_email: "r.torres@example.invalid", address: "2525 Murworth Dr, Houston, TX", notes: "Foster care placement referrals. 24-hour response requirement.", start_date: "2026-02-01", renewal_date: "2027-02-01", referral_count: 3, created_at: "2026-02-01" },
     );
   }
   if (campaignsStore.length === 0) {

@@ -1,10 +1,10 @@
 import { trpc } from "@/providers/trpc";
 import {
-  HeartPulse, Calendar, Users, AlertTriangle, ClipboardCheck,
+  HeartPulse, Calendar, Users, ClipboardCheck,
   Activity, Clock, ShieldAlert, ArrowRight, UserPlus, Play,
   FileText, BarChart3, ChevronDown, ChevronUp, X, Stethoscope
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -14,6 +14,8 @@ const STATUS_COLORS: Record<string, string> = {
   discharged: "#6B7280",
   transferred: "#7C3AED",
 };
+
+export const M41C_DASHBOARD_OUTCOME_MEASURE_PREVIEW_ENABLED = false as const;
 
 type QuickAction = {
   id: string;
@@ -27,7 +29,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   { id: "admit", label: "Admit New Patient", icon: UserPlus, color: "#245C5A", description: "Create a new patient record" },
   { id: "session", label: "Start Session", icon: Play, color: "#2563EB", description: "Begin a clinical session" },
   { id: "note", label: "Complete Service Note", icon: FileText, color: "#059669", description: "Document a completed session" },
-  { id: "outcome", label: "Run Outcome Measure", icon: BarChart3, color: "#D97706", description: "Assess patient progress" },
+  { id: "outcome", label: "Outcome Measure Governance", icon: BarChart3, color: "#D97706", description: "Review the governed evaluation boundary" },
   { id: "plan", label: "View Treatment Plan", icon: Stethoscope, color: "#7C3AED", description: "Review or update care plan" },
 ];
 
@@ -154,7 +156,7 @@ function AdmitPatientModal({ onClose }: { onClose: () => void }) {
                   style={{ borderColor: "var(--card-border)" }}
                   value={form.email}
                   onChange={(e) => handleChange("email", e.target.value)}
-                  placeholder="patient@example.com"
+                  placeholder="patient@example.invalid"
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -528,144 +530,71 @@ function ServiceNoteModal({ onClose }: { onClose: () => void }) {
 
 /* ───────── Modal: Run Outcome Measure ───────── */
 function OutcomeMeasureModal({ onClose }: { onClose: () => void }) {
-  const [step, setStep] = useState<"select" | "score">("select");
-  const [measure, setMeasure] = useState("");
-  const [patientId, setPatientId] = useState("");
-  const [scores, setScores] = useState<Record<string, number>>({});
-  const { data: patientsData } = trpc.bhc.listPatients.useQuery({ pageSize: 100 });
-
-  const measures = [
-    { id: "phq9", name: "PHQ-9 (Depression)", questions: 9 },
-    { id: "gad7", name: "GAD-7 (Anxiety)", questions: 7 },
-    { id: "pcss", name: "PCSS (PTSD)", questions: 17 },
-    { id: "crs", name: "CRS (Crisis Risk)", questions: 6 },
-  ];
-
-  const selectedMeasure = measures.find((m) => m.id === measure);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div
-        className="rounded-xl border p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto"
-        style={{ backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2">
-            <BarChart3 size={20} style={{ color: "#D97706" }} />
-            <h2 className="text-[17px] font-bold" style={{ color: "var(--topbar-title)" }}>Run Outcome Measure</h2>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Close">
-            <X size={20} style={{ color: "var(--topbar-subtitle)" }} />
-          </button>
-        </div>
-
-        {step === "select" ? (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-[12px] font-medium mb-1" style={{ color: "var(--topbar-subtitle)" }}>Select Patient *</label>
-              <select
-                className="w-full rounded-lg border px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-[#D97706]/20 min-h-[44px]"
-                style={{ borderColor: "var(--card-border)" }}
-                value={patientId}
-                onChange={(e) => setPatientId(e.target.value)}
-              >
-                <option value="">Choose a patient</option>
-                {(patientsData?.patients ?? []).map((p) => (
-                  <option key={p.id} value={p.id}>{p.lastName}, {p.firstName}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[12px] font-medium mb-1" style={{ color: "var(--topbar-subtitle)" }}>Select Measure *</label>
-              <div className="grid grid-cols-1 gap-2">
-                {measures.map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => setMeasure(m.id)}
-                    className="flex items-center justify-between px-4 py-3 rounded-lg border text-left min-h-[44px] transition-all"
-                    style={{
-                      borderColor: measure === m.id ? "#D97706" : "var(--card-border)",
-                      backgroundColor: measure === m.id ? "#FFFBEB" : "transparent",
-                    }}
-                  >
-                    <span className="text-[13px] font-medium" style={{ color: measure === m.id ? "#D97706" : "var(--topbar-title)" }}>
-                      {m.name}
-                    </span>
-                    <span className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>{m.questions} items</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button
-              disabled={!patientId || !measure}
-              onClick={() => setStep("score")}
-              className="w-full px-5 py-3 rounded-lg text-[13px] font-medium text-white disabled:opacity-50 min-h-[44px] transition-all hover:opacity-90"
-              style={{ backgroundColor: "#D97706" }}
-            >
-              Continue
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <button
-              onClick={() => setStep("select")}
-              className="text-[12px] font-medium flex items-center gap-1 hover:underline"
-              style={{ color: "#D97706" }}
-            >
-              <ArrowRight size={12} className="rotate-180" /> Back to selection
-            </button>
-            <p className="text-[13px] font-medium" style={{ color: "var(--topbar-title)" }}>
-              {selectedMeasure?.name}
-            </p>
-            <p className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>
-              Score each item 0 (not at all) to 3 (nearly every day)
-            </p>
-            {Array.from({ length: selectedMeasure?.questions ?? 0 }, (_, i) => (
-              <div key={i} className="flex items-center justify-between">
-                <span className="text-[12px]" style={{ color: "var(--topbar-title)" }}>Item {i + 1}</span>
-                <div className="flex gap-1">
-                  {[0, 1, 2, 3].map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => setScores((prev) => ({ ...prev, [`q${i}`]: s }))}
-                      className="w-10 h-10 rounded-lg border text-[12px] font-medium transition-all min-h-[40px]"
-                      style={{
-                        borderColor: scores[`q${i}`] === s ? "#D97706" : "var(--card-border)",
-                        backgroundColor: scores[`q${i}`] === s ? "#FFFBEB" : "transparent",
-                        color: scores[`q${i}`] === s ? "#D97706" : "var(--topbar-subtitle)",
-                      }}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-            <div className="flex flex-col sm:flex-row justify-end gap-3 mt-4 pt-4 border-t" style={{ borderColor: "var(--card-border)" }}>
-              <button
-                onClick={() => setStep("select")}
-                className="w-full sm:w-auto px-5 py-3 rounded-lg text-[13px] font-medium border min-h-[44px]"
-                style={{ borderColor: "var(--card-border)", color: "var(--topbar-subtitle)" }}
-              >
-                Back
-              </button>
-              <button
-                className="w-full sm:w-auto px-5 py-3 rounded-lg text-[13px] font-medium text-white min-h-[44px] transition-all hover:opacity-90"
-                style={{ backgroundColor: "#D97706" }}
-                onClick={() => { onClose(); }}
-              >
-                Save Scores
-              </button>
-            </div>
-          </div>
-        )}
-        <p className="text-[10px] mt-3 text-center" style={{ color: "var(--topbar-subtitle)" }}>
-          This action requires clinician review
-        </p>
-      </div>
-    </div>
+  trpc.bhc.listPatients.useQuery(
+    { pageSize: 100 },
+    { enabled: M41C_DASHBOARD_OUTCOME_MEASURE_PREVIEW_ENABLED },
   );
+
+  if (!M41C_DASHBOARD_OUTCOME_MEASURE_PREVIEW_ENABLED) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+        onClick={onClose}
+      >
+        <section
+          className="w-full max-w-lg rounded-2xl border border-amber-200 bg-white p-6 shadow-xl"
+          data-testid="m41c-dashboard-outcome-measure-governance"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-amber-800">
+                <ShieldAlert aria-hidden="true" className="size-4" />
+                Governed evaluation boundary
+              </div>
+              <h2 className="text-xl font-bold text-slate-950">
+                Outcome Measure Governance
+              </h2>
+            </div>
+            <button
+              aria-label="Close"
+              className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100"
+              onClick={onClose}
+            >
+              <X aria-hidden="true" className="size-5" />
+            </button>
+          </div>
+          <p className="mt-4 text-sm leading-6 text-slate-600">
+            The inherited execution surface is unavailable. Authority,
+            licensing, version, competency, and human-review controls are
+            evaluated in the Clinical Intelligence Fabric without patient
+            records or computed clinical outputs.
+          </p>
+          <div className="mt-5 rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm leading-6 text-teal-950">
+            Synthetic evaluation only. No live clinical writes are available
+            from this dashboard action.
+          </div>
+          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button
+              className="min-h-11 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+              onClick={onClose}
+            >
+              Close
+            </button>
+            <Link
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-teal-800 px-4 py-2 text-sm font-semibold text-white"
+              to="/clinical/intelligence-fabric"
+            >
+              Open Clinical Intelligence Fabric
+              <ArrowRight aria-hidden="true" className="size-4" />
+            </Link>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 /* ───────── Modal: View Treatment Plan ───────── */

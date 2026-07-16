@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, authedQuery, auditLog } from "../middleware";
 import { getDb } from "../queries/connection";
 import { hrPeople, moduleStatuses, statusTransitions } from "@db/schema";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { triggerWorkflow } from "../lib/workflow";
 
@@ -309,7 +309,7 @@ export const hrRouter = createRouter({
 
     // Recent transitions
     const recentTransitions = allTransitions
-      .sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime())
+      .sort((a, b) => new Date(b.changedAt ?? 0).getTime() - new Date(a.changedAt ?? 0).getTime())
       .slice(0, 10);
 
     return {

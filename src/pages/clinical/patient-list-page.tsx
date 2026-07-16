@@ -2,7 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
 import {
-  Users, Search, Plus, Filter, ChevronLeft, ChevronRight,
+   Search, Plus, Filter, ChevronLeft, ChevronRight,
   HeartPulse, X
 } from "lucide-react";
 
@@ -21,11 +21,13 @@ const STATUS_LABELS: Record<string, string> = {
   discharged: "Discharged",
   transferred: "Transferred",
 };
+type PatientStatus = "active" | "intake" | "hold" | "discharged" | "transferred";
+type PatientGender = "male" | "female" | "non_binary" | "prefer_not_say";
 
 export function PatientListPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | PatientStatus>("all");
   const [page, setPage] = useState(1);
   const pageSize = 25;
 
@@ -36,14 +38,14 @@ export function PatientListPage() {
     pageSize,
   });
 
-  const { data: plansData } = trpc.bhc.listInsurancePlans.useQuery();
+  trpc.bhc.listInsurancePlans.useQuery();
 
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({
     firstName: "",
     lastName: "",
     dateOfBirth: "",
-    gender: "" as string,
+    gender: "" as "" | PatientGender,
     phone: "",
     email: "",
     address: "",
@@ -62,7 +64,7 @@ export function PatientListPage() {
     },
   });
 
-  const statuses = ["all", "intake", "active", "hold", "discharged", "transferred"];
+  const statuses: readonly ("all" | PatientStatus)[] = ["all", "intake", "active", "hold", "discharged", "transferred"];
   const totalPages = Math.ceil((data?.total ?? 0) / pageSize);
 
   return (
@@ -186,7 +188,7 @@ export function PatientListPage() {
                     {patient.assignedClinicianId ? patient.assignedClinicianId.slice(0, 8) + "..." : "Unassigned"}
                   </td>
                   <td className="px-4 py-3" style={{ color: "var(--topbar-subtitle)" }}>
-                    {new Date(patient.intakeDate).toLocaleDateString()}
+                    {patient.intakeDate ? new Date(patient.intakeDate).toLocaleDateString() : "—"}
                   </td>
                 </tr>
               ))}
@@ -248,7 +250,7 @@ export function PatientListPage() {
               </div>
               <div>
                 <label className="text-[11px] font-medium mb-1 block" style={{ color: "var(--topbar-subtitle)" }}>Gender</label>
-                <select className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none" style={{ borderColor: "var(--card-border)" }} value={createForm.gender} onChange={(e) => setCreateForm({ ...createForm, gender: e.target.value })}>
+                <select className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none" style={{ borderColor: "var(--card-border)" }} value={createForm.gender} onChange={(e) => setCreateForm({ ...createForm, gender: e.target.value as typeof createForm.gender })}>
                   <option value="">Select...</option>
                   <option value="male">Male</option>
                   <option value="female">Female</option>
@@ -296,7 +298,7 @@ export function PatientListPage() {
               <button
                 onClick={() => {
                   if (!createForm.firstName || !createForm.lastName || !createForm.dateOfBirth || !createForm.assignedClinicianId) return;
-                  createPatient.mutate(createForm);
+                  createPatient.mutate({ ...createForm, gender: createForm.gender || undefined });
                 }}
                 disabled={createPatient.isPending || !createForm.firstName || !createForm.lastName || !createForm.dateOfBirth || !createForm.assignedClinicianId}
                 className="px-4 py-2 rounded-lg text-[13px] font-medium text-white disabled:opacity-50"

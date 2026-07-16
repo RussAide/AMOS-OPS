@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, publicQuery, authedQuery, adminQuery, auditLog } from "../middleware";
 import { getDb } from "../queries/connection";
 import { claims as claimsTable, claimLineItems as lineItemsTable, payers as payersTable, authorizations as authzTable } from "@db/schema";
-import { eq, like, and, or, desc, sql, isNull, gte, lte } from "drizzle-orm";
+import { eq, like, and, or, desc, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 // ─── M4: Revenue Cycle — AMOS-Revenue ──────────────────────
@@ -23,14 +23,14 @@ export const m4Router = createRouter({
 
   listClaims: publicQuery
     .input(z.object({
-      status: z.string().optional(),
+      status: z.enum(["draft", "pending", "submitted", "acknowledged", "pending_review", "approved", "denied", "appealed", "paid", "write_off"]).optional(),
       search: z.string().optional(),
       page: z.number().default(1),
       pageSize: z.number().default(25),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.status) conditions.push(eq(claimsTable.status, input.status));
       if (input?.search) {
         conditions.push(or(
@@ -153,7 +153,7 @@ export const m4Router = createRouter({
       const db = getDb();
       const actor = ctx.user?.email ?? "unknown";
       const { id, ...updates } = input;
-      const updateData: Record<string, any> = { updatedAt: new Date().toISOString() };
+      const updateData: Partial<typeof claimsTable.$inferInsert> = { updatedAt: new Date().toISOString() };
 
       if (updates.status !== undefined) {
         updateData.status = updates.status;
@@ -250,17 +250,17 @@ export const m4Router = createRouter({
 
   listAuthorizations: authedQuery
     .input(z.object({
-      status: z.string().optional(),
-      stage: z.string().optional(),
+      status: z.enum(["pending", "in_progress", "submitted", "approved", "denied", "appealed", "expired", "closed"]).optional(),
+      stage: z.enum(["readiness", "submission", "tracking", "reauthorization", "retrospective"]).optional(),
       search: z.string().optional(),
       page: z.number().default(1),
       pageSize: z.number().default(25),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
-      if (input?.status) conditions.push(eq(authzTable.status, input.status as any));
-      if (input?.stage) conditions.push(eq(authzTable.stage, input.stage as any));
+      const conditions = [];
+      if (input?.status) conditions.push(eq(authzTable.status, input.status));
+      if (input?.stage) conditions.push(eq(authzTable.stage, input.stage));
       if (input?.search) {
         conditions.push(or(
           like(authzTable.youthName, `%${input.search}%`),
@@ -372,23 +372,21 @@ export const m4Router = createRouter({
       const db = getDb();
       const actor = ctx.user?.email ?? "unknown";
       const { id, ...updates } = input;
-      const updateData: Record<string, any> = { updatedAt: new Date().toISOString() };
-
-      // Build update dynamically
-      for (const [key, value] of Object.entries(updates)) {
-        if (value !== undefined) updateData[key] = value;
-      }
+      const updateData: Partial<typeof authzTable.$inferInsert> = {
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      };
 
       // Auto-calculate readinessMetAt if all readiness fields are true
       const allReadinessFields = [
         "readinessClinicalDocs", "readinessAssessmentCurrent", "readinessLOCSupported",
         "readinessTreatmentPlan", "readinessProgressNotes", "readinessMedicalNecessity",
         "readinessUtilizationReview", "readinessGuardianConsent", "readinessUB04Clean", "readinessExcludedServices",
-      ];
+      ] as const;
       if (allReadinessFields.some((f) => f in updates)) {
         const current = await db.select().from(authzTable).where(eq(authzTable.id, id)).get();
         if (current) {
-          const allMet = allReadinessFields.every((f) => updateData[f] ?? (current as any)[f]);
+          const allMet = allReadinessFields.every((f) => updateData[f] ?? current[f]);
           if (allMet && !current.readinessMetAt) updateData.readinessMetAt = new Date().toISOString();
         }
       }
@@ -606,7 +604,7 @@ export const m4Router = createRouter({
       totalDeniedAmount: deniedClaims.reduce((s, c) => s + (c.totalAmount ?? 0), 0),
       appealedCount: deniedClaims.filter((c) => c.status === "appealed").length,
       byCode: Object.entries(byCode).map(([code, data]) => ({ code, ...data })),
-      byPayer: Object.entries(byPayer).map(([_, data]) => data),
+      byPayer: Object.entries(byPayer).map(([, data]) => data),
     };
   }),
 
@@ -622,12 +620,13 @@ export const m4Router = createRouter({
       )).all();
 
     const now = new Date();
+    type AgingClaim = typeof claimsTable.$inferSelect & { payerName: string; balance: number; daysDiff: number };
     const buckets = {
-      current: { label: "0-30 Days", total: 0, count: 0, claims: [] as any[] },
-      aging31: { label: "31-60 Days", total: 0, count: 0, claims: [] as any[] },
-      aging61: { label: "61-90 Days", total: 0, count: 0, claims: [] as any[] },
-      aging91: { label: "91-120 Days", total: 0, count: 0, claims: [] as any[] },
-      aging121: { label: "120+ Days", total: 0, count: 0, claims: [] as any[] },
+      current: { label: "0-30 Days", total: 0, count: 0, claims: [] as AgingClaim[] },
+      aging31: { label: "31-60 Days", total: 0, count: 0, claims: [] as AgingClaim[] },
+      aging61: { label: "61-90 Days", total: 0, count: 0, claims: [] as AgingClaim[] },
+      aging91: { label: "91-120 Days", total: 0, count: 0, claims: [] as AgingClaim[] },
+      aging121: { label: "120+ Days", total: 0, count: 0, claims: [] as AgingClaim[] },
     };
 
     const payers = await db.select().from(payersTable).all();
@@ -800,9 +799,9 @@ export const m4Router = createRouter({
     if (existingPayers.length > 0) return { success: true, message: "Already seeded" };
 
     const payerData = [
-      { id: "payer-001", name: "Texas Medicaid (HHSC)", payerType: "medicaid" as const, contactPhone: "1-800-925-9126", contactEmail: "provider@hhsc.state.tx.us", claimsAddress: "Texas Medicaid, PO Box 149021, Austin, TX 78714" },
-      { id: "payer-002", name: "Superior HealthPlan", payerType: "insurance" as const, contactPhone: "1-800-783-5386", contactEmail: "claims@superiorhealthplan.com", claimsAddress: "Superior HealthPlan, 5900 E. Ben White Blvd, Austin, TX 78741" },
-      { id: "payer-003", name: "Blue Cross Blue Shield of Texas", payerType: "insurance" as const, contactPhone: "1-800-451-0287", contactEmail: "claims@bcbstx.com", claimsAddress: "BCBSTX, PO Box 660044, Dallas, TX 75266" },
+      { id: "payer-001", name: "Texas Medicaid (HHSC)", payerType: "medicaid" as const, contactPhone: "1-800-925-9126", contactEmail: "provider@example.invalid", claimsAddress: "Texas Medicaid, PO Box 149021, Austin, TX 78714" },
+      { id: "payer-002", name: "Superior HealthPlan", payerType: "insurance" as const, contactPhone: "1-800-783-5386", contactEmail: "claims@example.invalid", claimsAddress: "Superior HealthPlan, 5900 E. Ben White Blvd, Austin, TX 78741" },
+      { id: "payer-003", name: "Blue Cross Blue Shield of Texas", payerType: "insurance" as const, contactPhone: "1-800-451-0287", contactEmail: "claims@example.invalid", claimsAddress: "BCBSTX, PO Box 660044, Dallas, TX 75266" },
       { id: "payer-004", name: "Self Pay / Private", payerType: "self_pay" as const },
     ];
     for (const p of payerData) await db.insert(payersTable).values(p);
@@ -839,10 +838,10 @@ export const m4Router = createRouter({
 
     // Seed authorizations
     const authzData = [
-      { id: "authz-001", youthId: "youth-001", youthName: "John Martinez", mrn: "MRN-2026-001", payerName: "Texas Medicaid (HHSC)", policyNumber: "TX-MED-778899", stage: "tracking" as const, status: "approved" as const, authorizationNumber: "AUTH-2026-1122", approvedUnits: 30, approvedFromDate: "2026-06-01", approvedToDate: "2026-08-31", approvedLevelOfCare: "Intensive Outpatient", readinessMetAt: iso, submissionDate: "2026-05-28", submittedBy: "billing@amos.org", submissionMethod: "portal" as const, reauthDueDate: "2026-08-15", reauthStatus: "upcoming" as const, daysUntilExpiration: 45 },
-      { id: "authz-002", youthId: "youth-002", youthName: "Sarah Chen", mrn: "MRN-2026-002", payerName: "Superior HealthPlan", policyNumber: "SHP-445566", stage: "readiness" as const, status: "in_progress" as const, readinessClinicalDocs: true, readinessAssessmentCurrent: true, readinessLOCSupported: true, readinessTreatmentPlan: true, readinessProgressNotes: true, readinessMedicalNecessity: false, readinessUtilizationReview: true, readinessGuardianConsent: true, readinessUB04Clean: true, readinessExcludedServices: true },
-      { id: "authz-003", youthId: "youth-003", youthName: "Marcus Johnson", mrn: "MRN-2026-003", payerName: "Blue Cross Blue Shield of Texas", policyNumber: "BCBS-223344", stage: "submission" as const, status: "submitted" as const, readinessMetAt: iso, submissionDate: "2026-07-01", submittedBy: "billing@amos.org", submissionMethod: "fax" as const, submissionReference: "FAX-REF-998877" },
-      { id: "authz-004", youthId: "youth-001", youthName: "John Martinez", mrn: "MRN-2026-001", payerName: "Texas Medicaid (HHSC)", policyNumber: "TX-MED-778899", stage: "reauthorization" as const, status: "in_progress" as const, authorizationNumber: "AUTH-2026-1123", approvedUnits: 15, approvedFromDate: "2026-03-01", approvedToDate: "2026-05-31", approvedLevelOfCare: "Residential", reauthDueDate: "2026-07-20", reauthStatus: "overdue" as const, daysUntilExpiration: -5 },
+      { id: "authz-001", youthId: "youth-001", youthName: "Synthetic Youth 030", mrn: "SYNTH-REC-001", payerName: "Texas Medicaid (HHSC)", policyNumber: "TX-MED-778899", stage: "tracking" as const, status: "approved" as const, authorizationNumber: "AUTH-2026-1122", approvedUnits: 30, approvedFromDate: "2026-06-01", approvedToDate: "2026-08-31", approvedLevelOfCare: "Intensive Outpatient", readinessMetAt: iso, submissionDate: "2026-05-28", submittedBy: "billing@example.invalid", submissionMethod: "portal" as const, reauthDueDate: "2026-08-15", reauthStatus: "upcoming" as const, daysUntilExpiration: 45 },
+      { id: "authz-002", youthId: "youth-002", youthName: "Synthetic Youth 035", mrn: "SYNTH-REC-002", payerName: "Superior HealthPlan", policyNumber: "SHP-445566", stage: "readiness" as const, status: "in_progress" as const, readinessClinicalDocs: true, readinessAssessmentCurrent: true, readinessLOCSupported: true, readinessTreatmentPlan: true, readinessProgressNotes: true, readinessMedicalNecessity: false, readinessUtilizationReview: true, readinessGuardianConsent: true, readinessUB04Clean: true, readinessExcludedServices: true },
+      { id: "authz-003", youthId: "youth-003", youthName: "Synthetic Youth 001", mrn: "SYNTH-REC-003", payerName: "Blue Cross Blue Shield of Texas", policyNumber: "BCBS-223344", stage: "submission" as const, status: "submitted" as const, readinessMetAt: iso, submissionDate: "2026-07-01", submittedBy: "billing@example.invalid", submissionMethod: "fax" as const, submissionReference: "FAX-REF-998877" },
+      { id: "authz-004", youthId: "youth-001", youthName: "Synthetic Youth 030", mrn: "SYNTH-REC-001", payerName: "Texas Medicaid (HHSC)", policyNumber: "TX-MED-778899", stage: "reauthorization" as const, status: "in_progress" as const, authorizationNumber: "AUTH-2026-1123", approvedUnits: 15, approvedFromDate: "2026-03-01", approvedToDate: "2026-05-31", approvedLevelOfCare: "Residential", reauthDueDate: "2026-07-20", reauthStatus: "overdue" as const, daysUntilExpiration: -5 },
     ];
     for (const a of authzData) {
       await db.insert(authzTable).values({ ...a, createdAt: iso, updatedAt: iso, createdBy: "system" });

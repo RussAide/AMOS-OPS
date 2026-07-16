@@ -2,10 +2,34 @@ import { z } from "zod";
 import { createRouter, publicQuery, authedQuery, adminQuery, auditLog } from "../middleware";
 import { getDb, sqlite } from "../queries/connection";
 import { dmsDocuments, documentCategories, documentVersions, documentAuditLog } from "@db/schema";
-import { eq, like, and, or, desc, sql, count } from "drizzle-orm";
+import { eq, like, and, or, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 // ═══════════════════════════════════════════════════════════════
+
+type SqliteRow = Record<string, unknown>;
+
+export const M41C_DMS_CLINICAL_INSTRUMENT_PLACEHOLDER = Object.freeze({
+  id: "doc-003",
+  documentId: "ADL-CLN-PRO-202606-0002",
+  title: "Clinical Instrument Governance Placeholder (Synthetic)",
+  description:
+    "Metadata-only synthetic placeholder. It contains no instrument wording, response anchors, scoring rubric, risk band, or level-of-care logic; use the governed M4.1C Clinical Knowledge Registry.",
+  categoryId: "cat-002",
+  category: "Clinical Protocols",
+  department: "Clinical",
+  status: "draft" as const,
+  version: 1,
+  authorId: "user-003",
+  authorName: "Demo Clinical Director",
+  tagsJson: JSON.stringify([
+    "clinical-governance",
+    "synthetic-demo",
+    "metadata-only",
+    "quarantined",
+  ]),
+  retentionYears: 7,
+});
 // M2: AMOS-DMS Document Management System
 // Features: D004-01 through D004-07
 // ═══════════════════════════════════════════════════════════════
@@ -382,7 +406,7 @@ export const m2Router = createRouter({
       }
 
       // Build update data
-      const updateData: Record<string, any> = {
+      const updateData: Partial<typeof dmsDocuments.$inferInsert> = {
         status: toStatus,
         updatedAt: now,
       };
@@ -647,7 +671,7 @@ export const m2Router = createRouter({
 
       const chain = sqlite.prepare(
         `SELECT * FROM document_approval_chains WHERE document_id = ? AND status = 'in_progress'`
-      ).get(input.documentId) as any;
+      ).get(input.documentId);
 
       if (!chain) throw new Error("No active approval chain found for this document");
 
@@ -754,7 +778,7 @@ export const m2Router = createRouter({
     .query(async ({ input }) => {
       const chain = sqlite.prepare(
         `SELECT * FROM document_approval_chains WHERE document_id = ? ORDER BY created_at DESC LIMIT 1`
-      ).get(input.documentId) as any;
+      ).get(input.documentId) as SqliteRow | undefined;
 
       if (!chain) return { documentId: input.documentId, chain: null };
 
@@ -797,11 +821,8 @@ export const m2Router = createRouter({
       const actorName = `${ctx.user?.firstName ?? ""} ${ctx.user?.lastName ?? ""}`.trim() || actor;
       const now = new Date().toISOString();
 
-      // Build packet: assemble documents by type with optional patient/case filters
-      let conditions = [];
-
       // Base query - all active documents
-      let allDocs = await db.select().from(dmsDocuments).all();
+      const allDocs = await db.select().from(dmsDocuments).all();
 
       // Filter by packet type (category mapping)
       const packetCategoryMap: Record<string, string[]> = {
@@ -999,7 +1020,7 @@ export const m2Router = createRouter({
        LEFT JOIN dms_documents dd ON drs.document_id = dd.document_id
        WHERE drs.is_expired = 1
        ORDER BY drs.retention_until_date ASC`
-    ).all() as any[];
+    ).all() as SqliteRow[];
 
     return {
       expiredCount: expired.length,
@@ -1022,7 +1043,7 @@ export const m2Router = createRouter({
     .query(async ({ input }) => {
       const schedule = sqlite.prepare(
         `SELECT * FROM document_retention_schedules WHERE document_id = ? ORDER BY computed_at DESC LIMIT 1`
-      ).get(input.documentId) as any;
+      ).get(input.documentId) as SqliteRow | undefined;
 
       if (!schedule) {
         return {
@@ -1077,11 +1098,11 @@ export const m2Router = createRouter({
       // Apply date filters if provided
       if (input.fromDate) {
         const from = new Date(input.fromDate).getTime();
-        auditEntries = auditEntries.filter((e) => new Date(e.createdAt).getTime() >= from);
+        auditEntries = auditEntries.filter((e) => new Date(e.createdAt ?? 0).getTime() >= from);
       }
       if (input.toDate) {
         const to = new Date(input.toDate).getTime();
-        auditEntries = auditEntries.filter((e) => new Date(e.createdAt).getTime() <= to);
+        auditEntries = auditEntries.filter((e) => new Date(e.createdAt ?? 0).getTime() <= to);
       }
 
       // Get the document details
@@ -1222,16 +1243,16 @@ export const m2Router = createRouter({
   list: publicQuery
     .input(z.object({
       categoryId: z.string().optional(),
-      status: z.string().optional(),
+      status: z.enum(["draft", "in-review", "approved", "published", "archived", "superseded"]).optional(),
       department: z.string().optional(),
       search: z.string().optional(),
       page: z.number().default(1),
       pageSize: z.number().default(20),
     }).optional())
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input }) => {
       const db = getDb();
 
-      let query = db.select().from(dmsDocuments);
+      const query = db.select().from(dmsDocuments);
       const conditions = [];
 
       if (input?.categoryId) conditions.push(eq(dmsDocuments.categoryId, input.categoryId));
@@ -1405,7 +1426,7 @@ export const m2Router = createRouter({
       const { id, ...updates } = input;
       const now = new Date().toISOString();
 
-      const updateData: Record<string, any> = { updatedAt: now };
+      const updateData: Partial<typeof dmsDocuments.$inferInsert> = { updatedAt: now };
       if (updates.title !== undefined) updateData.title = updates.title;
       if (updates.description !== undefined) updateData.description = updates.description;
       if (updates.categoryId !== undefined) updateData.categoryId = updates.categoryId;
@@ -1486,7 +1507,7 @@ export const m2Router = createRouter({
         throw new Error(`Invalid status transition from ${fromStatus} to ${toStatus}`);
       }
 
-      const updateData: Record<string, any> = { status: toStatus, updatedAt: now };
+      const updateData: Partial<typeof dmsDocuments.$inferInsert> = { status: toStatus, updatedAt: now };
 
       if (toStatus === "in-review") {
         updateData.assignedReviewerId = ctx.user?.id;
@@ -1578,7 +1599,7 @@ export const m2Router = createRouter({
   // EXISTING: Seed Data
   // ════════════════════════════════════════════════════════════
 
-  seedDocuments: publicQuery.mutation(async () => {
+  seedDocuments: adminQuery.mutation(async () => {
     const db = getDb();
     const now = new Date().toISOString();
 
@@ -1602,16 +1623,16 @@ export const m2Router = createRouter({
     }
 
     const docs = [
-      { id: "doc-001", documentId: "ADL-HR-POL-202606-0001", title: "Employee Handbook 2026", description: "Comprehensive employee handbook covering policies, benefits, conduct, and procedures for all staff.", categoryId: "cat-001", category: "HR Policies", department: "HR", status: "published" as const, version: 3, authorId: "admin-001", authorName: "E. Russ Aideyan", tagsJson: JSON.stringify(["handbook", "policy", "all-staff"]), retentionYears: 7, publishedAt: now, publishedBy: "E. Russ Aideyan" },
-      { id: "doc-002", documentId: "ADL-CLN-PRO-202606-0001", title: "Crisis Intervention Protocol", description: "Step-by-step crisis intervention procedures for behavioral health emergencies.", categoryId: "cat-002", category: "Clinical Protocols", department: "Clinical", status: "published" as const, version: 2, authorId: "user-003", authorName: "Dr. Hall", tagsJson: JSON.stringify(["crisis", "safety", "protocol", "training-required"]), retentionYears: 7, publishedAt: now, publishedBy: "Dr. Hall" },
-      { id: "doc-003", documentId: "ADL-CLN-PRO-202606-0002", title: "CANS Assessment Guide", description: "Child and Adolescent Needs and Strengths assessment administration guide with scoring rubrics.", categoryId: "cat-002", category: "Clinical Protocols", department: "Clinical", status: "published" as const, version: 1, authorId: "user-003", authorName: "Dr. Hall", tagsJson: JSON.stringify(["CANS", "assessment", "HHSC"]), retentionYears: 7, publishedAt: now, publishedBy: "Dr. Hall" },
-      { id: "doc-004", documentId: "ADL-GRO-OPS-202606-0001", title: "GRO Residential Operations Manual", description: "Day-to-day operations for General Residential Operations including staffing ratios and procedures.", categoryId: "cat-003", category: "GRO Operations", department: "GRO", status: "published" as const, version: 4, authorId: "admin-001", authorName: "E. Russ Aideyan", tagsJson: JSON.stringify(["GRO", "operations", "T-748"]), retentionYears: 7, publishedAt: now, publishedBy: "E. Russ Aideyan" },
-      { id: "doc-005", documentId: "ADL-QA-COMP-202606-0001", title: "Chart Audit Checklist", description: "9-area clinical chart review checklist with corrective action tracking.", categoryId: "cat-004", category: "QA & Compliance", department: "QA", status: "approved" as const, version: 2, authorId: "user-003", authorName: "Dr. Hall", tagsJson: JSON.stringify(["audit", "chart-review", "compliance"]), retentionYears: 5, approvedAt: now, approvedBy: "Dr. Hall" },
-      { id: "doc-006", documentId: "ADL-REV-CYC-202606-0001", title: "Texas Medicaid Billing Guide", description: "HHSC Texas Medicaid billing procedures for T1017 and H2017 service codes.", categoryId: "cat-005", category: "Revenue Cycle", department: "Revenue", status: "published" as const, version: 1, authorId: "admin-001", authorName: "E. Russ Aideyan", tagsJson: JSON.stringify(["Medicaid", "billing", "T1017", "H2017", "HHSC"]), retentionYears: 7, publishedAt: now, publishedBy: "E. Russ Aideyan" },
-      { id: "doc-007", documentId: "ADL-TRN-MAT-202606-0001", title: "42 CFR Part 2 Training Module", description: "SUD confidentiality training module for all clinical and residential staff.", categoryId: "cat-007", category: "Training Materials", department: "HR", status: "in-review" as const, version: 1, authorId: "user-003", authorName: "Dr. Hall", tagsJson: JSON.stringify(["training", "42CFR2", "SUD", "confidentiality"]), retentionYears: 3 },
-      { id: "doc-008", documentId: "ADL-FRM-TPL-202606-0001", title: "Incident Report Template", description: "Standard incident report form for restraint, seclusion, and behavioral events.", categoryId: "cat-009", category: "Form Templates", department: "GRO", status: "published" as const, version: 5, authorId: "admin-001", authorName: "E. Russ Aideyan", tagsJson: JSON.stringify(["incident", "form", "T-748", "template"]), retentionYears: 7, publishedAt: now, publishedBy: "E. Russ Aideyan" },
-      { id: "doc-009", documentId: "ADL-GAD-ADM-202606-0001", title: "Facility Maintenance Schedule", description: "Annual maintenance schedule for HVAC, plumbing, electrical, and grounds.", categoryId: "cat-006", category: "GAD Administration", department: "GAD", status: "draft" as const, version: 1, authorId: "admin-001", authorName: "E. Russ Aideyan", tagsJson: JSON.stringify(["maintenance", "facility", "GAD"]), retentionYears: 3 },
-      { id: "doc-010", documentId: "ADL-EXEC-202606-0001", title: "MGMA Scorecard Template", description: "7-domain practice management scorecard with KPI tracking and benchmarking.", categoryId: "cat-010", category: "Executive", department: "Executive", status: "published" as const, version: 1, authorId: "admin-001", authorName: "E. Russ Aideyan", tagsJson: JSON.stringify(["MGMA", "scorecard", "KPI", "executive"]), retentionYears: 10, publishedAt: now, publishedBy: "E. Russ Aideyan" },
+      { id: "doc-001", documentId: "ADL-HR-POL-202606-0001", title: "Employee Handbook 2026", description: "Comprehensive employee handbook covering policies, benefits, conduct, and procedures for all staff.", categoryId: "cat-001", category: "HR Policies", department: "HR", status: "published" as const, version: 3, authorId: "admin-001", authorName: "Demo Executive", tagsJson: JSON.stringify(["handbook", "policy", "all-staff"]), retentionYears: 7, publishedAt: now, publishedBy: "Demo Executive" },
+      { id: "doc-002", documentId: "ADL-CLN-PRO-202606-0001", title: "Crisis Intervention Protocol", description: "Step-by-step crisis intervention procedures for behavioral health emergencies.", categoryId: "cat-002", category: "Clinical Protocols", department: "Clinical", status: "published" as const, version: 2, authorId: "user-003", authorName: "Demo Clinical Director", tagsJson: JSON.stringify(["crisis", "safety", "protocol", "training-required"]), retentionYears: 7, publishedAt: now, publishedBy: "Demo Clinical Director" },
+      { ...M41C_DMS_CLINICAL_INSTRUMENT_PLACEHOLDER },
+      { id: "doc-004", documentId: "ADL-GRO-OPS-202606-0001", title: "GRO Residential Operations Manual", description: "Day-to-day operations for General Residential Operations including staffing ratios and procedures.", categoryId: "cat-003", category: "GRO Operations", department: "GRO", status: "published" as const, version: 4, authorId: "admin-001", authorName: "Demo Executive", tagsJson: JSON.stringify(["GRO", "operations", "T-748"]), retentionYears: 7, publishedAt: now, publishedBy: "Demo Executive" },
+      { id: "doc-005", documentId: "ADL-QA-COMP-202606-0001", title: "Chart Audit Checklist", description: "9-area clinical chart review checklist with corrective action tracking.", categoryId: "cat-004", category: "QA & Compliance", department: "QA", status: "approved" as const, version: 2, authorId: "user-003", authorName: "Demo Clinical Director", tagsJson: JSON.stringify(["audit", "chart-review", "compliance"]), retentionYears: 5, approvedAt: now, approvedBy: "Demo Clinical Director" },
+      { id: "doc-006", documentId: "ADL-REV-CYC-202606-0001", title: "Texas Medicaid Billing Guide", description: "HHSC Texas Medicaid billing procedures for T1017 and H2017 service codes.", categoryId: "cat-005", category: "Revenue Cycle", department: "Revenue", status: "published" as const, version: 1, authorId: "admin-001", authorName: "Demo Executive", tagsJson: JSON.stringify(["Medicaid", "billing", "T1017", "H2017", "HHSC"]), retentionYears: 7, publishedAt: now, publishedBy: "Demo Executive" },
+      { id: "doc-007", documentId: "ADL-TRN-MAT-202606-0001", title: "42 CFR Part 2 Training Module", description: "SUD confidentiality training module for all clinical and residential staff.", categoryId: "cat-007", category: "Training Materials", department: "HR", status: "in-review" as const, version: 1, authorId: "user-003", authorName: "Demo Clinical Director", tagsJson: JSON.stringify(["training", "42CFR2", "SUD", "confidentiality"]), retentionYears: 3 },
+      { id: "doc-008", documentId: "ADL-FRM-TPL-202606-0001", title: "Incident Report Template", description: "Standard incident report form for restraint, seclusion, and behavioral events.", categoryId: "cat-009", category: "Form Templates", department: "GRO", status: "published" as const, version: 5, authorId: "admin-001", authorName: "Demo Executive", tagsJson: JSON.stringify(["incident", "form", "T-748", "template"]), retentionYears: 7, publishedAt: now, publishedBy: "Demo Executive" },
+      { id: "doc-009", documentId: "ADL-GAD-ADM-202606-0001", title: "Facility Maintenance Schedule", description: "Annual maintenance schedule for HVAC, plumbing, electrical, and grounds.", categoryId: "cat-006", category: "GAD Administration", department: "GAD", status: "draft" as const, version: 1, authorId: "admin-001", authorName: "Demo Executive", tagsJson: JSON.stringify(["maintenance", "facility", "GAD"]), retentionYears: 3 },
+      { id: "doc-010", documentId: "ADL-EXEC-202606-0001", title: "MGMA Scorecard Template", description: "7-domain practice management scorecard with KPI tracking and benchmarking.", categoryId: "cat-010", category: "Executive", department: "Executive", status: "published" as const, version: 1, authorId: "admin-001", authorName: "Demo Executive", tagsJson: JSON.stringify(["MGMA", "scorecard", "KPI", "executive"]), retentionYears: 10, publishedAt: now, publishedBy: "Demo Executive" },
     ];
     for (const d of docs) {
       await db.insert(dmsDocuments).values({ ...d, fileName: null, fileType: null, fileSize: null, filePath: null, permissionsJson: null, createdAt: now, updatedAt: now });
@@ -1619,8 +1640,8 @@ export const m2Router = createRouter({
 
     // Seed audit log entries
     const auditEntries = [
-      { id: "da-001", documentId: "ADL-HR-POL-202606-0001", action: "created" as const, actorId: "admin-001", actorName: "E. Russ Aideyan", toStatus: "draft", details: "Document created", createdAt: now },
-      { id: "da-002", documentId: "ADL-HR-POL-202606-0001", action: "status-changed" as const, actorId: "admin-001", actorName: "E. Russ Aideyan", fromStatus: "draft", toStatus: "published", details: "Published by E. Russ Aideyan", createdAt: now },
+      { id: "da-001", documentId: "ADL-HR-POL-202606-0001", action: "created" as const, actorId: "admin-001", actorName: "Demo Executive", toStatus: "draft", details: "Document created", createdAt: now },
+      { id: "da-002", documentId: "ADL-HR-POL-202606-0001", action: "status-changed" as const, actorId: "admin-001", actorName: "Demo Executive", fromStatus: "draft", toStatus: "published", details: "Published by Demo Executive", createdAt: now },
     ];
     for (const a of auditEntries) {
       await db.insert(documentAuditLog).values(a);
@@ -1661,7 +1682,7 @@ export const m2Router = createRouter({
       superseded: byStatus.superseded ?? 0,
       rejected: byStatus.rejected ?? 0,
       recent: allDocs
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
         .slice(0, 5)
         .map((d) => ({ id: d.id, documentId: d.documentId, title: d.title, status: d.status, createdAt: d.createdAt })),
     };

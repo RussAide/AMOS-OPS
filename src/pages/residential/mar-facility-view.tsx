@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {  useQueryClient } from "@tanstack/react-query";
 import { trpc } from "@/providers/trpc";
-import { Pill, CheckCircle2, XCircle, Pause, Clock, Shield, User, Calendar } from "lucide-react";
+import { Pill, CheckCircle2, XCircle, Pause, Clock, Shield, User } from "lucide-react";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: typeof CheckCircle2 }> = {
   scheduled: { label: "Scheduled", color: "#2563EB", bg: "#EFF6FF", icon: Clock },

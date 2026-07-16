@@ -2,26 +2,8 @@ export * from "./errors";
 
 // ─── Shared Role Types ───────────────────────────────────────
 
-export type UserRole =
-  | "administrator"
-  | "hr-director"
-  | "supervisor"
-  | "clinical-director"
-  | "gro-staff"
-  | "qa-officer"
-  | "training-coordinator"
-  | "operations-manager";
-
-export const USER_ROLES: UserRole[] = [
-  "administrator",
-  "hr-director",
-  "supervisor",
-  "clinical-director",
-  "gro-staff",
-  "qa-officer",
-  "training-coordinator",
-  "operations-manager",
-];
+export type { UserRole } from "@/constants/roles";
+export { ALL_ROLES as USER_ROLES } from "@/constants/roles";
 
 // ─── HR Lane Types ───────────────────────────────────────────
 

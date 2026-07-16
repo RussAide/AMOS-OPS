@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
-import { BookOpen, Search, FileText, Scale, GraduationCap, ClipboardList, ExternalLink, ChevronRight, BookMarked, Tag } from "lucide-react";
+import { BookOpen, Search, FileText, Scale, GraduationCap, ClipboardList, ExternalLink, BookMarked, Tag } from "lucide-react";
 import { PageLayout } from "@/components/shell/page-layout";
 
 const TABS = [
@@ -38,13 +38,13 @@ export function SOPKnowledgePage() {
   const items = sopItems ?? [];
   const refs = regulatoryRefs ?? [];
 
-  const filteredSOP = items.filter((s: any) => {
+  const filteredSOP = items.filter((s) => {
     if (search && !s.title?.toLowerCase().includes(search.toLowerCase()) && !s.category?.toLowerCase().includes(search.toLowerCase())) return false;
     if (categoryFilter && s.category !== categoryFilter) return false;
     return true;
   });
 
-  const categories = [...new Set(items.map((s: any) => s.category))];
+  const categories = [...new Set(items.map((s) => s.category))];
 
   return (
     <PageLayout>
@@ -89,7 +89,7 @@ export function SOPKnowledgePage() {
               </div>
             )}
             <div className="space-y-1">
-              {filteredSOP.map((s: any) => (
+              {filteredSOP.map((s) => (
                 <div
                   key={s.id}
                   onClick={() => setSelectedSOP(s.id === selectedSOP ? null : s.id)}
@@ -157,7 +157,7 @@ export function SOPKnowledgePage() {
 
       {activeTab === "policies" && (
         <div className="space-y-2">
-          {refs.map((r: any) => (
+          {refs.map((r) => (
             <div key={r.title} className="rounded-lg border p-3 flex items-center gap-3" style={{ backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)" }}>
               <Scale size={16} style={{ color: "#7C3AED" }} className="flex-shrink-0" />
               <div className="flex-1 min-w-0">

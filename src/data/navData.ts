@@ -26,13 +26,14 @@ import {
   MapPin,
   FileText,
   BookOpen,
-  FileText,
   ClipboardList,
   ArrowRightLeft,
+  TabletSmartphone,
   Package2,
   Clock,
   ShieldAlert,
   Heart,
+  HeartHandshake,
   AlertTriangle,
   StickyNote,
   ClipboardSignature,
@@ -40,11 +41,11 @@ import {
   Globe2,
   type LucideIcon,
 } from "lucide-react";
+import { authorizeClientRoute } from "@/constants/access-control";
 
 /* ═══════════════════════════════════════════════════════════════
-   NAVIGATION DATA — D-002 7-Section Hierarchy with Role-Based Visibility
-   28 items organized into 7 top-level sections per IA Map
-   Role system: 33 roles across 4 tiers
+   NAVIGATION DATA — D-002 hierarchy with canonical authorization
+   Visibility is derived from the 36-role Enterprise Role Registry.
    ═══════════════════════════════════════════════════════════════ */
 
 export interface NavItem {
@@ -53,62 +54,13 @@ export interface NavItem {
   href: string;
   icon: LucideIcon;
   section: string;
-  roles: string[]; // which roles can see this item ("all" = every role)
+  audience: string[]; // descriptive legacy audience metadata; never authorization
 }
 
 export interface NavSection {
   title: string;
   items: NavItem[];
 }
-
-/* ═══════════════════════════════════════════════════════════════
-   ROLE CONSTANTS — 33 roles across 4 tiers
-   ═══════════════════════════════════════════════════════════════ */
-
-export const ALL_ROLES = [
-  // Tier 1: Executive & Strategic (5)
-  "executive-director",
-  "managing-director",
-  "treatment-director-lpha",
-  "gro-administrator",
-  "hr-director",
-  // Tier 2: Administration & Management (5)
-  "administrator-lcca",
-  "super-admin",
-  "program-director",
-  "clinical-director",
-  "operations-director",
-  // Tier 3: Department Leads & Coordination (10)
-  "qa-coordinator",
-  "compliance-officer",
-  "hr-coordinator",
-  "hr-recruiter",
-  "hr-compliance-officer",
-  "clinical-supervisor",
-  "charge-nurse",
-  "billing-supervisor",
-  "house-supervisor",
-  "nurse-manager",
-  // Tier 4: Operational Staff (13)
-  "registered-nurse",
-  "lpn",
-  "therapist",
-  "counselor",
-  "case-manager",
-  "mental-health-tech",
-  "activity-therapist",
-  "intake-coordinator",
-  "billers",
-  "medical-records",
-  "front-desk",
-  "maintenance",
-  "dietary",
-  // Audit-specific roles (2)
-  "qa-auditor",
-  "chart-auditor",
-] as const;
-
-export type UserRole = (typeof ALL_ROLES)[number];
 
 /* ─── Section 1: OPERATIONS — Visible to ALL roles ─── */
 const OPERATIONS_ITEMS: NavItem[] = [
@@ -118,7 +70,7 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/",
     icon: LayoutDashboard,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
   },
   {
     label: "Workflows",
@@ -126,7 +78,15 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/workflows",
     icon: ListTodo,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
+  },
+  {
+    label: "Intelligence Workplan",
+    agent: "AMOS-Enterprise",
+    href: "/workflows/intelligence-assistant",
+    icon: Lightbulb,
+    section: "OPERATIONS",
+    audience: ["all"],
   },
   {
     label: "BHC Clinical",
@@ -134,7 +94,55 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/clinical",
     icon: Activity,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
+  },
+  {
+    label: "Clinical Intelligence Fabric",
+    agent: "AMOS-Clinical",
+    href: "/clinical/intelligence-fabric",
+    icon: Lightbulb,
+    section: "OPERATIONS",
+    audience: ["all"],
+  },
+  {
+    label: "CCMG Oversight",
+    agent: "AMOS-Clinical",
+    href: "/ccmg",
+    icon: HeartHandshake,
+    section: "OPERATIONS",
+    audience: ["ccmg-oversight"],
+  },
+  {
+    label: "Continuum Operations",
+    agent: "AMOS-Core",
+    href: "/continuum",
+    icon: HeartHandshake,
+    section: "OPERATIONS",
+    audience: ["all"],
+  },
+  {
+    label: "Corporate Operations",
+    agent: "AMOS-Enterprise",
+    href: "/corporate-operations",
+    icon: Compass,
+    section: "OPERATIONS",
+    audience: ["all"],
+  },
+  {
+    label: "MHRS Program",
+    agent: "AMOS-Clinical",
+    href: "/mhrs",
+    icon: Activity,
+    section: "OPERATIONS",
+    audience: ["mhrs-supervisor", "therapist", "clinical-supervisor"],
+  },
+  {
+    label: "MHTCM Case Management",
+    agent: "AMOS-Clinical",
+    href: "/mhtcm",
+    icon: ClipboardList,
+    section: "OPERATIONS",
+    audience: ["mhtcm-supervisor", "case-manager", "qmhp-cs"],
   },
   // ─── BHC Clinical Sub-Pages ───
   {
@@ -143,7 +151,7 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/clinical/treatment-plans",
     icon: BookOpen,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
   },
   {
     label: "Clinical Sessions",
@@ -151,15 +159,15 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/clinical/sessions",
     icon: FileText,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
   },
   {
-    label: "Outcome Measures",
+    label: "Outcome Measure Governance",
     agent: "AMOS-Clinical",
     href: "/clinical/outcome-measures",
     icon: BarChart3,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
   },
   {
     label: "Insurance Plans",
@@ -167,7 +175,7 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/clinical/insurance-plans",
     icon: ShieldCheck,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
   },
   {
     label: "Referral Intake",
@@ -175,7 +183,7 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/clinical/referrals",
     icon: ArrowRightLeft,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
   },
   {
     label: "CANS Assessments",
@@ -183,7 +191,7 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/clinical/cans-assessments",
     icon: ClipboardList,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
   },
   {
     label: "Service Delivery",
@@ -191,7 +199,7 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/clinical/service-delivery",
     icon: Package2,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
   },
   {
     label: "GRO Residential",
@@ -199,7 +207,7 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/gro",
     icon: Home,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
   },
   // ─── GRO Residential Sub-Pages ───
   {
@@ -208,7 +216,7 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/gro/shift-logs",
     icon: Clock,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
   },
   {
     label: "Safety Rounds",
@@ -216,7 +224,7 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/gro/safety-rounds",
     icon: ShieldAlert,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
   },
   {
     label: "Care Logs",
@@ -224,7 +232,7 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/gro/care-logs",
     icon: Heart,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
   },
   {
     label: "Incidents",
@@ -232,7 +240,7 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/gro/incidents",
     icon: AlertTriangle,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
   },
   {
     label: "Supervision",
@@ -240,7 +248,7 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/gro/supervision",
     icon: StickyNote,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
   },
   {
     label: "Shift Handoffs",
@@ -248,7 +256,7 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/gro/handoffs",
     icon: ClipboardSignature,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
   },
   {
     label: "GAD Ops",
@@ -256,7 +264,7 @@ const OPERATIONS_ITEMS: NavItem[] = [
     href: "/gad",
     icon: Building2,
     section: "OPERATIONS",
-    roles: ["all"],
+    audience: ["all"],
   },
 ];
 
@@ -265,12 +273,27 @@ const OPERATIONS_ITEMS: NavItem[] = [
    super-admin, qa-auditor, chart-auditor */
 const COMPLIANCE_ITEMS: NavItem[] = [
   {
+    label: "Regulatory Framework",
+    agent: "AMOS-Sentinel",
+    href: "/compliance/regulatory-framework",
+    icon: Shield,
+    section: "COMPLIANCE",
+    audience: [
+      "qa-coordinator",
+      "compliance-officer",
+      "administrator-lcca",
+      "super-admin",
+      "qa-auditor",
+      "chart-auditor",
+    ],
+  },
+  {
     label: "QA & Compliance",
     agent: "AMOS-Sentinel",
     href: "/qa",
     icon: ShieldCheck,
     section: "COMPLIANCE",
-    roles: [
+    audience: [
       "qa-coordinator",
       "compliance-officer",
       "administrator-lcca",
@@ -285,7 +308,7 @@ const COMPLIANCE_ITEMS: NavItem[] = [
     href: "/revenue",
     icon: DollarSign,
     section: "COMPLIANCE",
-    roles: [
+    audience: [
       "qa-coordinator",
       "compliance-officer",
       "administrator-lcca",
@@ -307,7 +330,7 @@ const REPORTS_ITEMS: NavItem[] = [
     href: "/analytics",
     icon: BarChart3,
     section: "REPORTS",
-    roles: [
+    audience: [
       "administrator-lcca",
       "super-admin",
       "treatment-director-lpha",
@@ -331,7 +354,7 @@ const HUMAN_RESOURCES_ITEMS: NavItem[] = [
     href: "/hr",
     icon: Users,
     section: "HUMAN RESOURCES",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -351,7 +374,7 @@ const WORKFORCE_ACTIVATION_ITEMS: NavItem[] = [
     href: "/hr/recruitment",
     icon: UserPlus,
     section: "WORKFORCE ACTIVATION",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -366,7 +389,7 @@ const WORKFORCE_ACTIVATION_ITEMS: NavItem[] = [
     href: "/hr/screening",
     icon: Search,
     section: "WORKFORCE ACTIVATION",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -381,7 +404,7 @@ const WORKFORCE_ACTIVATION_ITEMS: NavItem[] = [
     href: "/hr/offers",
     icon: FileCheck2,
     section: "WORKFORCE ACTIVATION",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -396,7 +419,7 @@ const WORKFORCE_ACTIVATION_ITEMS: NavItem[] = [
     href: "/hr/orientation",
     icon: Compass,
     section: "WORKFORCE ACTIVATION",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -411,7 +434,7 @@ const WORKFORCE_ACTIVATION_ITEMS: NavItem[] = [
     href: "/hr/onboarding",
     icon: GraduationCap,
     section: "WORKFORCE ACTIVATION",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -426,7 +449,7 @@ const WORKFORCE_ACTIVATION_ITEMS: NavItem[] = [
     href: "/hr/clearance",
     icon: Shield,
     section: "WORKFORCE ACTIVATION",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -448,7 +471,7 @@ const WORKFORCE_MANAGEMENT_ITEMS: NavItem[] = [
     href: "/hr/personnel-files",
     icon: FolderOpen,
     section: "WORKFORCE MANAGEMENT",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -462,7 +485,7 @@ const WORKFORCE_MANAGEMENT_ITEMS: NavItem[] = [
     href: "/hr/credentials",
     icon: Award,
     section: "WORKFORCE MANAGEMENT",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -476,7 +499,7 @@ const WORKFORCE_MANAGEMENT_ITEMS: NavItem[] = [
     href: "/hr/performance",
     icon: TrendingUp,
     section: "WORKFORCE MANAGEMENT",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -490,7 +513,7 @@ const WORKFORCE_MANAGEMENT_ITEMS: NavItem[] = [
     href: "/hr/compliance",
     icon: ClipboardCheck,
     section: "WORKFORCE MANAGEMENT",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -504,7 +527,7 @@ const WORKFORCE_MANAGEMENT_ITEMS: NavItem[] = [
     href: "/hr/separation",
     icon: LogOut,
     section: "WORKFORCE MANAGEMENT",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -526,7 +549,7 @@ const HR_TOOLS_ITEMS: NavItem[] = [
     href: "/hr/credentials-tracker",
     icon: Award,
     section: "HR TOOLS",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -540,7 +563,7 @@ const HR_TOOLS_ITEMS: NavItem[] = [
     href: "/hr/training-assignments",
     icon: GraduationCap,
     section: "HR TOOLS",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -554,7 +577,7 @@ const HR_TOOLS_ITEMS: NavItem[] = [
     href: "/hr/performance-reviews",
     icon: TrendingUp,
     section: "HR TOOLS",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -568,7 +591,7 @@ const HR_TOOLS_ITEMS: NavItem[] = [
     href: "/hr/separations",
     icon: LogOut,
     section: "HR TOOLS",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -582,7 +605,7 @@ const HR_TOOLS_ITEMS: NavItem[] = [
     href: "/hr/onboarding-workflow",
     icon: ShieldCheck,
     section: "HR TOOLS",
-    roles: [
+    audience: [
       "hr-director",
       "administrator-lcca",
       "super-admin",
@@ -596,12 +619,20 @@ const HR_TOOLS_ITEMS: NavItem[] = [
 /* ─── Section 7: ADMIN — Visible to: super-admin only ─── */
 const ADMIN_ITEMS: NavItem[] = [
   {
+    label: "Organization Model",
+    agent: "AMOS-Core",
+    href: "/admin/organization",
+    icon: Building2,
+    section: "ADMIN",
+    audience: ["enterprise-administration"],
+  },
+  {
     label: "Settings",
     agent: "AMOS-Core",
     href: "/admin/settings",
     icon: Settings,
     section: "ADMIN",
-    roles: ["super-admin"],
+    audience: ["super-admin"],
   },
   {
     label: "Enhancement Register",
@@ -609,7 +640,7 @@ const ADMIN_ITEMS: NavItem[] = [
     href: "/admin/enhancements",
     icon: Lightbulb,
     section: "ADMIN",
-    roles: ["super-admin", "managing-director", "administrator"],
+    audience: ["super-admin", "managing-director", "administrator"],
   },
   {
     label: "NIL Graph",
@@ -617,7 +648,7 @@ const ADMIN_ITEMS: NavItem[] = [
     href: "/nil",
     icon: Network,
     section: "ADMIN",
-    roles: ["super-admin"],
+    audience: ["super-admin"],
   },
   {
     label: "Entra ID Sync",
@@ -625,7 +656,7 @@ const ADMIN_ITEMS: NavItem[] = [
     href: "/admin/entra-id",
     icon: Lock,
     section: "ADMIN",
-    roles: ["super-admin"],
+    audience: ["super-admin"],
   },
   {
     label: "Workflow Engine",
@@ -633,7 +664,7 @@ const ADMIN_ITEMS: NavItem[] = [
     href: "/admin/workflows",
     icon: Cog,
     section: "ADMIN",
-    roles: ["super-admin"],
+    audience: ["super-admin"],
   },
   {
     label: "Universal Orientation",
@@ -641,7 +672,7 @@ const ADMIN_ITEMS: NavItem[] = [
     href: "/onboarding/track/universal-orientation",
     icon: MapPin,
     section: "ADMIN",
-    roles: ["super-admin"],
+    audience: ["super-admin"],
   },
   {
     label: "Onboarding Academy",
@@ -649,7 +680,7 @@ const ADMIN_ITEMS: NavItem[] = [
     href: "/onboarding",
     icon: GraduationCap,
     section: "ADMIN",
-    roles: ["super-admin"],
+    audience: ["super-admin"],
   },
   {
     label: "Document Studio",
@@ -657,7 +688,7 @@ const ADMIN_ITEMS: NavItem[] = [
     href: "/documents",
     icon: FileText,
     section: "ADMIN",
-    roles: ["super-admin"],
+    audience: ["super-admin"],
   },
   {
     label: "Knowledge & SOP",
@@ -665,7 +696,47 @@ const ADMIN_ITEMS: NavItem[] = [
     href: "/knowledge",
     icon: BookOpen,
     section: "ADMIN",
-    roles: ["super-admin"],
+    audience: ["super-admin"],
+  },
+  {
+    label: "Document Intelligence",
+    agent: "AMOS-Scribe",
+    href: "/knowledge/document-intelligence",
+    icon: Network,
+    section: "ADMIN",
+    audience: ["all"],
+  },
+  {
+    label: "Operations Hub",
+    agent: "AMOS-DMS",
+    href: "/operations-hub",
+    icon: Globe2,
+    section: "ADMIN",
+    audience: ["all"],
+  },
+  {
+    label: "Microsoft 365 Integration",
+    agent: "AMOS-DMS",
+    href: "/operations-hub/microsoft-integrations",
+    icon: ArrowRightLeft,
+    section: "ADMIN",
+    audience: ["all"],
+  },
+  {
+    label: "Mobile & Offline",
+    agent: "AMOS-Core",
+    href: "/operations-hub/mobile-offline",
+    icon: TabletSmartphone,
+    section: "ADMIN",
+    audience: ["all"],
+  },
+  {
+    label: "Enterprise Demo Verification",
+    agent: "AMOS-Enterprise",
+    href: "/operations-hub/enterprise-demo",
+    icon: ClipboardCheck,
+    section: "ADMIN",
+    audience: ["all"],
   },
   {
     label: "Executive Command",
@@ -673,7 +744,28 @@ const ADMIN_ITEMS: NavItem[] = [
     href: "/executive",
     icon: Shield,
     section: "ADMIN",
-    roles: ["super-admin", "executive-director", "managing-director"],
+    audience: ["super-admin", "executive-director", "managing-director"],
+  },
+  {
+    label: "Decision Intelligence",
+    agent: "AMOS-Enterprise",
+    href: "/executive/decision-intelligence",
+    icon: BarChart3,
+    section: "ADMIN",
+    audience: [
+      "super-admin",
+      "managing-director",
+      "administrator",
+      "bhc-director",
+      "treatment-director",
+      "clinical-director",
+      "gro-administrator",
+      "program-director",
+      "hr-director",
+      "hr-compliance-officer",
+      "revenue-cycle-manager",
+      "facilities-manager",
+    ],
   },
   {
     label: "MGMA Scorecard",
@@ -681,7 +773,7 @@ const ADMIN_ITEMS: NavItem[] = [
     href: "/executive/mgma",
     icon: Award,
     section: "ADMIN",
-    roles: ["super-admin", "executive-director", "managing-director"],
+    audience: ["super-admin", "executive-director", "managing-director"],
   },
   {
     label: "Strategic Projects",
@@ -689,7 +781,7 @@ const ADMIN_ITEMS: NavItem[] = [
     href: "/executive/strategic-projects",
     icon: TrendingUp,
     section: "ADMIN",
-    roles: ["super-admin", "executive-director", "managing-director"],
+    audience: ["super-admin", "executive-director", "managing-director"],
   },
   {
     label: "Site Review",
@@ -697,7 +789,7 @@ const ADMIN_ITEMS: NavItem[] = [
     href: "/executive/marketing-review",
     icon: Globe2,
     section: "ADMIN",
-    roles: ["super-admin", "executive-director", "managing-director"],
+    audience: ["super-admin", "executive-director", "managing-director"],
   },
 ];
 
@@ -737,13 +829,10 @@ export const navSections: NavSection[] = [
 
 /**
  * Returns only the nav items visible to the given user role.
- * Items with roles: ["all"] are visible to everyone.
- * Items with explicit role lists require a matching role.
+ * The access-control registry is the only visibility authority.
  */
 export function getVisibleNavItems(userRole: string): NavItem[] {
-  return navItems.filter(
-    (item) => item.roles.includes("all") || item.roles.includes(userRole)
-  );
+  return navItems.filter((item) => authorizeClientRoute(userRole, item.href).allowed);
 }
 
 /**
@@ -754,10 +843,7 @@ export function getVisibleNavSections(userRole: string): NavSection[] {
   return navSections
     .map((section) => ({
       ...section,
-      items: section.items.filter(
-        (item) =>
-          item.roles.includes("all") || item.roles.includes(userRole)
-      ),
+      items: section.items.filter((item) => authorizeClientRoute(userRole, item.href).allowed),
     }))
     .filter((section) => section.items.length > 0);
 }
@@ -803,17 +889,34 @@ export const heroConfigs: Record<string, HeroConfig> = {
     subtitle:
       "Your operational command center. Overview of census, workflows, alerts, and quick actions.",
   },
+  "/compliance/regulatory-framework": {
+    category: "COMPLIANCE",
+    title: "Regulatory Framework",
+    subtitle: "Controlled MHTCM, MHRS, billing, GRO Chapter 748, and 42 CFR Part 2 rules with end-to-end evidence mapping.",
+  },
   "/workflows": {
     category: "OPERATIONS",
     title: "My Shift",
     subtitle:
       "Day Shift — July 3, 2026 | 7:00 AM - 3:00 PM. Guided workflow: med passes, observations, family contacts, documentation, handoff.",
   },
+  "/workflows/intelligence-assistant": {
+    category: "OPERATIONS",
+    title: "My Intelligence Workplan",
+    subtitle:
+      "Permission-aware daily, weekly, monthly, quarterly, and annual priorities with sourced Ask AMOS guidance and accountable human controls.",
+  },
   "/clinical": {
     category: "OPERATIONS",
     title: "BHC Clinical Dashboard",
     subtitle:
       "Clinical operations for Behavioral Health Clinic — census, encounters, MAR, and care coordination.",
+  },
+  "/clinical/intelligence-fabric": {
+    category: "CLINICAL INTELLIGENCE",
+    title: "Clinical Intelligence Fabric",
+    subtitle:
+      "Governed synthetic pathway, source, instrument, workplan, and scenario evaluation with named human controls and zero live writes.",
   },
   "/clinical/treatment-plans": {
     category: "OPERATIONS",
@@ -826,9 +929,10 @@ export const heroConfigs: Record<string, HeroConfig> = {
     subtitle: "Document clinical encounters including progress notes, risk assessments, and interventions.",
   },
   "/clinical/outcome-measures": {
-    category: "OPERATIONS",
-    title: "Outcome Measures",
-    subtitle: "Track standardized clinical outcomes (PHQ-9, GAD-7, PSS-10, etc.) with trend analysis.",
+    category: "CLINICAL INTELLIGENCE",
+    title: "Outcome Measure Governance",
+    subtitle:
+      "Metadata-only evaluation boundary for governed sources, instrument profiles, competency controls, and named human review.",
   },
   "/clinical/insurance-plans": {
     category: "OPERATIONS",
@@ -987,6 +1091,11 @@ export const heroConfigs: Record<string, HeroConfig> = {
     title: "Settings",
     subtitle: "System configuration, user management, and administrative controls.",
   },
+  "/admin/organization": {
+    category: "ADMIN",
+    title: "Organization & Campus Model",
+    subtitle: "Controlled four-division, BHC department, PC/CO, and three-stage campus development reference.",
+  },
   "/nil": {
     category: "ADMIN",
     title: "NIL Graph",
@@ -1026,6 +1135,36 @@ export const heroConfigs: Record<string, HeroConfig> = {
     subtitle:
       "Policies, SOPs, forms, regulatory references, training materials, and NIL semantic search.",
   },
+  "/knowledge/document-intelligence": {
+    category: "ADMIN",
+    title: "Document & Knowledge Intelligence",
+    subtitle:
+      "Governed records, permission-trimmed search, cited NIL retrieval, T2+ report building, and no-code administration.",
+  },
+  "/operations-hub": {
+    category: "ENTERPRISE OPERATIONS",
+    title: "Adolbi Care Operations Hub",
+    subtitle:
+      "Governed content architecture, Microsoft repository controls, stable AMOS identities, permission-trimmed intranet routing, and integrated migration and security evaluation.",
+  },
+  "/operations-hub/microsoft-integrations": {
+    category: "ENTERPRISE OPERATIONS",
+    title: "Microsoft 365 Integration Control Center",
+    subtitle:
+      "Synthetic Teams notification, Outlook referral intake, and governed SharePoint synchronization evaluation with measurable service thresholds, recovery controls, and zero live Microsoft activity.",
+  },
+  "/operations-hub/mobile-offline": {
+    category: "ENTERPRISE OPERATIONS",
+    title: "Mobile & Offline Operations Center",
+    subtitle:
+      "Synthetic tablet medication pass, encrypted device cache, offline queue, reconnect reconciliation, and field-usability evaluation with zero live device or production activity.",
+  },
+  "/operations-hub/enterprise-demo": {
+    category: "ENTERPRISE OPERATIONS",
+    title: "Final Cross-Enterprise Demo Verification",
+    subtitle:
+      "One governed Operations Hub experience spanning all twelve enterprise criteria, the eight-stage referral-to-executive pilot, contextual assistance, evidence lineage, and zero-live boundary verification.",
+  },
   /* Legacy hero configs — kept for any hardcoded links that may reference them */
   "/bhc": {
     category: "OPERATIONS",
@@ -1038,6 +1177,12 @@ export const heroConfigs: Record<string, HeroConfig> = {
     title: "Executive Command",
     subtitle:
       "Risk register, strategic decisions, growth initiatives, board memos, and enterprise KPIs.",
+  },
+  "/executive/decision-intelligence": {
+    category: "ADMIN",
+    title: "Executive Decision Intelligence",
+    subtitle:
+      "Governed enterprise and division dashboards with source lineage, three-click detail, data-quality state, and human decision controls.",
   },
   "/executive/mgma": {
     category: "ADMIN",
@@ -1094,6 +1239,11 @@ export function getBreadcrumbs(path: string): BreadcrumbSegment[] {
         compliance: "Compliance & Audits",
         separation: "Separation",
         person: "Person Profile",
+        "credentials-tracker": "Credential Tracker",
+        "training-assignments": "Training Assignment",
+        "performance-reviews": "Performance Reviews",
+        separations: "Separations",
+        "onboarding-workflow": "Onboarding Workflow",
       };
       breadcrumbs.push({ label: moduleNames[segments[1]] || segments[1] });
     }
@@ -1118,27 +1268,18 @@ export function getBreadcrumbs(path: string): BreadcrumbSegment[] {
         patients: "Patients",
         "treatment-plans": "Treatment Plans",
         sessions: "Clinical Sessions",
-        "outcome-measures": "Outcome Measures",
+        "outcome-measures": "Outcome Measure Governance",
         "insurance-plans": "Insurance Plans",
         referrals: "Referral Intake",
         "cans-assessments": "CANS Assessments",
         "service-delivery": "Service Delivery",
+        "intelligence-fabric": "Clinical Intelligence Fabric",
       };
       breadcrumbs.push({ label: clinicalNames[segments[1]] || segments[1] });
       if (segments[1] === "patients" && segments[2]) {
         breadcrumbs.push({ label: "Patient Profile" });
       }
     }
-  } else if (segments[0] === "hr" && segments[1] && ["credentials-tracker", "training-assignments", "performance-reviews", "separations", "onboarding-workflow"].includes(segments[1])) {
-    breadcrumbs.push({ label: "HR Command Center", href: "/hr" });
-    const toolNames: Record<string, string> = {
-      "credentials-tracker": "Credential Tracker",
-      "training-assignments": "Training Assignment",
-      "performance-reviews": "Performance Reviews",
-      "separations": "Separations",
-      "onboarding-workflow": "Onboarding Workflow",
-    };
-    breadcrumbs.push({ label: toolNames[segments[1]] || segments[1] });
   } else if (segments[0] === "admin") {
     breadcrumbs.push({ label: "Admin", href: "/admin/settings" });
     if (segments[1]) {
@@ -1149,6 +1290,14 @@ export function getBreadcrumbs(path: string): BreadcrumbSegment[] {
       };
       breadcrumbs.push({ label: adminNames[segments[1]] || segments[1] });
     }
+  } else if (segments[0] === "operations-hub") {
+    breadcrumbs.push({ label: "Operations Hub", href: "/operations-hub" });
+    if (segments[1] === "microsoft-integrations")
+      breadcrumbs.push({ label: "Microsoft 365 Integration" });
+    if (segments[1] === "mobile-offline")
+      breadcrumbs.push({ label: "Mobile & Offline" });
+    if (segments[1] === "enterprise-demo")
+      breadcrumbs.push({ label: "Enterprise Demo Verification" });
   }
 
   return breadcrumbs;

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, publicQuery, authedQuery, auditLog } from "../middleware";
 import { getDb } from "../queries/connection";
 import { performanceReviews, hrPeople } from "@db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export const performanceRouter = createRouter({

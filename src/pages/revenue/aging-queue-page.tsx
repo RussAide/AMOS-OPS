@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
-import { Clock, ArrowLeft, AlertTriangle, ChevronRight, X, Building2, FileText } from "lucide-react";
+import { Clock, ArrowLeft, X, Building2, FileText } from "lucide-react";
 
 const BUCKET_COLORS: Record<string, string> = {
   "0-30 Days": "#059669",
@@ -17,7 +17,7 @@ export function AgingQueuePage() {
   const [detailClaim, setDetailClaim] = useState<string | null>(null);
   const [payerView, setPayerView] = useState(false);
 
-  const { data, isLoading } = trpc.revenue.agingReport.useQuery();
+  const { data } = trpc.revenue.agingReport.useQuery();
   const { data: payerAging } = trpc.revenue.agingQueueByPayer.useQuery();
 
   const selectedClaim = data?.detailClaims.find((c) => c.id === detailClaim);

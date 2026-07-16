@@ -21,31 +21,37 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
-  ClipboardList, Plus, Search, Clock, Calendar, Users, ShieldCheck, Heart,
-  AlertTriangle, FileText, ChevronRight, RefreshCw, XCircle, CheckCircle2,
-  Activity, Play, Square
+  ClipboardList, Plus, Search, Clock, Calendar, ChevronRight, RefreshCw, XCircle, Play, Square
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+interface ShiftLogEntry {
+  time: string;
+  category: string;
+  note: string;
+}
 
 const SHIFT_TYPES = [
   { value: "day", label: "Day" },
   { value: "evening", label: "Evening" },
   { value: "night", label: "Night" },
   { value: "overnight", label: "Overnight" },
-];
+] as const;
 
 const STATUS_OPTIONS = [
   { value: "active", label: "Active", color: "bg-green-100 text-green-700 border-green-200" },
   { value: "completed", label: "Completed", color: "bg-blue-100 text-blue-700 border-blue-200" },
   { value: "no_show", label: "No Show", color: "bg-red-100 text-red-700 border-red-200" },
   { value: "absent", label: "Absent", color: "bg-gray-100 text-gray-700 border-gray-200" },
-];
+] as const;
+type ShiftType = typeof SHIFT_TYPES[number]["value"];
+type ShiftStatus = typeof STATUS_OPTIONS[number]["value"];
 
 export default function ShiftLogPage() {
   const utils = trpc.useUtils();
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("");
-  const [filterType, setFilterType] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<"" | ShiftStatus>("");
+  const [filterType, setFilterType] = useState<"" | ShiftType>("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
@@ -196,7 +202,7 @@ export default function ShiftLogPage() {
               className="pl-9"
             />
           </div>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as typeof filterStatus)}>
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="All Statuses" />
             </SelectTrigger>
@@ -207,7 +213,7 @@ export default function ShiftLogPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={filterType} onValueChange={setFilterType}>
+          <Select value={filterType} onValueChange={(value) => setFilterType(value as typeof filterType)}>
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="All Types" />
             </SelectTrigger>
@@ -256,7 +262,7 @@ export default function ShiftLogPage() {
               </TableHeader>
               <TableBody>
                 {filtered.map((log) => {
-                  const entries = JSON.parse(log.entriesJson ?? "[]") as any[];
+                  const entries = JSON.parse(log.entriesJson ?? "[]") as ShiftLogEntry[];
                   return (
                     <TableRow key={log.id} className="cursor-pointer hover:bg-gray-50" onClick={() => { setSelectedId(log.id); setShowDetail(true); }}>
                       <TableCell className="text-xs font-medium">{log.shiftDate}</TableCell>
@@ -320,7 +326,7 @@ export default function ShiftLogPage() {
               <Button
                 onClick={() => createShift.mutate({
                   shiftDate: new Date().toISOString().split("T")[0],
-                  shiftType: formShiftType as any,
+                  shiftType: formShiftType as Parameters<typeof createShift.mutate>[0]["shiftType"],
                   staffName: formStaffName,
                   supervisorName: formSupervisor || undefined,
                   notes: formNotes || undefined,
@@ -388,10 +394,10 @@ export default function ShiftLogPage() {
                     </div>
                   )}
                   <div className="space-y-1.5">
-                    {(JSON.parse(detail.entriesJson ?? "[]") as any[]).length === 0 ? (
+                    {(JSON.parse(detail.entriesJson ?? "[]") as ShiftLogEntry[]).length === 0 ? (
                       <p className="text-xs text-gray-400 text-center py-4">No entries yet</p>
                     ) : (
-                      (JSON.parse(detail.entriesJson ?? "[]") as any[]).map((entry, i) => (
+                      (JSON.parse(detail.entriesJson ?? "[]") as ShiftLogEntry[]).map((entry, i) => (
                         <div key={i} className="flex gap-3 text-sm p-2 bg-gray-50 rounded">
                           <span className="font-mono text-[10px] text-gray-500 shrink-0 w-[80px]">
                             {new Date(entry.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}

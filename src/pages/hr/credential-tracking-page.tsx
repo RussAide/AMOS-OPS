@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { trpc } from "@/providers/trpc";
 import {
-  ShieldCheck, AlertTriangle, CheckCircle, Plus, Search,
-  ArrowLeft, Clock, X, Filter, Award, AlertOctagon
+  ShieldCheck, CheckCircle, Plus, Search,
+  ArrowLeft, Clock, X, Filter, AlertOctagon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,8 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   expired: { bg: "#FEF2F2", color: "#DC2626" },
   pending: { bg: "#F3F4F6", color: "#6B7280" },
 };
+
+const DEMO_REFERENCE_DATE_MS = Date.UTC(2026, 6, 13);
 
 const CREDENTIAL_TYPES = [
   "Professional License", "Certification", "Training Certificate",
@@ -163,7 +165,7 @@ export function CredentialTrackingPage() {
               </div>
               <div>
                 <Label className="text-[10px]">Status</Label>
-                <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as any })}>
+                    <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as typeof formData.status })}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="valid" className="text-xs">Valid</SelectItem>
@@ -269,7 +271,7 @@ export function CredentialTrackingPage() {
               filteredCredentials.map((cred) => {
                 const sc = STATUS_COLORS[cred.status] || STATUS_COLORS.pending;
                 const daysUntilExpiry = cred.expiryDate
-                  ? Math.ceil((new Date(cred.expiryDate).getTime() - Date.now()) / 86400000)
+                  ? Math.ceil((new Date(cred.expiryDate).getTime() - DEMO_REFERENCE_DATE_MS) / 86400000)
                   : null;
                 return (
                   <tr key={cred.id} className="hover:bg-gray-50 transition-colors">

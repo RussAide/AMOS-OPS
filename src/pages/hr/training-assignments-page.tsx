@@ -1,7 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Search,
-  Filter,
   BookOpen,
   CheckCircle,
   AlertTriangle,
@@ -13,7 +12,7 @@ import {
 
 const trainingData = [
   {
-    employee: "Sarah Johnson",
+    employee: "Synthetic Staff 01",
     module: "HIPAA Compliance",
     assignedDate: "2025-04-01",
     dueDate: "2025-04-15",
@@ -31,7 +30,7 @@ const trainingData = [
     score: null,
   },
   {
-    employee: "David Park",
+    employee: "Synthetic Staff 04",
     module: "De-escalation Techniques",
     assignedDate: "2025-04-05",
     dueDate: "2025-04-19",
@@ -40,7 +39,7 @@ const trainingData = [
     score: null,
   },
   {
-    employee: "Emily Roberts",
+    employee: "Synthetic-Person-037 Roberts",
     module: "Medication Administration",
     assignedDate: "2025-04-03",
     dueDate: "2025-04-17",
@@ -49,7 +48,7 @@ const trainingData = [
     score: 88,
   },
   {
-    employee: "James Wilson",
+    employee: "Synthetic Staff 09",
     module: "Cultural Competency",
     assignedDate: "2025-04-08",
     dueDate: "2025-04-22",
@@ -67,7 +66,7 @@ const trainingData = [
     score: 92,
   },
   {
-    employee: "Marcus Lee",
+    employee: "Synthetic-Person-001 Lee",
     module: "Suicide Prevention",
     assignedDate: "2025-04-06",
     dueDate: "2025-04-20",

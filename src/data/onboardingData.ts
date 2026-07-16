@@ -1364,11 +1364,11 @@ export const quizData: Record<string, QuizQuestion[]> = {
 // ─── Employees ──────────────────────────────────────────────
 
 export const employees: Employee[] = [
-  { id: "emp-001", name: "Sarah Martinez", employeeId: "EMP-1001", track: "Clinical Staff Track", startDate: "2025-01-15", clearanceStatus: "in-progress", supervisor: "Dr. James Wilson", completedModules: 8, totalModules: 12 },
+  { id: "emp-001", name: "Synthetic Staff 08", employeeId: "EMP-1001", track: "Clinical Staff Track", startDate: "2025-01-15", clearanceStatus: "in-progress", supervisor: "Dr. Synthetic Staff 09", completedModules: 8, totalModules: 12 },
   { id: "emp-002", name: "David Chen", employeeId: "EMP-1002", track: "GRO Residential Track", startDate: "2025-02-01", clearanceStatus: "cleared", supervisor: "Maria Rodriguez", completedModules: 10, totalModules: 10 },
   { id: "emp-003", name: "Aisha Johnson", employeeId: "EMP-1003", track: "QA & Compliance Track", startDate: "2025-03-10", clearanceStatus: "in-progress", supervisor: "Robert Park", completedModules: 5, totalModules: 14 },
   { id: "emp-004", name: "Michael Torres", employeeId: "EMP-1004", track: "Revenue Cycle Track", startDate: "2025-04-01", clearanceStatus: "pending", supervisor: "Lisa Chang", completedModules: 3, totalModules: 11 },
-  { id: "emp-005", name: "Emily Foster", employeeId: "EMP-1005", track: "Supervisor Track", startDate: "2025-01-20", clearanceStatus: "in-progress", supervisor: "Dr. James Wilson", completedModules: 12, totalModules: 16 },
+  { id: "emp-005", name: "Synthetic-Person-037 Foster", employeeId: "EMP-1005", track: "Supervisor Track", startDate: "2025-01-20", clearanceStatus: "in-progress", supervisor: "Dr. Synthetic Staff 09", completedModules: 12, totalModules: 16 },
   { id: "emp-006", name: "James Park", employeeId: "EMP-1006", track: "Management Track", startDate: "2025-01-10", clearanceStatus: "in-progress", supervisor: "Executive Board", completedModules: 15, totalModules: 18 },
   { id: "emp-007", name: "Maria Rodriguez", employeeId: "EMP-1007", track: "HR & Training Track", startDate: "2024-12-01", clearanceStatus: "cleared", supervisor: "James Park", completedModules: 10, totalModules: 10 },
   { id: "emp-008", name: "Lisa Chang", employeeId: "EMP-1008", track: "GAD Operations Track", startDate: "2025-02-15", clearanceStatus: "in-progress", supervisor: "James Park", completedModules: 6, totalModules: 8 },

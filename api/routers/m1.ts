@@ -5,11 +5,46 @@ import { randomUUID } from "crypto";
 
 // ─── M1: First Vertical Slice Router ───────────────────────
 
+interface IdRow { id: string }
+interface CountRow { c: number }
+interface ModuleCountRow { total: number; completed: number | null }
+interface EvidenceCountRow { total: number; uploaded: number | null }
+interface CredentialExpiryRow { id: string; expiry_date: string; alert_threshold_days: number }
+interface EvidenceGateRow { gate_name: string; evidence_type: string; required: number }
+interface EvidenceTypeRow { evidence_type: string }
+interface WorkflowDefinitionRow { workflow_id: string; workflow_name: string }
+interface WorkTaskRow {
+  id: string;
+  workflow_id: string | null;
+  task_type: string | null;
+  task_title: string;
+  status: string;
+  due_date: string | null;
+  escalation_level: number | null;
+  assigned_by: string | null;
+  assigned_to: string | null;
+}
+interface WorkflowGroup {
+  workflowId: string;
+  workflowName: string;
+  tasks: WorkTaskRow[];
+  evidenceGates: { gateName: string; required: boolean; completed: boolean }[];
+}
+interface EscalatedTask {
+  taskId: string;
+  taskTitle: string;
+  previousLevel: number;
+  newLevel: number;
+  dueDate: string | null;
+  assignedTo: string | null;
+  escalationReason: string;
+}
+
 export const m1Router = createRouter({
   // ─── M1.1: Onboarding Progress ───────────────────────────
   getOnboardingProgress: authedQuery
     .input(z.object({ personId: z.string() }))
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input }) => {
       const rows = sqlite.prepare(
         "SELECT * FROM onboarding_progress WHERE person_id = ? ORDER BY track_id, module_id"
       ).all(input.personId) ?? [];
@@ -28,7 +63,7 @@ export const m1Router = createRouter({
       const actor = ctx.user?.email ?? "unknown";
       const existing = sqlite.prepare(
         "SELECT id FROM onboarding_progress WHERE person_id = ? AND module_id = ?"
-      ).get(input.personId, input.moduleId) as any;
+      ).get(input.personId, input.moduleId) as IdRow | undefined;
 
       if (existing) {
         sqlite.prepare(
@@ -63,9 +98,9 @@ export const m1Router = createRouter({
   // ─── M1.2: Credential Expiries ───────────────────────────
   listCredentialExpiries: authedQuery
     .input(z.object({ personId: z.string().optional(), alertStatus: z.string().optional() }).optional())
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input }) => {
       let sql = "SELECT * FROM credential_expiries WHERE 1=1";
-      const params: any[] = [];
+      const params: string[] = [];
       if (input?.personId) { sql += " AND person_id = ?"; params.push(input.personId); }
       if (input?.alertStatus) { sql += " AND alert_status = ?"; params.push(input.alertStatus); }
       sql += " ORDER BY expiry_date ASC";
@@ -98,7 +133,7 @@ export const m1Router = createRouter({
 
   checkCredentialAlerts: authedQuery.query(async () => {
     // Update alert_status based on expiry_date
-    const rows = sqlite.prepare("SELECT id, expiry_date, alert_threshold_days FROM credential_expiries WHERE alert_status = 'current'").all() as any[];
+    const rows = sqlite.prepare("SELECT id, expiry_date, alert_threshold_days FROM credential_expiries WHERE alert_status = 'current'").all() as CredentialExpiryRow[];
     const now = new Date();
     let expired = 0, warning = 0;
 
@@ -123,17 +158,17 @@ export const m1Router = createRouter({
       // Check if all required modules are completed
       const modules = sqlite.prepare(
         "SELECT COUNT(*) as total, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed FROM onboarding_progress WHERE person_id = ?"
-      ).get(input.personId) as any;
+      ).get(input.personId) as ModuleCountRow | undefined;
 
       // Check if credentials are current (no expired)
       const expiredCreds = sqlite.prepare(
         "SELECT COUNT(*) as c FROM credential_expiries WHERE person_id = ? AND alert_status = 'expired'"
-      ).get(input.personId) as any;
+      ).get(input.personId) as CountRow | undefined;
 
       // Check required documents (evidence uploaded)
       const evidence = sqlite.prepare(
         "SELECT COUNT(*) as total, SUM(CASE WHEN evidence_uploaded = 1 THEN 1 ELSE 0 END) as uploaded FROM onboarding_progress WHERE person_id = ?"
-      ).get(input.personId) as any;
+      ).get(input.personId) as EvidenceCountRow | undefined;
 
       const totalModules = modules?.total ?? 0;
       const completedModules = modules?.completed ?? 0;
@@ -171,7 +206,7 @@ export const m1Router = createRouter({
       // Get next sequence
       const seqResult = sqlite.prepare(
         "SELECT COUNT(*) as c FROM documents WHERE file_name LIKE ?"
-      ).get(`${input.department}-${input.category}-${year}%`) as any;
+      ).get(`${input.department}-${input.category}-${year}%`) as CountRow | undefined;
       const seq = input.sequence ?? ((seqResult?.c ?? 0) + 1);
       const docId = `ADL-${input.department.toUpperCase()}-${input.category.toUpperCase()}-${year}${month}-${String(seq).padStart(4, "0")}`;
       return { documentId: docId };
@@ -210,7 +245,7 @@ export const m1Router = createRouter({
     .input(z.object({ personId: z.string().optional(), status: z.string().optional() }).optional())
     .query(async ({ input }) => {
       let sql = "SELECT * FROM evidence_packets WHERE 1=1";
-      const params: any[] = [];
+      const params: string[] = [];
       if (input?.personId) { sql += " AND person_id = ?"; params.push(input.personId); }
       if (input?.status) { sql += " AND status = ?"; params.push(input.status); }
       sql += " ORDER BY created_at DESC";
@@ -239,9 +274,9 @@ export const m1Router = createRouter({
   // ─── M1.8: My Work Today ─────────────────────────────────
   getWorkQueue: authedQuery
     .input(z.object({ assignedTo: z.string().optional(), status: z.string().optional() }).optional())
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input }) => {
       let sql = "SELECT * FROM work_queue WHERE 1=1";
-      const params: any[] = [];
+      const params: string[] = [];
       if (input?.assignedTo) { sql += " AND assigned_to = ?"; params.push(input.assignedTo); }
       if (input?.status) { sql += " AND status = ?"; params.push(input.status); }
       else { sql += " AND status IN ('pending', 'in-progress')"; }
@@ -277,6 +312,69 @@ export const m1Router = createRouter({
       return { success: true, id };
     }),
 
+  claimWorkTask: authedQuery
+    .input(z.object({ taskId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const actor = ctx.user.email;
+      const task = sqlite.prepare(
+        "SELECT * FROM work_queue WHERE id = ?"
+      ).get(input.taskId) as WorkTaskRow | undefined;
+
+      if (!task) {
+        throw new Error("Task not found");
+      }
+      if (task.status === "completed") {
+        throw new Error("Completed tasks cannot be claimed");
+      }
+      if (task.assigned_to && task.assigned_to !== actor && task.assigned_to !== ctx.user.id) {
+        throw new Error("Task is already assigned to another team member");
+      }
+
+      sqlite.prepare(
+        "UPDATE work_queue SET assigned_to = ?, status = CASE WHEN status = 'pending' THEN 'in-progress' ELSE status END WHERE id = ?"
+      ).run(actor, input.taskId);
+
+      auditLog({
+        action: "m1:claimWorkTask",
+        actor,
+        resource: `task:${input.taskId}`,
+        details: "Task claimed by authenticated team member",
+      });
+
+      const claimedTask = sqlite.prepare(
+        "SELECT * FROM work_queue WHERE id = ?"
+      ).get(input.taskId) as WorkTaskRow;
+
+      return { success: true, task: claimedTask };
+    }),
+
+  addWorkTaskComment: authedQuery
+    .input(z.object({
+      taskId: z.string().min(1),
+      comment: z.string().trim().min(1).max(2000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const actor = ctx.user.email;
+      const task = sqlite.prepare(
+        "SELECT id FROM work_queue WHERE id = ?"
+      ).get(input.taskId) as IdRow | undefined;
+
+      if (!task) {
+        throw new Error("Task not found");
+      }
+
+      const id = randomUUID();
+      const createdAt = new Date().toISOString();
+      sqlite.prepare(
+        "INSERT INTO workflow_audit_log (id, instance_id, action, actor, details, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+      ).run(id, input.taskId, "m1:addWorkTaskComment", actor, input.comment, createdAt);
+
+      return {
+        success: true,
+        comment: { id, taskId: input.taskId, comment: input.comment, actor, createdAt },
+      };
+    }),
+
   completeWorkTask: authedQuery
     .input(z.object({
       taskId: z.string(),
@@ -291,7 +389,7 @@ export const m1Router = createRouter({
       const actor = ctx.user?.email ?? "unknown";
 
       // Fetch task details including workflow
-      const task = sqlite.prepare("SELECT * FROM work_queue WHERE id = ?").get(input.taskId) as any;
+      const task = sqlite.prepare("SELECT * FROM work_queue WHERE id = ?").get(input.taskId) as WorkTaskRow | undefined;
       if (!task) {
         throw new Error("Task not found");
       }
@@ -301,13 +399,13 @@ export const m1Router = createRouter({
         // Get required evidence gates for this workflow
         const requiredGates = sqlite.prepare(
           "SELECT gate_name, evidence_type, required FROM evidence_gates WHERE workflow_id = ? AND required = 1"
-        ).all(task.workflow_id) as any[];
+        ).all(task.workflow_id) as EvidenceGateRow[];
 
         if (requiredGates.length > 0) {
           // Check which evidence types have been uploaded (from input + existing)
           const existingEvidence = sqlite.prepare(
             "SELECT evidence_type FROM task_evidence WHERE task_id = ?"
-          ).all(input.taskId) as any[];
+          ).all(input.taskId) as EvidenceTypeRow[];
 
           const providedEvidenceTypes = new Set([
             ...existingEvidence.map((e) => e.evidence_type),
@@ -382,7 +480,7 @@ export const m1Router = createRouter({
 
   getWorkQueueGrouped: authedQuery
     .input(z.object({ assignedTo: z.string().optional(), status: z.string().optional() }).optional())
-    .query(async ({ ctx, input }) => {
+    .query(async ({ input }) => {
       // Ensure default workflows exist
       const defaultWorkflows = [
         { workflow_id: "WF-001", workflow_name: "Referral Intake", category: "GRO" },
@@ -421,19 +519,19 @@ export const m1Router = createRouter({
 
       // Build task query
       let taskSql = "SELECT * FROM work_queue WHERE 1=1";
-      const params: any[] = [];
+      const params: string[] = [];
       if (input?.assignedTo) { taskSql += " AND assigned_to = ?"; params.push(input.assignedTo); }
       if (input?.status) { taskSql += " AND status = ?"; params.push(input.status); }
       else { taskSql += " AND status IN ('pending', 'in-progress')"; }
       taskSql += " ORDER BY priority DESC, due_date ASC";
 
-      const tasks = (sqlite.prepare(taskSql).all(...params) ?? []) as any[];
+      const tasks = (sqlite.prepare(taskSql).all(...params) ?? []) as WorkTaskRow[];
 
       // Group tasks by workflow
-      const workflowMap = new Map<string, { workflowId: string; workflowName: string; tasks: any[]; evidenceGates: any[] }>();
+      const workflowMap = new Map<string, WorkflowGroup>();
 
       // Always include all active workflows even if they have no tasks
-      const allWorkflows = sqlite.prepare("SELECT workflow_id, workflow_name FROM workflow_definitions WHERE is_active = 1").all() as any[];
+      const allWorkflows = sqlite.prepare("SELECT workflow_id, workflow_name FROM workflow_definitions WHERE is_active = 1").all() as WorkflowDefinitionRow[];
       for (const wf of allWorkflows) {
         workflowMap.set(wf.workflow_id, {
           workflowId: wf.workflow_id,
@@ -463,15 +561,17 @@ export const m1Router = createRouter({
       // Fetch evidence gates for each workflow
       for (const [wfId, group] of workflowMap.entries()) {
         const gates = sqlite.prepare(
-          "SELECT gate_name, required FROM evidence_gates WHERE workflow_id = ? ORDER BY sort_order"
-        ).all(wfId) as any[];
+          "SELECT gate_name, evidence_type, required FROM evidence_gates WHERE workflow_id = ? ORDER BY sort_order"
+        ).all(wfId) as EvidenceGateRow[];
 
         if (gates.length > 0) {
           // Check completion status per gate for this workflow's tasks
           const allTaskIds = group.tasks.map((t) => t.id);
-          const uploadedEvidence = sqlite.prepare(
-            `SELECT DISTINCT evidence_type FROM task_evidence WHERE task_id IN (${allTaskIds.map(() => "?").join(",")})`
-          ).all(...allTaskIds) as any[];
+          const uploadedEvidence = allTaskIds.length > 0
+            ? sqlite.prepare(
+                `SELECT DISTINCT evidence_type FROM task_evidence WHERE task_id IN (${allTaskIds.map(() => "?").join(",")})`
+              ).all(...allTaskIds) as EvidenceTypeRow[]
+            : [];
           const uploadedTypes = new Set(uploadedEvidence.map((e) => e.evidence_type));
 
           group.evidenceGates = gates.map((g) => ({
@@ -525,9 +625,9 @@ export const m1Router = createRouter({
     // Find all overdue non-completed tasks
     const overdueTasks = sqlite.prepare(
       "SELECT * FROM work_queue WHERE due_date < ? AND status != 'completed' AND escalation_level < 3"
-    ).all(now) as any[];
+    ).all(now) as WorkTaskRow[];
 
-    const escalated: any[] = [];
+    const escalated: EscalatedTask[] = [];
 
     for (const task of overdueTasks) {
       const previousLevel = task.escalation_level ?? 0;
@@ -552,7 +652,7 @@ export const m1Router = createRouter({
       );
 
       // Generate supervisor notification
-      const supervisorId = task.assigned_by ?? "supervisor";
+      const supervisorId = task.assigned_by ?? "shift-supervisor";
       sqlite.prepare(
         "INSERT INTO notifications (id, user_id, type, title, message, person_name, module_name, action_href, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))"
       ).run(
@@ -593,7 +693,7 @@ export const m1Router = createRouter({
     .mutation(async ({ ctx, input }) => {
       const actor = ctx.user?.email ?? "unknown";
 
-      const task = sqlite.prepare("SELECT * FROM work_queue WHERE id = ?").get(input.taskId) as any;
+      const task = sqlite.prepare("SELECT * FROM work_queue WHERE id = ?").get(input.taskId) as WorkTaskRow | undefined;
       if (!task) {
         throw new Error("Task not found");
       }
@@ -624,7 +724,7 @@ export const m1Router = createRouter({
       );
 
       // Generate supervisor notification
-      const supervisorId = task.assigned_by ?? "supervisor";
+      const supervisorId = task.assigned_by ?? "shift-supervisor";
       sqlite.prepare(
         "INSERT INTO notifications (id, user_id, type, title, message, person_name, module_name, action_href, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))"
       ).run(
@@ -668,7 +768,7 @@ export const m1Router = createRouter({
     .mutation(async ({ ctx, input }) => {
       const actor = ctx.user?.email ?? "unknown";
 
-      const task = sqlite.prepare("SELECT * FROM work_queue WHERE id = ?").get(input.taskId) as any;
+      const task = sqlite.prepare("SELECT * FROM work_queue WHERE id = ?").get(input.taskId) as WorkTaskRow | undefined;
       if (!task) {
         throw new Error("Task not found");
       }
@@ -750,7 +850,7 @@ export const m1Router = createRouter({
 
     let seeded = 0;
     for (const wf of workflows) {
-      const existing = sqlite.prepare("SELECT id FROM workflow_definitions WHERE workflow_id = ?").get(wf.workflow_id) as any;
+      const existing = sqlite.prepare("SELECT id FROM workflow_definitions WHERE workflow_id = ?").get(wf.workflow_id) as IdRow | undefined;
       if (!existing) {
         sqlite.prepare(
           "INSERT INTO workflow_definitions (id, workflow_id, workflow_name, category, created_at) VALUES (?, ?, ?, ?, datetime('now'))"
@@ -776,7 +876,7 @@ export const m1Router = createRouter({
     for (const g of defaultGates) {
       const existing = sqlite.prepare(
         "SELECT id FROM evidence_gates WHERE workflow_id = ? AND gate_name = ?"
-      ).get(g.workflow_id, g.gate_name) as any;
+      ).get(g.workflow_id, g.gate_name) as IdRow | undefined;
       if (!existing) {
         sqlite.prepare(
           "INSERT INTO evidence_gates (id, workflow_id, gate_name, evidence_type, required, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))"
@@ -795,12 +895,12 @@ export const m1Router = createRouter({
 
   // ─── M1 Dashboard KPIs ───────────────────────────────────
   dashboardKPIs: authedQuery.query(async () => {
-    const totalInOnboarding = (sqlite.prepare("SELECT COUNT(DISTINCT person_id) as c FROM onboarding_progress").get() as any)?.c ?? 0;
-    const modulesCompleted = (sqlite.prepare("SELECT COUNT(*) as c FROM onboarding_progress WHERE status = 'completed'").get() as any)?.c ?? 0;
-    const totalModules = (sqlite.prepare("SELECT COUNT(*) as c FROM onboarding_progress").get() as any)?.c ?? 0;
-    const credentialAlerts = (sqlite.prepare("SELECT COUNT(*) as c FROM credential_expiries WHERE alert_status IN ('warning', 'expired')").get() as any)?.c ?? 0;
-    const pendingTasks = (sqlite.prepare("SELECT COUNT(*) as c FROM work_queue WHERE status IN ('pending', 'in-progress')").get() as any)?.c ?? 0;
-    const evidencePackets = (sqlite.prepare("SELECT COUNT(*) as c FROM evidence_packets").get() as any)?.c ?? 0;
+    const totalInOnboarding = (sqlite.prepare("SELECT COUNT(DISTINCT person_id) as c FROM onboarding_progress").get() as CountRow | undefined)?.c ?? 0;
+    const modulesCompleted = (sqlite.prepare("SELECT COUNT(*) as c FROM onboarding_progress WHERE status = 'completed'").get() as CountRow | undefined)?.c ?? 0;
+    const totalModules = (sqlite.prepare("SELECT COUNT(*) as c FROM onboarding_progress").get() as CountRow | undefined)?.c ?? 0;
+    const credentialAlerts = (sqlite.prepare("SELECT COUNT(*) as c FROM credential_expiries WHERE alert_status IN ('warning', 'expired')").get() as CountRow | undefined)?.c ?? 0;
+    const pendingTasks = (sqlite.prepare("SELECT COUNT(*) as c FROM work_queue WHERE status IN ('pending', 'in-progress')").get() as CountRow | undefined)?.c ?? 0;
+    const evidencePackets = (sqlite.prepare("SELECT COUNT(*) as c FROM evidence_packets").get() as CountRow | undefined)?.c ?? 0;
     const rtdClearedRaw = sqlite.prepare("SELECT person_id FROM onboarding_progress WHERE status = 'completed' GROUP BY person_id").all();
     const rtdCleared = Array.isArray(rtdClearedRaw) ? rtdClearedRaw : [];
 
@@ -812,7 +912,7 @@ export const m1Router = createRouter({
       credentialAlerts,
       pendingTasks,
       evidencePackets,
-      rtdReady: (rtdCleared as any[]).length,
+      rtdReady: rtdCleared.length,
     };
   }),
 });

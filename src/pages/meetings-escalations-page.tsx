@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarDays, MessageSquareWarning, ChevronRight, Clock, User, CheckCircle2, AlertTriangle, Users } from "lucide-react";
+import { CalendarDays, MessageSquareWarning, ChevronRight, CheckCircle2, AlertTriangle, Users } from "lucide-react";
 import { PageLayout } from "@/components/shell/page-layout";
 
 const TABS = [
@@ -8,10 +8,10 @@ const TABS = [
 ];
 
 const meetings = [
-  { id: "M-001", title: "Weekly MDT Review", type: "MDT", date: "2026-07-03", time: "10:00 AM", attendees: ["Dr. Hall", "Sarah RCS", "QMHP-CS"], status: "scheduled", actionItems: 3 },
+  { id: "M-001", title: "Weekly MDT Review", type: "MDT", date: "2026-07-03", time: "10:00 AM", attendees: ["Demo Clinical Director", "Synthetic Staff 01", "QMHP-CS"], status: "scheduled", actionItems: 3 },
   { id: "M-002", title: "Family Conference — Johnson", type: "Family", date: "2026-07-02", time: "2:00 PM", attendees: ["Case Manager", "Guardian"], status: "completed", actionItems: 2 },
   { id: "M-003", title: "GRO Shift Handoff", type: "Shift", date: "2026-07-02", time: "6:00 PM", attendees: ["RCS Day", "RCS Night"], status: "completed", actionItems: 0 },
-  { id: "M-004", title: "Crisis Debrief — IR-2026-0701-004", type: "Crisis", date: "2026-07-02", time: "9:00 AM", attendees: ["Dr. Hall", "Supervisor", "RCS Lead"], status: "completed", actionItems: 4 },
+  { id: "M-004", title: "Crisis Debrief — IR-2026-0701-004", type: "Crisis", date: "2026-07-02", time: "9:00 AM", attendees: ["Demo Clinical Director", "Supervisor", "RCS Lead"], status: "completed", actionItems: 4 },
 ];
 
 const escalations = [

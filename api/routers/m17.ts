@@ -5,13 +5,36 @@ import { randomUUID } from "crypto";
 
 // ─── M15: Crisis Response Router ─────────────────────────────
 
+interface CountRow {
+  c: number;
+}
+
+interface CrisisTypeCountRow extends CountRow {
+  crisis_type: string;
+}
+
+type CrisisRow = Record<string, unknown>;
+
+interface DebriefRow {
+  field1_event_summary: string | null;
+  field2_triggers_identified: string | null;
+  field3_early_warning_signs: string | null;
+  field4_interventions_used: string | null;
+  field5_what_worked: string | null;
+  field6_what_did_not_work: string | null;
+  field7_youth_perspective: string | null;
+  field8_staff_perspective: string | null;
+  field9_plan_adjustments: string | null;
+  completed_at: string | null;
+}
+
 export const m17Router = createRouter({
   // ─── Crisis Events ─────────────────────────────────────────
   listCrises: authedQuery
     .input(z.object({ youthId: z.string().optional(), status: z.string().optional(), crisisType: z.string().optional() }).optional())
     .query(async ({ input }) => {
       let sql = "SELECT * FROM crisis_events WHERE 1=1";
-      const params: any[] = [];
+      const params: unknown[] = [];
       if (input?.youthId) { sql += " AND youth_id = ?"; params.push(input.youthId); }
       if (input?.status) { sql += " AND overall_status = ?"; params.push(input.status); }
       if (input?.crisisType) { sql += " AND crisis_type = ?"; params.push(input.crisisType); }
@@ -22,7 +45,7 @@ export const m17Router = createRouter({
   getCrisis: authedQuery
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
-      const crisis = sqlite.prepare("SELECT * FROM crisis_events WHERE id = ?").get(input.id) as any;
+      const crisis = sqlite.prepare("SELECT * FROM crisis_events WHERE id = ?").get(input.id) as CrisisRow | undefined;
       if (!crisis) return null;
       const debrief = sqlite.prepare("SELECT * FROM crisis_debriefs WHERE crisis_event_id = ?").get(input.id);
       return { ...crisis, debrief };
@@ -63,7 +86,7 @@ export const m17Router = createRouter({
     .input(z.object({
       id: z.string(),
       step: z.number().min(1).max(7),
-      data: z.record(z.any()),
+      data: z.record(z.string(), z.unknown()),
     }))
     .mutation(async ({ ctx, input }) => {
       const actor = ctx.user?.email ?? "unknown";
@@ -84,7 +107,7 @@ export const m17Router = createRouter({
       if (!fields) throw new Error(`Unknown step: ${step}`);
 
       const updates: string[] = [];
-      const values: any[] = [];
+      const values: unknown[] = [];
 
       for (const field of fields) {
         if (data[field] !== undefined) {
@@ -142,7 +165,7 @@ export const m17Router = createRouter({
         overallStatus: "overall_status",
       };
       const updates: string[] = [];
-      const values: any[] = [];
+      const values: unknown[] = [];
       for (const [key, val] of Object.entries(fields)) {
         if (val !== undefined) {
           updates.push(`${fieldMap[key]} = ?`);
@@ -173,7 +196,6 @@ export const m17Router = createRouter({
     }))
     .mutation(async ({ ctx, input }) => {
       const actor = ctx.user?.email ?? "unknown";
-      const actorId = ctx.user?.id ?? "";
       const id = randomUUID();
       const now = new Date().toISOString();
 
@@ -217,7 +239,7 @@ export const m17Router = createRouter({
       };
 
       const updates: string[] = [];
-      const values: any[] = [];
+      const values: unknown[] = [];
       for (const [key, val] of Object.entries(fields)) {
         if (val !== undefined) {
           updates.push(`${fieldMap[key]} = ?`);
@@ -227,7 +249,7 @@ export const m17Router = createRouter({
 
       // Check if all 9 fields are filled → mark completed
       if (updates.length > 0) {
-        const current = sqlite.prepare("SELECT * FROM crisis_debriefs WHERE id = ?").get(id) as any;
+        const current = sqlite.prepare("SELECT * FROM crisis_debriefs WHERE id = ?").get(id) as DebriefRow | undefined;
         if (current) {
           const allFields = [
             fields.field1EventSummary ?? current.field1_event_summary,
@@ -256,11 +278,11 @@ export const m17Router = createRouter({
 
   // ─── Crisis Dashboard Summary ──────────────────────────────
   crisisSummary: authedQuery.query(async () => {
-    const activeCrises = sqlite.prepare("SELECT COUNT(*) as c FROM crisis_events WHERE overall_status IN ('active', 'contained')").get() as any;
-    const resolvedToday = sqlite.prepare("SELECT COUNT(*) as c FROM crisis_events WHERE overall_status = 'resolved' AND date(updated_at) = date('now')").get() as any;
-    const underReview = sqlite.prepare("SELECT COUNT(*) as c FROM crisis_events WHERE overall_status = 'under_review'").get() as any;
-    const totalThisMonth = sqlite.prepare("SELECT COUNT(*) as c FROM crisis_events WHERE created_at >= date('now', 'start of month')").get() as any;
-    const byType = sqlite.prepare("SELECT crisis_type, COUNT(*) as c FROM crisis_events GROUP BY crisis_type").all() as any[];
+    const activeCrises = sqlite.prepare("SELECT COUNT(*) as c FROM crisis_events WHERE overall_status IN ('active', 'contained')").get() as CountRow | undefined;
+    const resolvedToday = sqlite.prepare("SELECT COUNT(*) as c FROM crisis_events WHERE overall_status = 'resolved' AND date(updated_at) = date('now')").get() as CountRow | undefined;
+    const underReview = sqlite.prepare("SELECT COUNT(*) as c FROM crisis_events WHERE overall_status = 'under_review'").get() as CountRow | undefined;
+    const totalThisMonth = sqlite.prepare("SELECT COUNT(*) as c FROM crisis_events WHERE created_at >= date('now', 'start of month')").get() as CountRow | undefined;
+    const byType = sqlite.prepare("SELECT crisis_type, COUNT(*) as c FROM crisis_events GROUP BY crisis_type").all() as CrisisTypeCountRow[];
 
     return {
       activeCrises: activeCrises?.c ?? 0,

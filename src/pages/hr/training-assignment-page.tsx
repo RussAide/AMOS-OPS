@@ -3,19 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { trpc } from "@/providers/trpc";
 import {
   GraduationCap, ArrowLeft, BookOpen, Plus, Search,
-  CheckCircle2, Clock, AlertTriangle, Users, Trash2, X
+  CheckCircle2, Clock, Users, Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  completed: { label: "Completed", color: "#059669", bg: "#ECFDF5" },
-  "in-progress": { label: "In Progress", color: "#2563EB", bg: "#EFF6FF" },
-  available: { label: "Not Started", color: "#6B7280", bg: "#F3F4F6" },
-};
 
 const TRACK_OPTIONS = [
   { id: "all-staff", label: "All Staff Core" },
@@ -95,8 +89,6 @@ export function TrainingAssignmentPage() {
     setSelectedPerson("");
     setSelectedModule("");
   };
-
-  const CATEGORIES = [...new Set(modules.map((m) => m.category))];
 
   return (
     <div className="p-6">

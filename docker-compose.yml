@@ -1,7 +1,4 @@
-# AMOS-OPS Full-Stack Deployment
-# Docker Compose configuration for production deployment
-
-version: "3.8"
+# AMOS-OPS single-build runtime composition
 
 services:
   amos-backend:
@@ -13,19 +10,37 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      # Persist SQLite database
+      # Persist the selected environment's isolated SQLite database.
       - ./data:/app/data
-      # Persist uploaded files
-      - ./uploads:/app/uploads
+      # Persist only the selected environment's uploads.
+      - ./uploads/${APP_ENV:-demo}:/app/uploads/${APP_ENV:-demo}
     environment:
-      - NODE_ENV=production
+      - APP_ENV=${APP_ENV:-demo}
+      - AMOS_RUNTIME_MODE=${AMOS_RUNTIME_MODE:-demo}
+      - AMOS_ENVIRONMENT_ID=${AMOS_ENVIRONMENT_ID:-amos-ops-demo}
+      - CREDENTIAL_NAMESPACE=${CREDENTIAL_NAMESPACE:-amos-ops/demo}
+      - NODE_ENV=${NODE_ENV:-production}
       - PORT=3000
-      - DATABASE_PATH=/app/data/amos-ops.db
-      - JWT_SECRET=${JWT_SECRET:-amos-ops-change-me-in-production}
+      - DATABASE_PATH=${DATABASE_PATH:-/app/data/demo/amos-ops.db}
+      - UPLOAD_PATH=${UPLOAD_PATH:-/app/uploads/demo}
+      - JWT_SECRET=${JWT_SECRET:-}
       - APP_ID=${APP_ID:-amos-ops}
-      - APP_SECRET=${APP_SECRET:-amos-ops-secret}
+      - APP_SECRET=${APP_SECRET:-}
+      - ALLOW_SELF_REGISTRATION=${ALLOW_SELF_REGISTRATION:-true}
+      - MFA_POLICY=${MFA_POLICY:-required-all}
+      - DEPLOYMENT_APPROVAL_ID=${DEPLOYMENT_APPROVAL_ID:-}
+      - DEPLOYMENT_CHANGE_REFERENCE=${DEPLOYMENT_CHANGE_REFERENCE:-}
+      - AMOS_ALLOWED_ORIGINS=${AMOS_ALLOWED_ORIGINS:-http://localhost:3000}
+      - AMOS_PRODUCTION_RELEASE_AUTHORIZED=${AMOS_PRODUCTION_RELEASE_AUTHORIZED:-false}
+      - AMOS_PRODUCTION_RELEASE_ID=${AMOS_PRODUCTION_RELEASE_ID:-}
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/trpc/ping').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3

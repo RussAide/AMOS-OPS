@@ -3,6 +3,9 @@
 
 import { sqlite } from "../api/queries/connection";
 import { randomUUID } from "crypto";
+import { assertSyntheticSeedAllowed } from "./seed-guard";
+
+assertSyntheticSeedAllowed({ scriptName: "db/seed-clinical.ts" });
 
 const now = new Date().toISOString();
 const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString();
@@ -148,12 +151,12 @@ const clinicianIds: string[] = [];
 for (let i = 0; i < 6; i++) clinicianIds.push(randomUUID());
 
 const clinicians = [
-  { id: clinicianIds[0], firstName: "Dr. Sarah", lastName: "Mitchell", role: "Clinical Psychologist" },
-  { id: clinicianIds[1], firstName: "Dr. James", lastName: "Chen", role: "Psychiatrist" },
-  { id: clinicianIds[2], firstName: "Maria", lastName: "Rodriguez", role: "LCSW" },
-  { id: clinicianIds[3], firstName: "Dr. Robert", lastName: "Williams", role: "Clinical Psychologist" },
-  { id: clinicianIds[4], firstName: "Jennifer", lastName: "Park", role: "LPC" },
-  { id: clinicianIds[5], firstName: "Dr. Michael", lastName: "Thompson", role: "Psychiatrist" },
+  { id: clinicianIds[0], firstName: "Synthetic", lastName: "Clinician-001", role: "Clinical Psychologist" },
+  { id: clinicianIds[1], firstName: "Synthetic", lastName: "Clinician-002", role: "Psychiatrist" },
+  { id: clinicianIds[2], firstName: "Synthetic", lastName: "Clinician-003", role: "LCSW" },
+  { id: clinicianIds[3], firstName: "Synthetic", lastName: "Clinician-004", role: "Clinical Psychologist" },
+  { id: clinicianIds[4], firstName: "Synthetic", lastName: "Clinician-005", role: "LPC" },
+  { id: clinicianIds[5], firstName: "Synthetic", lastName: "Clinician-006", role: "Psychiatrist" },
 ];
 
 for (const c of clinicians) {
@@ -164,18 +167,18 @@ for (const c of clinicians) {
 console.log("[Seed] Creating patients...");
 
 const patientData = [
-  { first_name: "Alexandra", last_name: "Martinez", dob: "1992-03-15", gender: "female", phone: "(713) 555-0101", status: "active", clinicianIdx: 0, referral: "Community Referral" },
-  { first_name: "Christopher", last_name: "Johnson", dob: "1985-07-22", gender: "male", phone: "(713) 555-0102", status: "active", clinicianIdx: 1, referral: "Physician Referral" },
-  { first_name: "Emily", last_name: "Davidson", dob: "1998-11-03", gender: "female", phone: "(713) 555-0103", status: "active", clinicianIdx: 0, referral: "Crisis Line" },
-  { first_name: "Marcus", last_name: "Williams", dob: "1979-01-10", gender: "male", phone: "(713) 555-0104", status: "active", clinicianIdx: 2, referral: "Court Ordered" },
-  { first_name: "Sophia", last_name: "Anderson", dob: "2001-05-28", gender: "female", phone: "(713) 555-0105", status: "intake", clinicianIdx: 3, referral: "School Counselor" },
-  { first_name: "Daniel", last_name: "Brown", dob: "1988-09-14", gender: "male", phone: "(713) 555-0106", status: "hold", clinicianIdx: 1, referral: "Self Referral" },
-  { first_name: "Isabella", last_name: "Garcia", dob: "1995-12-07", gender: "female", phone: "(713) 555-0107", status: "active", clinicianIdx: 4, referral: "Community Referral" },
-  { first_name: "Ethan", last_name: "Taylor", dob: "1990-04-19", gender: "male", phone: "(713) 555-0108", status: "active", clinicianIdx: 5, referral: "Physician Referral" },
-  { first_name: "Olivia", last_name: "Robinson", dob: "2003-08-30", gender: "female", phone: "(713) 555-0109", status: "intake", clinicianIdx: 2, referral: "Family Referral" },
-  { first_name: "William", last_name: "Lee", dob: "1975-06-11", gender: "male", phone: "(713) 555-0110", status: "discharged", clinicianIdx: 0, referral: "EAP" },
-  { first_name: "Mia", last_name: "Harris", dob: "1983-02-25", gender: "female", phone: "(713) 555-0111", status: "active", clinicianIdx: 3, referral: "Community Referral" },
-  { first_name: "Alexander", last_name: "Clark", dob: "1997-10-08", gender: "male", phone: "(713) 555-0112", status: "active", clinicianIdx: 4, referral: "Crisis Line" },
+  { first_name: "Synthetic", last_name: "Patient-001", dob: "2000-01-01", gender: "female", phone: "+1-555-0101", status: "active", clinicianIdx: 0, referral: "Synthetic Community Referral" },
+  { first_name: "Synthetic", last_name: "Patient-002", dob: "2000-01-02", gender: "male", phone: "+1-555-0102", status: "active", clinicianIdx: 1, referral: "Synthetic Provider Referral" },
+  { first_name: "Synthetic", last_name: "Patient-003", dob: "2000-01-03", gender: "female", phone: "+1-555-0103", status: "active", clinicianIdx: 0, referral: "Synthetic Crisis Referral" },
+  { first_name: "Synthetic", last_name: "Patient-004", dob: "2000-01-04", gender: "male", phone: "+1-555-0104", status: "active", clinicianIdx: 2, referral: "Synthetic Court Referral" },
+  { first_name: "Synthetic", last_name: "Patient-005", dob: "2000-01-05", gender: "female", phone: "+1-555-0105", status: "intake", clinicianIdx: 3, referral: "Synthetic School Referral" },
+  { first_name: "Synthetic", last_name: "Patient-006", dob: "2000-01-06", gender: "male", phone: "+1-555-0106", status: "hold", clinicianIdx: 1, referral: "Synthetic Self Referral" },
+  { first_name: "Synthetic", last_name: "Patient-007", dob: "2000-01-07", gender: "female", phone: "+1-555-0107", status: "active", clinicianIdx: 4, referral: "Synthetic Community Referral" },
+  { first_name: "Synthetic", last_name: "Patient-008", dob: "2000-01-08", gender: "male", phone: "+1-555-0108", status: "active", clinicianIdx: 5, referral: "Synthetic Provider Referral" },
+  { first_name: "Synthetic", last_name: "Patient-009", dob: "2000-01-09", gender: "female", phone: "+1-555-0109", status: "intake", clinicianIdx: 2, referral: "Synthetic Family Referral" },
+  { first_name: "Synthetic", last_name: "Patient-010", dob: "2000-01-10", gender: "male", phone: "+1-555-0110", status: "discharged", clinicianIdx: 0, referral: "Synthetic EAP Referral" },
+  { first_name: "Synthetic", last_name: "Patient-011", dob: "2000-01-11", gender: "female", phone: "+1-555-0111", status: "active", clinicianIdx: 3, referral: "Synthetic Community Referral" },
+  { first_name: "Synthetic", last_name: "Patient-012", dob: "2000-01-12", gender: "male", phone: "+1-555-0112", status: "active", clinicianIdx: 4, referral: "Synthetic Crisis Referral" },
 ];
 
 const patientIds: string[] = [];
@@ -183,7 +186,7 @@ for (let i = 0; i < patientData.length; i++) {
   const p = patientData[i];
   const id = randomUUID();
   patientIds.push(id);
-  const mrn = `MRN-2026-${String(i + 1).padStart(5, "0")}`;
+  const mrn = `SYNTH-REC-${String(i + 1).padStart(5, "0")}`;
   const intakeDate = daysAgo(p.status === "discharged" ? 120 : Math.floor(Math.random() * 60));
   sqlite.exec(`INSERT INTO patients (id, mrn, first_name, last_name, date_of_birth, gender, phone, status, assigned_clinician_id, intake_date, referral_source, created_at, updated_at) VALUES ('${id}', '${mrn}', '${q(p.first_name)}', '${q(p.last_name)}', '${p.dob}', '${p.gender}', '${p.phone}', '${p.status}', '${clinicianIds[p.clinicianIdx]}', '${intakeDate}', '${q(p.referral)}', '${now}', '${now}')`);
 }

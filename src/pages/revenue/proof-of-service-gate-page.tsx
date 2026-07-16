@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck, ArrowLeft, Search, CheckCircle, XCircle, AlertTriangle, FileText, ChevronRight, RefreshCw, Lock } from "lucide-react";
+import { ShieldCheck, ArrowLeft, Search, CheckCircle, XCircle, AlertTriangle, ChevronRight, RefreshCw, Lock } from "lucide-react";
 
 const CATEGORY_COLORS: Record<string, string> = {
   validation: "#2563EB",
@@ -37,7 +37,6 @@ export function ProofOfServiceGatePage() {
 
   const allPassed = posStatus?.status === "cleared";
   const failedChecks = posStatus?.checks.filter((c) => !c.passed && c.required) ?? [];
-  const optionalFailed = posStatus?.checks.filter((c) => !c.passed && !c.required) ?? [];
 
   return (
     <div className="px-4 md:px-6 pt-4">

@@ -1,10 +1,8 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/providers/trpc";
 import {
   FileDown, Users, AlertTriangle, Pill, Calendar,
-  CheckCircle2, Clock, Download, FileSpreadsheet,
-  ChevronRight, Building2, ShieldCheck,
+  CheckCircle2, Clock, Download, FileSpreadsheet, Building2, ShieldCheck,
 } from "lucide-react";
 
 interface ExportTemplate {
@@ -20,24 +18,28 @@ interface ExportTemplate {
   frequency: string;
 }
 
+const DEMO_REPORT_END_DATE = "2026-07-13";
+const DEMO_REPORT_END_MS = Date.UTC(2026, 6, 13);
+const demoDateDaysAgo = (days: number) =>
+  new Date(DEMO_REPORT_END_MS - days * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
 export function HHSCExportPage() {
   const [dateRange, setDateRange] = useState<{ from: string; to: string }>({
-    from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-    to: new Date().toISOString().split("T")[0],
+    from: demoDateDaysAgo(30),
+    to: DEMO_REPORT_END_DATE,
   });
   const [selectedExport, setSelectedExport] = useState<string | null>(null);
   const [generating, setGenerating] = useState<string | null>(null);
 
-  const { data: youthProfiles } = trpc.m13.listYouth.useQuery();
+  trpc.m13.listYouth.useQuery();
   const { data: incidents } = trpc.m3.listIncidents?.useQuery() ?? { data: null };
   const { data: medications } = trpc.m20.getFacilityMedications.useQuery({ facilityId: "fac-001" });
   const { data: campusSummary } = trpc.m19.getCampusSummary.useQuery();
   const { data: behavioralObs } = trpc.m18.listBehavioralObservations?.useQuery() ?? { data: null };
 
-  const youthCount = youthProfiles?.length ?? 0;
-  const incidentCount = (incidents as any)?.length ?? 4;
+  const incidentCount = Array.isArray(incidents) ? incidents.length : 4;
   const medCount = medications?.reduce((s, y) => s + y.medications.length, 0) ?? 0;
-  const obsCount = (behavioralObs as any)?.length ?? 6;
+  const obsCount = Array.isArray(behavioralObs) ? behavioralObs.length : 6;
 
   const exportTemplates: ExportTemplate[] = [
     {
@@ -127,20 +129,20 @@ export function HHSCExportPage() {
 
     if (tmpl.key === "census_daily") {
       csv = "Facility,Bed,Youth Name,MRN,Admission Date,Status\n";
-      csv += "BHC Cypress,101-A,Marcus Johnson,BHC-2026-001,2026-04-03,Active\n";
-      csv += "BHC Cypress,101-B,Aaliyah Williams,BHC-2026-002,2026-04-10,Active\n";
-      csv += "BHC Cypress,102-A,Carlos Martinez,BHC-2026-003,2026-06-29,Active\n";
-      csv += "BHC Cypress,102-B,Jada Thompson,BHC-2026-004,2026-06-29,Active\n";
+      csv += "BHC Cypress,101-A,Synthetic Youth 001,SYNTH-BHC-001,2026-04-03,Active\n";
+      csv += "BHC Cypress,101-B,Synthetic Youth 005,SYNTH-BHC-002,2026-04-10,Active\n";
+      csv += "BHC Cypress,102-A,Synthetic Youth 007,SYNTH-BHC-003,2026-06-29,Active\n";
+      csv += "BHC Cypress,102-B,Synthetic Youth 002,SYNTH-BHC-004,2026-06-29,Active\n";
     } else if (tmpl.key === "incident_report") {
       csv = "Date,Time,Incident Type,Severity,Youth Involved,Description,Action Taken,Notifications\n";
-      csv += "2026-07-01,14:30,Peer Conflict,Moderate,Jada Thompson,Verbal altercation at lunch,Separated + de-escalation,Supervisor + Clinician\n";
+      csv += "2026-07-01,14:30,Peer Conflict,Moderate,Synthetic Youth 002,Verbal altercation at lunch,Separated + de-escalation,Supervisor + Clinician\n";
       csv += "2026-06-28,08:00,Equipment,Low,None,Vital signs monitor malfunction,Device removed + service request,GAD + Clinical Director\n";
-      csv += "2026-06-15,21:15,Behavioral,High,Marcus Johnson,Refused evening medication + verbal aggression,PRN administered + 1:1,On-call clinician\n";
+      csv += "2026-06-15,21:15,Behavioral,High,Synthetic Youth 001,Refused evening medication + verbal aggression,PRN administered + 1:1,On-call clinician\n";
     } else if (tmpl.key === "medication_admin_log") {
       csv = "Date,Time,Youth Name,Medication,Dosage,Route,Status,Administered By,Notes\n";
-      csv += "2026-07-02,08:00,Marcus Johnson,Sertraline,50mg,PO,Given,Sarah RCS,\n";
-      csv += "2026-07-02,08:00,Aaliyah Williams,Methylphenidate,20mg,PO,Given,Mike RCS,\n";
-      csv += "2026-07-02,20:00,Marcus Johnson,Melatonin,3mg,PO,Refused,—,Youth declined\n";
+      csv += "2026-07-02,08:00,Synthetic Youth 001,Sertraline,50mg,PO,Given,Synthetic Staff 01,\n";
+      csv += "2026-07-02,08:00,Synthetic Youth 005,Methylphenidate,20mg,PO,Given,Synthetic Staff 02,\n";
+      csv += "2026-07-02,20:00,Synthetic Youth 001,Melatonin,3mg,PO,Refused,—,Youth declined\n";
     } else {
       csv = `Export Type,${tmpl.label}\n`;
       csv += `Generated,${now}\n`;
@@ -202,12 +204,12 @@ export function HHSCExportPage() {
           <div className="flex gap-2 ml-auto">
             {["7d", "30d", "90d"].map(period => {
               const days = parseInt(period);
-              const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+              const from = demoDateDaysAgo(days);
               const isActive = dateRange.from === from;
               return (
                 <button
                   key={period}
-                  onClick={() => setDateRange({ from, to: new Date().toISOString().split("T")[0] })}
+                  onClick={() => setDateRange({ from, to: DEMO_REPORT_END_DATE })}
                   className="px-2.5 py-1 rounded text-[10px] font-medium border transition-colors"
                   style={{
                     backgroundColor: isActive ? "#245C5A" : "var(--card-bg)",

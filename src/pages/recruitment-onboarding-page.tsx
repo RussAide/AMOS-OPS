@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Users, Search, FileCheck, GraduationCap, Award, ShieldCheck, ChevronRight, Clock, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { Users, Search, FileCheck, GraduationCap, Award, ShieldCheck, ChevronRight, Clock, CheckCircle2, XCircle } from "lucide-react";
 import { PageLayout } from "@/components/shell/page-layout";
 
 const TABS = [

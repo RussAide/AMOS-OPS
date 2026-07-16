@@ -2,8 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, ClipboardCheck, Search, FileText, CheckCircle,
-  Clock, AlertTriangle, XCircle, BarChart3,
+  ArrowLeft, ClipboardCheck, Search, AlertTriangle,
 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -22,11 +21,40 @@ const TYPE_LABELS: Record<string, string> = {
   random: "Random",
 };
 
+interface AuditFinding {
+  finding: string;
+  status: string;
+}
+
+function parseAuditFindings(value: string): AuditFinding[] | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return null;
+
+    const findings: AuditFinding[] = [];
+    for (const item of parsed) {
+      if (
+        typeof item === "object" &&
+        item !== null &&
+        "finding" in item &&
+        typeof item.finding === "string" &&
+        "status" in item &&
+        typeof item.status === "string"
+      ) {
+        findings.push({ finding: item.finding, status: item.status });
+      }
+    }
+    return findings;
+  } catch {
+    return null;
+  }
+}
+
 export function AuditBinderPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"" | "planned" | "in_progress" | "pending_review" | "completed" | "closed">("");
+  const [typeFilter, setTypeFilter] = useState<"" | "internal" | "external" | "regulatory" | "peer_review" | "random">("");
   const [expandedAudit, setExpandedAudit] = useState<string | null>(null);
 
   const { data: audits, refetch } = trpc.m3.auditBinderList.useQuery({
@@ -93,7 +121,7 @@ export function AuditBinderPage() {
         </div>
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
           className="rounded-lg border px-3 py-2 text-[13px] outline-none"
           style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}
         >
@@ -106,7 +134,7 @@ export function AuditBinderPage() {
         </select>
         <select
           value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
+          onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
           className="rounded-lg border px-3 py-2 text-[13px] outline-none"
           style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}
         >
@@ -131,7 +159,7 @@ export function AuditBinderPage() {
             <div key={audit.id} className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)" }}>
               <div
                 className="p-4 cursor-pointer"
-                onClick={() => setIsExpanded(isExpanded ? null : audit.id)}
+                onClick={() => setExpandedAudit(isExpanded ? null : audit.id)}
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -172,9 +200,9 @@ export function AuditBinderPage() {
                         <h4 className="text-[12px] font-semibold mb-2" style={{ color: "var(--topbar-title)" }}>Findings</h4>
                         <div className="space-y-1">
                           {(() => {
-                            try {
-                              const findings = JSON.parse(audit.findingsJson);
-                              return findings.map((f: any, i: number) => (
+                            const findings = parseAuditFindings(audit.findingsJson);
+                            if (findings) {
+                              return findings.map((f, i) => (
                                 <div key={i} className="flex items-center gap-2 text-[12px] px-2 py-1 rounded" style={{ backgroundColor: "#FEF3C720" }}>
                                   <AlertTriangle size={12} style={{ color: "#D97706" }} />
                                   <span style={{ color: "var(--topbar-title)" }}>{f.finding}</span>
@@ -183,7 +211,8 @@ export function AuditBinderPage() {
                                   </span>
                                 </div>
                               ));
-                            } catch { return <span className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>Invalid findings data</span>; }
+                            }
+                            return <span className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>Invalid findings data</span>;
                           })()}
                         </div>
                       </div>

@@ -10,7 +10,6 @@ import {
   Eye,
   Bell,
   TrendingUp,
-  Users,
 } from "lucide-react";
 
 interface OnboardingRecord {

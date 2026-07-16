@@ -15,18 +15,18 @@ const TOOLKITS = [
   {
     num: 2,
     title: "High-Acuity Assessment Worksheet",
-    desc: "7-domain assessment covering behavioral, cognitive, social, family, safety, medical, and educational functioning with CANS/ANSA scoring.",
+    desc: "Structured narrative assessment covering presenting information, history, strengths, needs, observations, and governed clinical-workflow handoff.",
     href: "/intake/assessment",
-    status: "IMPLEMENTED",
+    status: "NARRATIVE + GOVERNED",
     module: "M13: Assessment",
     sopRef: "Part XIV, Toolkit 2",
   },
   {
     num: 3,
     title: "Level-of-Care Determination Matrix",
-    desc: "3x4 decision matrix (3 levels x 4 decision areas: safety risk, clinical complexity, functional impairment, family support) with clinical rationale.",
-    href: "/intake/assessment",
-    status: "IMPLEMENTED",
+    desc: "Program-specific level-of-care guidance with authoritative source, validation, competency, named human review, rationale, and audit controls.",
+    href: "/clinical/intelligence-fabric",
+    status: "GOVERNED",
     module: "M13: Assessment",
     sopRef: "Part XIV, Toolkit 3",
   },
@@ -77,10 +77,10 @@ const TOOLKITS = [
   },
   {
     num: 9,
-    title: "CANS Assessment Tool",
-    desc: "43-item CANS assessment across 5 domains (Life Functioning, Youth Strengths, Caregiver Needs, Behavioral/Emotional Needs, Child Risk Behaviors) with automated scoring and action level calculation.",
+    title: "Governed CANS Profile Experience",
+    desc: "Distinct Texas TRR and DFPS CANS 3.0 metadata profiles, validation status, source and version controls, competency gates, and synthetic pathway demonstrations. Legacy automated scoring is quarantined.",
     href: "/toolkits/cans",
-    status: "IMPLEMENTED",
+    status: "GOVERNED",
     module: "M27: Advanced Tooling",
     sopRef: "Part XIV, Toolkit 9",
   },
@@ -90,24 +90,50 @@ export function ToolkitHubPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#1a3a3a]">Operational Toolkits</h1>
+        <h1 className="text-2xl font-bold text-[#1a3a3a]">
+          Operational Toolkits
+        </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          All 9 SOP toolkits implemented as working forms — SOP Part XIV
+          All 9 SOP toolkit routes presented as operational or governed
+          experiences — SOP Part XIV
         </p>
       </div>
 
       {/* Progress Summary */}
       <div className="grid grid-cols-4 gap-3">
-        <Card className="bg-[#2e8b8b] text-white"><CardContent className="p-4 text-center"><div className="text-3xl font-bold">9/9</div><div className="text-xs opacity-80">Toolkits Implemented</div></CardContent></Card>
-        <Card><CardContent className="p-4 text-center"><div className="text-3xl font-bold text-[#1a3a3a]">6</div><div className="text-xs text-muted-foreground">Milestones</div></CardContent></Card>
-        <Card><CardContent className="p-4 text-center"><div className="text-3xl font-bold text-[#1a3a3a]">25</div><div className="text-xs text-muted-foreground">Database Tables</div></CardContent></Card>
-        <Card><CardContent className="p-4 text-center"><div className="text-3xl font-bold text-[#1a3a3a]">10</div><div className="text-xs text-muted-foreground">Backend Routers</div></CardContent></Card>
+        <Card className="bg-[#2e8b8b] text-white">
+          <CardContent className="p-4 text-center">
+            <div className="text-3xl font-bold">9/9</div>
+            <div className="text-xs opacity-80">Toolkit Routes Governed</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <div className="text-3xl font-bold text-[#1a3a3a]">6</div>
+            <div className="text-xs text-muted-foreground">Milestones</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <div className="text-3xl font-bold text-[#1a3a3a]">25</div>
+            <div className="text-xs text-muted-foreground">Database Tables</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <div className="text-3xl font-bold text-[#1a3a3a]">10</div>
+            <div className="text-xs text-muted-foreground">Backend Routers</div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Toolkit Cards */}
       <div className="space-y-3">
         {TOOLKITS.map((tk) => (
-          <Card key={tk.num} className="hover:border-[#2e8b8b]/50 transition-all">
+          <Card
+            key={tk.num}
+            className="hover:border-[#2e8b8b]/50 transition-all"
+          >
             <CardContent className="p-4">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-lg bg-[#1a3a3a] text-white flex items-center justify-center text-lg font-bold shrink-0">
@@ -116,12 +142,23 @@ export function ToolkitHubPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm">{tk.title}</span>
-                    <Badge className="bg-green-100 text-green-700 text-xs">{tk.status}</Badge>
-                    <Badge variant="outline" className="text-xs text-[#2e8b8b]">{tk.sopRef}</Badge>
+                    <Badge className="bg-green-100 text-green-700 text-xs">
+                      {tk.status}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs text-[#2e8b8b]">
+                      {tk.sopRef}
+                    </Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">{tk.desc}</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {tk.desc}
+                  </p>
                   <div className="flex items-center gap-2 mt-2 text-xs">
-                    <a href={`#${tk.href}`} className="text-[#2e8b8b] font-medium hover:underline">Open {tk.module} →</a>
+                    <a
+                      href={`#${tk.href}`}
+                      className="text-[#2e8b8b] font-medium hover:underline"
+                    >
+                      Open {tk.module} →
+                    </a>
                   </div>
                 </div>
               </div>
@@ -132,22 +169,51 @@ export function ToolkitHubPage() {
 
       {/* Integration Status */}
       <Card className="bg-[#f0f5f5] border-[#2e8b8b]/30">
-        <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold text-[#2e8b8b] uppercase tracking-wider">End-to-End Youth Pathway Integration</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold text-[#2e8b8b] uppercase tracking-wider">
+            End-to-End Youth Pathway Integration
+          </CardTitle>
+        </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            {["Referral", "Intake", "Assessment", "LOC Determination", "Admission", "Daily Observations", "Case Management", "Crisis Response", "Authorization", "Discharge Planning"].map((step, idx) => (
+            {[
+              "Referral",
+              "Intake",
+              "Assessment",
+              "Governed Clinical Decision",
+              "Admission",
+              "Daily Observations",
+              "Case Management",
+              "Crisis Response",
+              "Authorization",
+              "Discharge Planning",
+            ].map((step, idx) => (
               <span key={step} className="flex items-center gap-2">
-                <span className="px-2 py-1 rounded bg-[#2e8b8b] text-white text-xs font-medium">{step}</span>
+                <span className="px-2 py-1 rounded bg-[#2e8b8b] text-white text-xs font-medium">
+                  {step}
+                </span>
                 {idx < 9 && <span className="text-[#2e8b8b]">→</span>}
               </span>
             ))}
           </div>
           <Separator className="my-3" />
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs text-muted-foreground">
-            <div><span className="text-[#2e8b8b] font-medium">4</span> youth in demo data</div>
-            <div><span className="text-[#2e8b8b] font-medium">3</span> active residential</div>
-            <div><span className="text-[#2e8b8b] font-medium">2</span> crisis events tracked</div>
-            <div><span className="text-[#2e8b8b] font-medium">4</span> authorizations managed</div>
+            <div>
+              <span className="text-[#2e8b8b] font-medium">4</span> youth in
+              demo data
+            </div>
+            <div>
+              <span className="text-[#2e8b8b] font-medium">3</span> active
+              residential
+            </div>
+            <div>
+              <span className="text-[#2e8b8b] font-medium">2</span> crisis
+              events tracked
+            </div>
+            <div>
+              <span className="text-[#2e8b8b] font-medium">4</span>{" "}
+              authorizations managed
+            </div>
           </div>
         </CardContent>
       </Card>

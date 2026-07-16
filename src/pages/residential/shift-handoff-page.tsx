@@ -3,13 +3,32 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
-export function ShiftHandoffPage() {
-  const { data: shifts = [] } = trpc.m18.listShifts.useQuery();
-  const { data: summary } = trpc.m18.residentialSummary.useQuery();
+interface ShiftStaffMember {
+  name: string;
+}
 
-  const inProgress = shifts.find((s: any) => s.status === "in_progress");
-  const completed = shifts.filter((s: any) => s.status === "completed");
-  const scheduled = shifts.filter((s: any) => s.status === "scheduled");
+interface ResidentialShift {
+  id: string;
+  status: string;
+  shift_type: string;
+  start_time: string;
+  end_time: string;
+  rcs_lead_name: string | null;
+  nurse_name: string | null;
+  clinician_on_call: string | null;
+  coverage_status: string;
+  rcs_staff_ids_json: string | null;
+  coverage_notes: string | null;
+}
+
+export function ShiftHandoffPage() {
+  const { data: rawShifts = [] } = trpc.m18.listShifts.useQuery();
+  const { data: summary } = trpc.m18.residentialSummary.useQuery();
+  const shifts = rawShifts as ResidentialShift[];
+
+  const inProgress = shifts.find((s) => s.status === "in_progress");
+  const completed = shifts.filter((s) => s.status === "completed");
+  const scheduled = shifts.filter((s) => s.status === "scheduled");
 
   return (
     <>
@@ -54,7 +73,7 @@ export function ShiftHandoffPage() {
                 <div>
                   <span className="text-xs text-muted-foreground">RCS Staff</span>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {(JSON.parse(inProgress.rcs_staff_ids_json) as any[]).map((s: any, idx: number) => (
+                    {(JSON.parse(inProgress.rcs_staff_ids_json) as ShiftStaffMember[]).map((s, idx: number) => (
                       <Badge key={idx} variant="outline" className="text-xs">{s.name}</Badge>
                     ))}
                   </div>
@@ -72,7 +91,7 @@ export function ShiftHandoffPage() {
       {completed.length > 0 && (
         <div>
           <div className="text-sm font-semibold text-muted-foreground mb-2">Completed</div>
-          {completed.map((s: any) => (
+          {completed.map((s) => (
             <Card key={s.id} className="mb-2 opacity-70">
               <CardContent className="p-3">
                 <div className="flex items-center justify-between">
@@ -93,7 +112,7 @@ export function ShiftHandoffPage() {
       {scheduled.length > 0 && (
         <div>
           <div className="text-sm font-semibold text-muted-foreground mb-2">Scheduled</div>
-          {scheduled.map((s: any) => (
+          {scheduled.map((s) => (
             <Card key={s.id} className="mb-2">
               <CardContent className="p-3">
                 <div className="flex items-center justify-between">

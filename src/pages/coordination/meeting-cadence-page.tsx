@@ -6,10 +6,16 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  isRecord,
+  readNullableString,
+  readNumber,
+  readString,
+  toRecords,
+} from "@/components/data/record-utils";
 
 const MEETING_TYPES: Record<string, { label: string; color: string }> = {
   daily_huddle: { label: "Daily Huddle", color: "bg-blue-100 text-blue-700" },
@@ -40,17 +46,119 @@ const PRIORITY_COLORS: Record<string, string> = {
   urgent: "bg-red-100 text-red-700",
 };
 
+type MeetingType =
+  | "daily_huddle"
+  | "case_staffing"
+  | "treatment_plan_review"
+  | "family_conference";
+
+interface MeetingAttendee {
+  name: string;
+  role: string;
+}
+
+interface ActionItemRecord {
+  id: string;
+  description: string;
+  assigned_to_name: string | null;
+  due_date: string | null;
+  priority: string;
+  status: string;
+}
+
+interface ActionItemWithMeeting extends ActionItemRecord {
+  meetingTitle: string;
+}
+
+interface MeetingRecord {
+  id: string;
+  meeting_type: string;
+  title: string;
+  status: string;
+  scheduled_date: string;
+  scheduled_time: string | null;
+  duration_minutes: number;
+  facilitator_name: string | null;
+  attendees_json: string | null;
+  agenda_json: string | null;
+  follow_up_required: number;
+  notes: string | null;
+  actionItems?: ActionItemRecord[];
+}
+
+interface MeetingFormState {
+  meetingType: MeetingType;
+  title: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  durationMinutes: number;
+  facilitatorName: string;
+}
+
+function normalizeActionItem(value: Record<string, unknown>): ActionItemRecord | null {
+  const id = readString(value, "id");
+  if (!id) return null;
+  return {
+    id,
+    description: readString(value, "description"),
+    assigned_to_name: readNullableString(value, "assigned_to_name"),
+    due_date: readNullableString(value, "due_date"),
+    priority: readString(value, "priority", "medium"),
+    status: readString(value, "status", "open"),
+  };
+}
+
+function normalizeMeeting(value: Record<string, unknown>): MeetingRecord | null {
+  const id = readString(value, "id");
+  if (!id) return null;
+  const actionItems = toRecords(value.actionItems).flatMap((item) => {
+    const normalized = normalizeActionItem(item);
+    return normalized ? [normalized] : [];
+  });
+  return {
+    id,
+    meeting_type: readString(value, "meeting_type", "daily_huddle"),
+    title: readString(value, "title", "Untitled meeting"),
+    status: readString(value, "status", "scheduled"),
+    scheduled_date: readString(value, "scheduled_date"),
+    scheduled_time: readNullableString(value, "scheduled_time"),
+    duration_minutes: readNumber(value, "duration_minutes", 30),
+    facilitator_name: readNullableString(value, "facilitator_name"),
+    attendees_json: readNullableString(value, "attendees_json"),
+    agenda_json: readNullableString(value, "agenda_json"),
+    follow_up_required: readNumber(value, "follow_up_required"),
+    notes: readNullableString(value, "notes"),
+    actionItems,
+  };
+}
+
+function parseJsonArray<T>(value: string | null): T[] {
+  try {
+    const parsed: unknown = JSON.parse(value ?? "[]");
+    return Array.isArray(parsed) ? parsed as T[] : [];
+  } catch {
+    return [];
+  }
+}
+
 export function MeetingCadencePage() {
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("meetings");
-  const { data: meetings = [] } = trpc.m15.listMeetings.useQuery();
-  const { data: meetingDetail } = trpc.m15.getMeeting.useQuery(
+  const { data: rawMeetings } = trpc.m15.listMeetings.useQuery();
+  const { data: rawMeetingDetail } = trpc.m15.getMeeting.useQuery(
     { id: selectedMeetingId ?? "" },
     { enabled: !!selectedMeetingId }
   );
+  const meetings = toRecords(rawMeetings).flatMap((meeting) => {
+    const normalized = normalizeMeeting(meeting);
+    return normalized ? [normalized] : [];
+  });
+  const meetingDetail = isRecord(rawMeetingDetail)
+    ? normalizeMeeting(rawMeetingDetail)
+    : null;
 
-  const upcomingMeetings = meetings.filter((m: any) => m.status === "scheduled");
-  const completedMeetings = meetings.filter((m: any) => m.status === "completed");
+  const upcomingMeetings = meetings.filter((m) => m.status === "scheduled");
+  const completedMeetings = meetings.filter((m) => m.status === "completed");
 
   return (
     <>
@@ -77,7 +185,7 @@ export function MeetingCadencePage() {
       {/* Meeting Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {Object.entries(MEETING_TYPES).map(([key, info]) => {
-          const count = meetings.filter((m: any) => m.meeting_type === key).length;
+          const count = meetings.filter((m) => m.meeting_type === key).length;
           return (
             <Card key={key}>
               <CardContent className="p-4">
@@ -101,7 +209,7 @@ export function MeetingCadencePage() {
           {upcomingMeetings.length > 0 && (
             <div>
               <div className="text-sm font-semibold text-[#1a3a3a] mb-2">Upcoming</div>
-              {upcomingMeetings.map((m: any) => (
+              {upcomingMeetings.map((m) => (
                 <MeetingRow key={m.id} meeting={m} selected={selectedMeetingId === m.id} onClick={() => setSelectedMeetingId(m.id === selectedMeetingId ? null : m.id)} />
               ))}
             </div>
@@ -111,7 +219,7 @@ export function MeetingCadencePage() {
           {completedMeetings.length > 0 && (
             <div>
               <div className="text-sm font-semibold text-muted-foreground mb-2">Completed</div>
-              {completedMeetings.map((m: any) => (
+              {completedMeetings.map((m) => (
                 <MeetingRow key={m.id} meeting={m} selected={selectedMeetingId === m.id} onClick={() => setSelectedMeetingId(m.id === selectedMeetingId ? null : m.id)} />
               ))}
             </div>
@@ -136,10 +244,9 @@ export function MeetingCadencePage() {
   );
 }
 
-function MeetingRow({ meeting: m, selected, onClick }: { meeting: any; selected: boolean; onClick: () => void }) {
+function MeetingRow({ meeting: m, selected, onClick }: { meeting: MeetingRecord; selected: boolean; onClick: () => void }) {
   const typeInfo = MEETING_TYPES[m.meeting_type] ?? { label: m.meeting_type, color: "bg-gray-100" };
-  let attendees: any[] = [];
-  try { attendees = JSON.parse(m.attendees_json ?? "[]"); } catch { /* ignore */ }
+  const attendees = parseJsonArray<MeetingAttendee>(m.attendees_json);
 
   return (
     <Card
@@ -174,11 +281,9 @@ function MeetingRow({ meeting: m, selected, onClick }: { meeting: any; selected:
   );
 }
 
-function MeetingDetailCard({ meeting: m }: { meeting: any }) {
-  let attendees: any[] = [];
-  let agenda: any[] = [];
-  try { attendees = JSON.parse(m.attendees_json ?? "[]"); } catch { /* ignore */ }
-  try { agenda = JSON.parse(m.agenda_json ?? "[]"); } catch { /* ignore */ }
+function MeetingDetailCard({ meeting: m }: { meeting: MeetingRecord }) {
+  const attendees = parseJsonArray<MeetingAttendee>(m.attendees_json);
+  const agenda = parseJsonArray<string>(m.agenda_json);
 
   return (
     <Card className="border-[#2e8b8b]/30">
@@ -202,7 +307,7 @@ function MeetingDetailCard({ meeting: m }: { meeting: any }) {
           <div>
             <Label className="text-xs text-muted-foreground">Agenda</Label>
             <ol className="mt-1 space-y-1">
-              {agenda.map((item: string, idx: number) => (
+              {agenda.map((item, idx) => (
                 <li key={idx} className="text-sm flex items-start gap-2">
                   <span className="text-[#2e8b8b] font-bold shrink-0">{idx + 1}.</span>
                   {item}
@@ -218,7 +323,7 @@ function MeetingDetailCard({ meeting: m }: { meeting: any }) {
             <div>
               <Label className="text-xs text-muted-foreground">Attendees</Label>
               <div className="flex flex-wrap gap-1.5 mt-1">
-                {attendees.map((a: any, idx: number) => (
+                {attendees.map((a, idx) => (
                   <Badge key={idx} variant="outline" className="text-xs">
                     {a.name} <span className="text-muted-foreground">({a.role})</span>
                   </Badge>
@@ -245,7 +350,7 @@ function MeetingDetailCard({ meeting: m }: { meeting: any }) {
             <div>
               <Label className="text-xs text-muted-foreground">Action Items ({m.actionItems.length})</Label>
               <div className="space-y-2 mt-2">
-                {m.actionItems.map((ai: any) => (
+                {m.actionItems.map((ai) => (
                   <div key={ai.id} className={`flex items-center justify-between p-2 rounded border ${
                     ai.status === "overdue" ? "border-red-300 bg-red-50" : ai.status === "completed" ? "border-green-300 bg-green-50" : "border-gray-200"
                   }`}>
@@ -272,37 +377,41 @@ function MeetingDetailCard({ meeting: m }: { meeting: any }) {
 }
 
 function ActionItemsList() {
-  const { data: meetings = [] } = trpc.m15.listMeetings.useQuery();
+  const { data: rawMeetings } = trpc.m15.listMeetings.useQuery();
+  const meetings = toRecords(rawMeetings).flatMap((meeting) => {
+    const normalized = normalizeMeeting(meeting);
+    return normalized ? [normalized] : [];
+  });
   // Collect action items from all meetings
-  const allActionItems: any[] = [];
-  meetings.forEach((m: any) => {
+  const allActionItems: ActionItemWithMeeting[] = [];
+  meetings.forEach((m) => {
     if (m.actionItems) {
-      m.actionItems.forEach((ai: any) => allActionItems.push({ ...ai, meetingTitle: m.title }));
+      m.actionItems.forEach((ai) => allActionItems.push({ ...ai, meetingTitle: m.title }));
     }
   });
 
-  const openItems = allActionItems.filter((ai: any) => ai.status === "open" || ai.status === "in_progress");
-  const overdueItems = allActionItems.filter((ai: any) => ai.status === "overdue");
-  const completedItems = allActionItems.filter((ai: any) => ai.status === "completed");
+  const openItems = allActionItems.filter((ai) => ai.status === "open" || ai.status === "in_progress");
+  const overdueItems = allActionItems.filter((ai) => ai.status === "overdue");
+  const completedItems = allActionItems.filter((ai) => ai.status === "completed");
 
   return (
     <div className="space-y-4">
       {overdueItems.length > 0 && (
         <div>
           <div className="text-sm font-semibold text-red-700 mb-2">Overdue ({overdueItems.length})</div>
-          {overdueItems.map((ai: any) => <ActionItemRow key={ai.id} item={ai} />)}
+          {overdueItems.map((ai) => <ActionItemRow key={ai.id} item={ai} />)}
         </div>
       )}
       {openItems.length > 0 && (
         <div>
           <div className="text-sm font-semibold text-[#1a3a3a] mb-2">Open ({openItems.length})</div>
-          {openItems.map((ai: any) => <ActionItemRow key={ai.id} item={ai} />)}
+          {openItems.map((ai) => <ActionItemRow key={ai.id} item={ai} />)}
         </div>
       )}
       {completedItems.length > 0 && (
         <div>
           <div className="text-sm font-semibold text-muted-foreground mb-2">Completed ({completedItems.length})</div>
-          {completedItems.map((ai: any) => <ActionItemRow key={ai.id} item={ai} />)}
+          {completedItems.map((ai) => <ActionItemRow key={ai.id} item={ai} />)}
         </div>
       )}
       {allActionItems.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">No action items.</p>}
@@ -310,7 +419,7 @@ function ActionItemsList() {
   );
 }
 
-function ActionItemRow({ item: ai }: { item: any }) {
+function ActionItemRow({ item: ai }: { item: ActionItemWithMeeting }) {
   return (
     <Card className={`mb-2 ${ai.status === "overdue" ? "border-red-200" : ""}`}>
       <CardContent className="p-3">
@@ -399,13 +508,13 @@ function DailyHuddleTemplate() {
 }
 
 function NewMeetingForm() {
-  const [form, setForm] = useState({
-    meetingType: "case_staffing" as string, title: "", scheduledDate: new Date().toISOString().split("T")[0],
+  const [form, setForm] = useState<MeetingFormState>({
+    meetingType: "case_staffing", title: "", scheduledDate: new Date().toISOString().split("T")[0],
     scheduledTime: "09:00", durationMinutes: 30, facilitatorName: "",
   });
 
   const createMeeting = trpc.m15.createMeeting.useMutation({ onSuccess: () => setForm({ meetingType: "case_staffing", title: "", scheduledDate: new Date().toISOString().split("T")[0], scheduledTime: "09:00", durationMinutes: 30, facilitatorName: "" }) });
-  const handleSubmit = () => { createMeeting.mutate({ title: form.title || "New Meeting", meetingType: form.meetingType, scheduledDate: form.scheduledDate, scheduledTime: form.scheduledTime, durationMinutes: form.durationMinutes, facilitatorName: form.facilitatorName || "Current User" } as any); };
+  const handleSubmit = () => { createMeeting.mutate({ title: form.title || "New Meeting", meetingType: form.meetingType, scheduledDate: form.scheduledDate, scheduledTime: form.scheduledTime, durationMinutes: form.durationMinutes, facilitatorName: form.facilitatorName || "Current User" }); };
 
   return (
     <>
@@ -413,7 +522,7 @@ function NewMeetingForm() {
       <div className="space-y-4">
       <div>
         <Label className="text-xs">Meeting Type</Label>
-        <Select value={form.meetingType} onValueChange={v => setForm({ ...form, meetingType: v })}>
+        <Select value={form.meetingType} onValueChange={v => setForm({ ...form, meetingType: v as MeetingType })}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="daily_huddle">Daily Huddle</SelectItem>

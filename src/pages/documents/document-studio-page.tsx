@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import {
-  FileText, Search, Filter, Plus, ChevronRight, Clock, CheckCircle, XCircle, Archive,
-  Eye, Edit, Trash2, Send, Check, RotateCcw, Tag, User, Calendar, FileClock,
-  BookOpen, ShieldCheck, TrendingUp, BarChart3, FolderOpen,
+  FileText, Search, Plus, ChevronRight, Clock, CheckCircle, XCircle, Archive,
+  Eye, Edit, Trash2, Send, Check, RotateCcw, Tag, User, Calendar,
+  BookOpen, FolderOpen,
 } from "lucide-react";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: typeof Clock }> = {
@@ -19,24 +19,26 @@ const DEPT_COLORS: Record<string, string> = {
   HR: "#2563EB", Clinical: "#059669", GRO: "#D97706", QA: "#7C3AED",
   Revenue: "#0891B2", GAD: "#6B7280", Executive: "#1a1a2e", All: "#245C5A",
 };
+type DocumentStatus = "draft" | "approved" | "superseded" | "in-review" | "published" | "archived";
 
-function formatFileSize(bytes: number): string {
+function formatFileSize(bytes: number | null | undefined): string {
   if (!bytes) return "-";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function formatDate(dateStr: string): string {
-  if (!dateStr) return "-";
-  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+function formatDate(value: string | Date | null | undefined): string {
+  if (!value) return "-";
+  const date = value instanceof Date ? value : new Date(value);
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 export function DocumentStudioPage() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [selectedDoc, setSelectedDoc] = useState<any>(null);
+  const [statusFilter, setStatusFilter] = useState<"" | DocumentStatus>("");
+  const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
 
   const { data: stats } = trpc.m2.stats.useQuery();
   const { data: categories } = trpc.m2.listCategories.useQuery();
@@ -53,12 +55,12 @@ export function DocumentStudioPage() {
   const documents = docList?.documents ?? [];
 
   const statCards = [
-    { label: "Total Documents", value: stats?.total ?? 0, icon: FolderOpen, color: "#245C5A" },
-    { label: "Draft", value: stats?.draft ?? 0, icon: FileText, color: "#6B7280" },
-    { label: "In Review", value: stats?.inReview ?? 0, icon: Eye, color: "#2563EB" },
-    { label: "Approved", value: stats?.approved ?? 0, icon: CheckCircle, color: "#059669" },
-    { label: "Published", value: stats?.published ?? 0, icon: BookOpen, color: "#245C5A" },
-    { label: "Archived", value: stats?.archived ?? 0, icon: Archive, color: "#92400E" },
+    { label: "Total Documents", status: "" as const, value: stats?.total ?? 0, icon: FolderOpen, color: "#245C5A" },
+    { label: "Draft", status: "draft" as const, value: stats?.draft ?? 0, icon: FileText, color: "#6B7280" },
+    { label: "In Review", status: "in-review" as const, value: stats?.inReview ?? 0, icon: Eye, color: "#2563EB" },
+    { label: "Approved", status: "approved" as const, value: stats?.approved ?? 0, icon: CheckCircle, color: "#059669" },
+    { label: "Published", status: "published" as const, value: stats?.published ?? 0, icon: BookOpen, color: "#245C5A" },
+    { label: "Archived", status: "archived" as const, value: stats?.archived ?? 0, icon: Archive, color: "#92400E" },
   ];
 
   return (
@@ -87,8 +89,8 @@ export function DocumentStudioPage() {
               <div
                 key={s.label}
                 className="rounded-lg border p-3 cursor-pointer transition-all hover:shadow-sm"
-                style={{ borderColor: statusFilter === s.label.toLowerCase().replace(" ", "-") ? s.color : "var(--card-border)", backgroundColor: "var(--card-bg)" }}
-                onClick={() => setStatusFilter(statusFilter === s.label.toLowerCase().replace(" ", "-") ? "" : s.label.toLowerCase().replace(" ", "-"))}
+                style={{ borderColor: statusFilter === s.status ? s.color : "var(--card-border)", backgroundColor: "var(--card-bg)" }}
+                onClick={() => setStatusFilter(statusFilter === s.status ? "" : s.status)}
               >
                 <div className="flex items-center gap-1.5 mb-1">
                   <Icon size={13} style={{ color: s.color }} />
@@ -110,7 +112,7 @@ export function DocumentStudioPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 rounded-lg border text-[13px] outline-none focus:ring-2"
-              style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)", focusRing: "#245C5A30" }}
+              style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}
             />
           </div>
           <select
@@ -120,13 +122,13 @@ export function DocumentStudioPage() {
             style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}
           >
             <option value="">All Categories</option>
-            {(categories ?? []).map((c: any) => (
+            {(categories ?? []).map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => setStatusFilter(e.target.value as "" | DocumentStatus)}
             className="px-3 py-2.5 rounded-lg border text-[13px] outline-none"
             style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}
           >
@@ -147,7 +149,7 @@ export function DocumentStudioPage() {
                 <p className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>No documents found</p>
               </div>
             ) : (
-              documents.map((doc: any) => {
+              documents.map((doc) => {
                 const st = STATUS_CONFIG[doc.status] ?? STATUS_CONFIG.draft;
                 const StatusIcon = st.icon;
                 return (
@@ -320,7 +322,7 @@ export function DocumentStudioPage() {
                   <div className="p-4 border-b" style={{ borderColor: "var(--card-border)" }}>
                     <h3 className="text-[11px] font-semibold uppercase tracking-[1px] mb-3" style={{ color: "var(--topbar-subtitle)" }}>Versions ({docDetail.versions.length})</h3>
                     <div className="space-y-1.5 max-h-[120px] overflow-y-auto">
-                      {docDetail.versions.map((v: any) => (
+                      {docDetail.versions.map((v) => (
                         <div key={v.id} className="flex items-center gap-2 text-[11px]">
                           <span className="font-mono font-medium" style={{ color: v.versionNumber === docDetail.version ? "#245C5A" : "var(--topbar-subtitle)" }}>v{v.versionNumber}</span>
                           <span className="flex-1 truncate" style={{ color: "var(--topbar-title)" }}>{v.changeSummary}</span>
@@ -336,7 +338,7 @@ export function DocumentStudioPage() {
                   <div className="p-4 border-b" style={{ borderColor: "var(--card-border)" }}>
                     <h3 className="text-[11px] font-semibold uppercase tracking-[1px] mb-3" style={{ color: "var(--topbar-subtitle)" }}>Audit Trail</h3>
                     <div className="space-y-1.5 max-h-[120px] overflow-y-auto">
-                      {docDetail.audit.map((a: any) => (
+                      {docDetail.audit.map((a) => (
                         <div key={a.id} className="flex items-center gap-2 text-[11px]">
                           <span className="capitalize font-medium" style={{ color: a.action === "status-changed" ? "#2563EB" : a.action === "created" ? "#059669" : "var(--topbar-title)" }}>{a.action}</span>
                           <span className="flex-1 truncate" style={{ color: "var(--topbar-subtitle)" }}>{a.details}</span>

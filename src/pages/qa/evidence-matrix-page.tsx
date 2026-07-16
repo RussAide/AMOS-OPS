@@ -2,8 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, Database, Search, FileText, CheckCircle, Clock,
-  AlertTriangle, Archive,
+  ArrowLeft, Database, Search,
 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -40,16 +39,15 @@ const AREA_LABELS: Record<string, string> = {
 export function EvidenceMatrixPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"" | "active" | "expired" | "superseded" | "under_review" | "archived">("");
+  const [categoryFilter, setCategoryFilter] = useState<"" | "other" | "incident_report" | "policy" | "procedure" | "training_record" | "audit_report" | "credential" | "risk_assessment">("");
 
-  const { data: items, refetch } = trpc.m3.evidenceList.useQuery({
+  const { data: items } = trpc.m3.evidenceList.useQuery({
     status: statusFilter || undefined,
     category: categoryFilter || undefined,
     search: search || undefined,
   });
   const { data: stats } = trpc.m3.evidenceStats.useQuery();
-  const updateEvidence = trpc.m3.evidenceUpdate.useMutation({ onSuccess: () => refetch() });
 
   return (
     <div className="px-4 md:px-6 pt-4">
@@ -99,7 +97,7 @@ export function EvidenceMatrixPage() {
         </div>
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
           className="rounded-lg border px-3 py-2 text-[13px] outline-none"
           style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}
         >
@@ -112,7 +110,7 @@ export function EvidenceMatrixPage() {
         </select>
         <select
           value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
+          onChange={(e) => setCategoryFilter(e.target.value as typeof categoryFilter)}
           className="rounded-lg border px-3 py-2 text-[13px] outline-none"
           style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}
         >

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
-  UserPlus, ClipboardCheck, Brain, ChevronRight, Clock,
-  CheckCircle2, AlertCircle, Filter, Search, Calendar,
+  UserPlus, ClipboardCheck, Brain, ChevronRight,
 } from "lucide-react";
 import { PageLayout } from "@/components/shell/page-layout";
 
@@ -19,16 +18,16 @@ const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
 };
 
 const referrals = [
-  { id: "REF-2026-007", name: "Jordan Mitchell", age: 15, referred: "2026-07-01", status: "pending", source: "DFPS", assigned: "Dr. Hall", urgency: "high", type: "Residential" },
-  { id: "REF-2026-006", name: "Taylor Brooks", age: 14, referred: "2026-06-28", status: "active", source: "Hospital", assigned: "Sarah RCS", urgency: "medium", type: "Crisis" },
-  { id: "REF-2026-005", name: "Riley Chen", age: 16, referred: "2026-06-20", status: "completed", source: "School", assigned: "Mike RCS", urgency: "low", type: "Outpatient" },
+  { id: "REF-2026-007", name: "Synthetic-Person-019 Mitchell", age: 15, referred: "2026-07-01", status: "pending", source: "DFPS", assigned: "Demo Clinical Director", urgency: "high", type: "Residential" },
+  { id: "REF-2026-006", name: "Taylor Brooks", age: 14, referred: "2026-06-28", status: "active", source: "Hospital", assigned: "Synthetic Staff 01", urgency: "medium", type: "Crisis" },
+  { id: "REF-2026-005", name: "Riley Chen", age: 16, referred: "2026-06-20", status: "completed", source: "School", assigned: "Synthetic Staff 02", urgency: "low", type: "Outpatient" },
 ];
 
 const assessments = [
-  { id: "ASM-004", youth: "Jada Thompson", mrn: "BHC-2026-004", type: "Intake", clinician: "Dr. Hall", date: "2026-06-30", status: "in_progress", score: null },
-  { id: "ASM-003", youth: "Carlos Martinez", mrn: "BHC-2026-003", type: "30-Day Review", clinician: "Dr. Hall", date: "2026-06-28", status: "completed", score: 42 },
-  { id: "ASM-002", youth: "Aaliyah Williams", mrn: "BHC-2026-002", type: "Intake", clinician: "QMHP-CS", date: "2026-04-12", status: "completed", score: 38 },
-  { id: "ASM-001", youth: "Marcus Johnson", mrn: "BHC-2026-001", type: "Intake", clinician: "Dr. Hall", date: "2026-04-05", status: "completed", score: 45 },
+  { id: "ASM-004", youth: "Synthetic Youth 002", mrn: "SYNTH-BHC-004", type: "Intake", clinician: "Demo Clinical Director", date: "2026-06-30", status: "in_progress", score: null },
+  { id: "ASM-003", youth: "Synthetic Youth 007", mrn: "SYNTH-BHC-003", type: "30-Day Review", clinician: "Demo Clinical Director", date: "2026-06-28", status: "completed", score: 42 },
+  { id: "ASM-002", youth: "Synthetic Youth 005", mrn: "SYNTH-BHC-002", type: "Intake", clinician: "QMHP-CS", date: "2026-04-12", status: "completed", score: 38 },
+  { id: "ASM-001", youth: "Synthetic Youth 001", mrn: "SYNTH-BHC-001", type: "Intake", clinician: "Demo Clinical Director", date: "2026-04-05", status: "completed", score: 45 },
 ];
 
 const CANS_DOMAINS = [

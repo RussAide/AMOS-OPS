@@ -2,12 +2,13 @@ import { describe, it, expect } from "vitest";
 
 // ─── Role System Tests ─────────────────────────────────────
 
-describe("Role System (22 canonical roles)", async () => {
+describe("Role System (36 canonical roles)", async () => {
   // Dynamic import to handle module resolution
   const rolesModule = await import("../../src/constants/roles");
 
-  it("should have exactly 22 roles", () => {
-    expect(rolesModule.ALL_ROLES.length).toBe(22);
+  it("should have exactly 36 unique roles", () => {
+    expect(rolesModule.ALL_ROLES).toHaveLength(36);
+    expect(new Set(rolesModule.ALL_ROLES).size).toBe(36);
   });
 
   it("should have super-admin as first role", () => {
@@ -40,13 +41,16 @@ describe("Role System (22 canonical roles)", async () => {
     expect(roles).toContain("billing-specialist");
   });
 
-  it("should have ROLE_DEFINITIONS for all 22 roles", () => {
-    expect(rolesModule.ROLE_DEFINITIONS.length).toBe(22);
+  it("should have one ROLE_DEFINITION for every role", () => {
+    expect(rolesModule.ROLE_DEFINITIONS).toHaveLength(rolesModule.ALL_ROLES.length);
+    expect(rolesModule.ROLE_DEFINITIONS.map((role) => role.id).sort()).toEqual(
+      [...rolesModule.ALL_ROLES].sort(),
+    );
   });
 
-  it("should have PERMISSION_MATRIX for all 22 roles", () => {
+  it("should have one PERMISSION_MATRIX entry for every role", () => {
     const keys = Object.keys(rolesModule.PERMISSION_MATRIX);
-    expect(keys.length).toBe(22);
+    expect(keys.sort()).toEqual([...rolesModule.ALL_ROLES].sort());
   });
 
   it("should have correct helper functions", () => {
@@ -76,19 +80,5 @@ describe("Role System (22 canonical roles)", async () => {
     expect(perms.canViewAdmin).toBe(true);
     expect(perms.canEditAdmin).toBe(true);
     expect(perms.canViewExecutive).toBe(true);
-  });
-});
-
-// ─── Build Verification ────────────────────────────────────
-
-describe("Build Verification", () => {
-  it("frontend should build without errors", () => {
-    // Verified by npm run build in CI
-    expect(true).toBe(true);
-  });
-
-  it("backend should compile without errors", () => {
-    // Verified by npm run build in CI
-    expect(true).toBe(true);
   });
 });

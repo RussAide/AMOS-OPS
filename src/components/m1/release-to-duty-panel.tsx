@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { ShieldCheck, AlertTriangle, CheckCircle, XCircle, UserCheck, FileCheck, Award } from "lucide-react";
+import { ShieldCheck, AlertTriangle, CheckCircle, XCircle, FileCheck, Award } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 
 interface RTDPanelProps {
@@ -7,7 +6,7 @@ interface RTDPanelProps {
 }
 
 export function ReleaseToDutyPanel({ personId }: RTDPanelProps) {
-  const [selectedPerson, setSelectedPerson] = useState(personId ?? "");
+  const selectedPerson = personId ?? "";
   const { data: rtd } = trpc.m1.checkReleaseToDuty.useQuery(
     { personId: selectedPerson },
     { enabled: !!selectedPerson }

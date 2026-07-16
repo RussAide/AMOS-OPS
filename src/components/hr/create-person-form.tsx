@@ -129,7 +129,7 @@ export function CreatePersonForm({ onCreated }: { onCreated?: () => void }) {
                 id="cp-first"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                placeholder="e.g. Marcus"
+                placeholder="e.g. Synthetic-Person-001"
               />
             </div>
             <div className="space-y-1.5">

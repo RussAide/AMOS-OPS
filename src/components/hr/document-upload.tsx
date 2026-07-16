@@ -60,7 +60,6 @@ export function DocumentUpload({ personId, moduleId, recordName, onUploaded, upl
         });
 
         // Invalidate queries
-        utils.documents.list.invalidate();
         utils.hr.listPeople.invalidate();
 
         setUploaded(true);
@@ -68,9 +67,9 @@ export function DocumentUpload({ personId, moduleId, recordName, onUploaded, upl
           setUploaded(false);
           onUploaded?.();
         }, 1500);
-      } catch (err: any) {
+      } catch (err) {
         console.error("[Upload] Error:", err);
-        setError(err.message || "Upload failed");
+        setError(err instanceof Error ? err.message : "Upload failed");
         setTimeout(() => setError(""), 3000);
       } finally {
         setUploading(false);

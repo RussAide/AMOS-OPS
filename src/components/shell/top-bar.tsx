@@ -1,18 +1,24 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Search, Bell, BellRing, CheckCheck, User, LogOut, LogIn, Menu, X } from "lucide-react";
+import {
+  Search,
+  Bell,
+  BellRing,
+  CheckCheck,
+  User,
+  LogOut,
+  LogIn,
+  Menu,
+  X,
+} from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { useNotifications, formatTimeAgo, getNotificationColor, getNotificationBg } from "@/context/notification-context";
-
-const ROLE_COLOR: Record<string, string> = {
-  administrator: "#DC2626",
-  "clinical-director": "#2563EB",
-  supervisor: "#D97706",
-  "hr-director": "#245C5A",
-  "qa-officer": "#7C3AED",
-  "gro-staff": "#059669",
-  "training-coordinator": "#0891B2",
-  "operations-manager": "#EA580C",
-};
+import { getRoleDef, isUserRole } from "@/constants/roles";
+import {
+  useNotifications,
+  formatTimeAgo,
+  getNotificationColor,
+  getNotificationBg,
+  type AppNotification,
+} from "@/context/notification-context";
 
 interface TopBarProps {
   onMenuToggle?: () => void;
@@ -24,139 +30,135 @@ function SafeNotificationItem({
   n,
   onMarkRead,
 }: {
-  n: Record<string, any>
-  onMarkRead: (id: string) => void
+  n: AppNotification;
+  onMarkRead: (id: string) => void;
 }) {
-  try {
-    const id = n?.id || "unknown"
-    const type = n?.type || "system"
-    const title = n?.title || "Notification"
-    const message = n?.message || ""
-    const read = !!n?.read
-    const timestamp = n?.timestamp || new Date().toISOString()
+  const id = n.id;
+  const type = n.type;
+  const title = n.title;
+  const message = n.message;
+  const read = n.read;
+  const timestamp = n.timestamp;
 
-    return (
+  return (
+    <div
+      className="flex items-start gap-3 px-4 py-3 border-b cursor-pointer transition-all hover:bg-gray-50"
+      style={{
+        borderColor: "var(--card-border, #E2E8F0)",
+        backgroundColor: read ? "transparent" : getNotificationBg(type),
+      }}
+      onClick={() => onMarkRead(id)}
+    >
       <div
-        key={id}
-        className="flex items-start gap-3 px-4 py-3 border-b cursor-pointer transition-all hover:bg-gray-50"
-        style={{
-          borderColor: "var(--card-border, #E2E8F0)",
-          backgroundColor: read ? "transparent" : getNotificationBg(type),
-        }}
-        onClick={() => onMarkRead(String(id))}
-      >
-        <div
-          className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0"
-          style={{ backgroundColor: getNotificationColor(type) }}
-        />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p
-              className="text-[12px] font-semibold"
-              style={{ color: read ? "var(--topbar-title)" : "#245C5A" }}
-            >
-              {title}
-            </p>
-            {!read && (
-              <span
-                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                style={{ backgroundColor: "#245C5A" }}
-              />
-            )}
-          </div>
-          {message && (
-            <p
-              className="text-[11px] mt-0.5 leading-relaxed"
-              style={{ color: "var(--topbar-subtitle)" }}
-            >
-              {message}
-            </p>
-          )}
-          <p className="text-[10px] mt-1" style={{ color: "#94A3B8" }}>
-            {formatTimeAgo(timestamp)}
+        className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0"
+        style={{ backgroundColor: getNotificationColor(type) }}
+      />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p
+            className="text-[12px] font-semibold"
+            style={{ color: read ? "var(--topbar-title)" : "#245C5A" }}
+          >
+            {title}
           </p>
+          {!read && (
+            <span
+              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+              style={{ backgroundColor: "#245C5A" }}
+            />
+          )}
         </div>
+        {message && (
+          <p
+            className="text-[11px] mt-0.5 leading-relaxed"
+            style={{ color: "var(--topbar-subtitle)" }}
+          >
+            {message}
+          </p>
+        )}
+        <p className="text-[10px] mt-1" style={{ color: "#94A3B8" }}>
+          {formatTimeAgo(timestamp)}
+        </p>
       </div>
-    )
-  } catch {
-    // If a single notification fails to render, skip it
-    return null
-  }
+    </div>
+  );
 }
 
 export function TopBar({ onMenuToggle, menuOpen }: TopBarProps) {
-  const { user, logout } = useAuth()
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications()
-  const [showNotifMenu, setShowNotifMenu] = useState(false)
-  const [showUserMenu, setShowUserMenu] = useState(false)
-  const notifMenuRef = useRef<HTMLDivElement>(null)
-  const userMenuRef = useRef<HTMLDivElement>(null)
-  const roleColor = ROLE_COLOR[user?.role ?? "staff"] ?? "#6B7280"
-  const roleLabel = user?.role
-    ? user.role.replace(/_/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase())
-    : "Guest"
+  const { user, logout, workspace, canSwitchWorkspace, setWorkspace } =
+    useAuth();
+  const { notifications, unreadCount, markAsRead, markAllAsRead } =
+    useNotifications();
+  const [showNotifMenu, setShowNotifMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const notifMenuRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const roleDefinition =
+    user?.role && isUserRole(user.role) ? getRoleDef(user.role) : undefined;
+  const roleColor = roleDefinition?.badgeColor ?? "#6B7280";
+  const roleLabel = roleDefinition?.label ?? "Guest";
 
   // Close menus on escape key
   useEffect(() => {
     function handleEsc(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        setShowNotifMenu(false)
-        setShowUserMenu(false)
+        setShowNotifMenu(false);
+        setShowUserMenu(false);
       }
     }
-    document.addEventListener("keydown", handleEsc)
-    return () => document.removeEventListener("keydown", handleEsc)
-  }, [])
+    document.addEventListener("keydown", handleEsc);
+    return () => document.removeEventListener("keydown", handleEsc);
+  }, []);
 
   // Click-outside handler — wrapped in useCallback to avoid re-registers
   const handleClickOutside = useCallback((e: MouseEvent) => {
-    const target = e.target as Node
+    const target = e.target as Node;
     if (notifMenuRef.current && !notifMenuRef.current.contains(target)) {
-      setShowNotifMenu(false)
+      setShowNotifMenu(false);
     }
     if (userMenuRef.current && !userMenuRef.current.contains(target)) {
-      setShowUserMenu(false)
+      setShowUserMenu(false);
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [handleClickOutside])
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [handleClickOutside]);
 
   // Defensive: ensure notifications is always an array
-  const safeNotifications = Array.isArray(notifications) ? notifications : []
-  const safeUnreadCount = typeof unreadCount === "number" ? unreadCount : 0
+  const safeNotifications = Array.isArray(notifications) ? notifications : [];
+  const safeUnreadCount = typeof unreadCount === "number" ? unreadCount : 0;
 
   const handleToggleNotif = useCallback(() => {
-    setShowNotifMenu((prev) => !prev)
-    setShowUserMenu(false)
-  }, [])
+    setShowNotifMenu((prev) => !prev);
+    setShowUserMenu(false);
+  }, []);
 
   const handleToggleUser = useCallback(() => {
-    setShowUserMenu((prev) => !prev)
-    setShowNotifMenu(false)
-  }, [])
+    setShowUserMenu((prev) => !prev);
+    setShowNotifMenu(false);
+  }, []);
 
   const handleMarkRead = useCallback(
     (id: string) => {
       try {
-        markAsRead(id)
+        markAsRead(id);
       } catch (err) {
-        console.error("[TopBar] markAsRead failed:", err)
+        console.error("[TopBar] markAsRead failed:", err);
       }
-      setShowNotifMenu(false)
+      setShowNotifMenu(false);
     },
-    [markAsRead]
-  )
+    [markAsRead],
+  );
 
   const handleMarkAllRead = useCallback(() => {
     try {
-      markAllAsRead()
+      markAllAsRead();
     } catch (err) {
-      console.error("[TopBar] markAllAsRead failed:", err)
+      console.error("[TopBar] markAllAsRead failed:", err);
     }
-  }, [markAllAsRead])
+  }, [markAllAsRead]);
 
   return (
     <header
@@ -172,19 +174,33 @@ export function TopBar({ onMenuToggle, menuOpen }: TopBarProps) {
           onClick={onMenuToggle}
           className="lg:hidden flex items-center justify-center w-10 h-10 rounded-lg border transition-all flex-shrink-0"
           style={{
-            backgroundColor: menuOpen ? "#F0FDFA" : "var(--role-badge-bg, #FFFFFF)",
-            borderColor: menuOpen ? "#245C5A" : "var(--role-badge-border, #E2E8F0)",
+            backgroundColor: menuOpen
+              ? "#F0FDFA"
+              : "var(--role-badge-bg, #FFFFFF)",
+            borderColor: menuOpen
+              ? "#245C5A"
+              : "var(--role-badge-border, #E2E8F0)",
           }}
           aria-label="Toggle menu"
         >
-          {menuOpen ? <X size={18} style={{ color: "#245C5A" }} /> : <Menu size={18} style={{ color: "#64748B" }} />}
+          {menuOpen ? (
+            <X size={18} style={{ color: "#245C5A" }} />
+          ) : (
+            <Menu size={18} style={{ color: "#64748B" }} />
+          )}
         </button>
 
         <div className="flex flex-col min-w-0">
-          <span className="text-[16px] font-semibold leading-tight truncate" style={{ color: "var(--topbar-title)" }}>
+          <span
+            className="text-[16px] font-semibold leading-tight truncate"
+            style={{ color: "var(--topbar-title)" }}
+          >
             AMOS Intranet
           </span>
-          <span className="text-[13px] leading-tight truncate hidden sm:block" style={{ color: "var(--topbar-subtitle)" }}>
+          <span
+            className="text-[13px] leading-tight truncate hidden sm:block"
+            style={{ color: "var(--topbar-subtitle)" }}
+          >
             {user?.department ?? "Behavioral Health Center"}
           </span>
         </div>
@@ -192,9 +208,48 @@ export function TopBar({ onMenuToggle, menuOpen }: TopBarProps) {
 
       {/* ─── Center: Role badge ─── */}
       <div className="hidden lg:flex items-center gap-2 flex-shrink-0">
+        {canSwitchWorkspace ? (
+          <div
+            className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5"
+            aria-label="Workspace selector"
+          >
+            {(["operational", "training"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setWorkspace(option)}
+                className="rounded-md px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide"
+                style={{
+                  backgroundColor:
+                    workspace === option
+                      ? option === "training"
+                        ? "#FEF3C7"
+                        : "#E6F4F1"
+                      : "transparent",
+                  color:
+                    workspace === option
+                      ? option === "training"
+                        ? "#92400E"
+                        : "#245C5A"
+                      : "#64748B",
+                }}
+              >
+                {option === "training" ? "Training · No PHI" : "Operational"}
+              </button>
+            ))}
+          </div>
+        ) : workspace === "training" ? (
+          <span className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+            Training · No PHI
+          </span>
+        ) : null}
         <span
           className="px-2.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide"
-          style={{ backgroundColor: roleColor + "15", color: roleColor, border: `1px solid ${roleColor}30` }}
+          style={{
+            backgroundColor: roleColor + "15",
+            color: roleColor,
+            border: `1px solid ${roleColor}30`,
+          }}
         >
           {roleLabel}
         </span>
@@ -208,8 +263,12 @@ export function TopBar({ onMenuToggle, menuOpen }: TopBarProps) {
             onClick={handleToggleNotif}
             className="relative flex items-center justify-center w-9 h-9 lg:w-10 lg:h-10 rounded-lg border transition-all"
             style={{
-              backgroundColor: showNotifMenu ? "#F0FDFA" : "var(--role-badge-bg, #FFFFFF)",
-              borderColor: showNotifMenu ? "#245C5A" : "var(--role-badge-border, #E2E8F0)",
+              backgroundColor: showNotifMenu
+                ? "#F0FDFA"
+                : "var(--role-badge-bg, #FFFFFF)",
+              borderColor: showNotifMenu
+                ? "#245C5A"
+                : "var(--role-badge-border, #E2E8F0)",
             }}
           >
             {safeUnreadCount > 0 ? (
@@ -242,7 +301,10 @@ export function TopBar({ onMenuToggle, menuOpen }: TopBarProps) {
               >
                 <div className="flex items-center gap-2">
                   <Bell size={15} style={{ color: "#245C5A" }} />
-                  <p className="text-[13px] font-semibold" style={{ color: "var(--topbar-title)" }}>
+                  <p
+                    className="text-[13px] font-semibold"
+                    style={{ color: "var(--topbar-title)" }}
+                  >
                     Notifications
                   </p>
                   {safeUnreadCount > 0 && (
@@ -268,22 +330,33 @@ export function TopBar({ onMenuToggle, menuOpen }: TopBarProps) {
                 {safeNotifications.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center">
                     <Bell size={24} style={{ color: "#CBD5E1" }} />
-                    <p className="text-[12px] mt-2" style={{ color: "#94A3B8" }}>
+                    <p
+                      className="text-[12px] mt-2"
+                      style={{ color: "#94A3B8" }}
+                    >
                       No notifications
                     </p>
                   </div>
                 ) : (
                   safeNotifications.map((n, i) => (
-                    <SafeNotificationItem key={n?.id ?? i} n={n} onMarkRead={handleMarkRead} />
+                    <SafeNotificationItem
+                      key={n?.id ?? i}
+                      n={n}
+                      onMarkRead={handleMarkRead}
+                    />
                   ))
                 )}
               </div>
               <div
                 className="px-4 py-2 border-t flex-shrink-0 text-center"
-                style={{ borderColor: "var(--card-border, #E2E8F0)", backgroundColor: "#F8FAFC" }}
+                style={{
+                  borderColor: "var(--card-border, #E2E8F0)",
+                  backgroundColor: "#F8FAFC",
+                }}
               >
                 <p className="text-[10px]" style={{ color: "#94A3B8" }}>
-                  {safeNotifications.filter((n) => !n?.read).length} unread of {safeNotifications.length} total
+                  {safeNotifications.filter((n) => !n?.read).length} unread of{" "}
+                  {safeNotifications.length} total
                 </p>
               </div>
             </div>
@@ -296,7 +369,10 @@ export function TopBar({ onMenuToggle, menuOpen }: TopBarProps) {
           style={{ backgroundColor: "var(--search-bg)" }}
         >
           <Search size={16} style={{ color: "var(--search-text)" }} />
-          <span className="text-[14px] flex-1" style={{ color: "var(--search-text)" }}>
+          <span
+            className="text-[14px] flex-1"
+            style={{ color: "var(--search-text)" }}
+          >
             Search workspaces
           </span>
           <kbd
@@ -313,8 +389,12 @@ export function TopBar({ onMenuToggle, menuOpen }: TopBarProps) {
             onClick={handleToggleUser}
             className="flex items-center justify-center w-9 h-9 lg:w-10 lg:h-10 rounded-lg border transition-all"
             style={{
-              backgroundColor: showUserMenu ? "#F0FDFA" : "var(--role-badge-bg, #FFFFFF)",
-              borderColor: showUserMenu ? "#245C5A" : "var(--role-badge-border, #E2E8F0)",
+              backgroundColor: showUserMenu
+                ? "#F0FDFA"
+                : "var(--role-badge-bg, #FFFFFF)",
+              borderColor: showUserMenu
+                ? "#245C5A"
+                : "var(--role-badge-border, #E2E8F0)",
             }}
           >
             <User size={16} style={{ color: user ? "#245C5A" : "#94A3B8" }} />
@@ -333,30 +413,48 @@ export function TopBar({ onMenuToggle, menuOpen }: TopBarProps) {
                 <>
                   <div
                     className="px-4 py-3 border-b"
-                    style={{ borderColor: "var(--card-border, #E2E8F0)", backgroundColor: "#F8FAFC" }}
+                    style={{
+                      borderColor: "var(--card-border, #E2E8F0)",
+                      backgroundColor: "#F8FAFC",
+                    }}
                   >
-                    <p className="text-[13px] font-semibold" style={{ color: "var(--topbar-title)" }}>
+                    <p
+                      className="text-[13px] font-semibold"
+                      style={{ color: "var(--topbar-title)" }}
+                    >
                       {user.firstName} {user.lastName}
                     </p>
-                    <p className="text-[11px] mt-0.5 truncate" style={{ color: "var(--topbar-subtitle)" }}>
+                    <p
+                      className="text-[11px] mt-0.5 truncate"
+                      style={{ color: "var(--topbar-subtitle)" }}
+                    >
                       {user.email}
                     </p>
                     <div className="flex items-center gap-1.5 mt-1.5">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: roleColor }} />
-                      <span className="text-[10px] font-medium" style={{ color: roleColor }}>
+                      <div
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: roleColor }}
+                      />
+                      <span
+                        className="text-[10px] font-medium"
+                        style={{ color: roleColor }}
+                      >
                         {roleLabel}
                       </span>
                     </div>
                   </div>
                   <button
                     onClick={() => {
-                      logout()
-                      setShowUserMenu(false)
+                      logout();
+                      setShowUserMenu(false);
                     }}
                     className="w-full flex items-center gap-2 px-4 py-2.5 text-left transition-all hover:bg-red-50"
                   >
                     <LogOut size={14} style={{ color: "#DC2626" }} />
-                    <span className="text-[13px] font-medium" style={{ color: "#DC2626" }}>
+                    <span
+                      className="text-[13px] font-medium"
+                      style={{ color: "#DC2626" }}
+                    >
                       Sign Out
                     </span>
                   </button>
@@ -365,7 +463,10 @@ export function TopBar({ onMenuToggle, menuOpen }: TopBarProps) {
                 <>
                   <div
                     className="px-4 py-3 border-b"
-                    style={{ borderColor: "var(--card-border, #E2E8F0)", backgroundColor: "#F8FAFC" }}
+                    style={{
+                      borderColor: "var(--card-border, #E2E8F0)",
+                      backgroundColor: "#F8FAFC",
+                    }}
                   >
                     <p
                       className="text-[11px] font-semibold uppercase tracking-wider"
@@ -376,13 +477,16 @@ export function TopBar({ onMenuToggle, menuOpen }: TopBarProps) {
                   </div>
                   <button
                     onClick={() => {
-                      window.location.hash = "/login"
-                      setShowUserMenu(false)
+                      window.location.hash = "/login";
+                      setShowUserMenu(false);
                     }}
                     className="w-full flex items-center gap-2 px-4 py-2.5 text-left transition-all hover:bg-[#F0FDFA]"
                   >
                     <LogIn size={14} style={{ color: "#245C5A" }} />
-                    <span className="text-[13px] font-medium" style={{ color: "#245C5A" }}>
+                    <span
+                      className="text-[13px] font-medium"
+                      style={{ color: "#245C5A" }}
+                    >
                       Sign In
                     </span>
                   </button>
@@ -393,5 +497,5 @@ export function TopBar({ onMenuToggle, menuOpen }: TopBarProps) {
         </div>
       </div>
     </header>
-  )
+  );
 }

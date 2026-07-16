@@ -240,7 +240,7 @@ CREATE TABLE sessions (
 {
   "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "username": "ops.admin",
-  "email": "admin@amos-ops.internal",
+  "email": "admin@example.invalid",
   "password_hash": "$2b$12$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
   "display_name": "Operations Administrator",
   "role_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",

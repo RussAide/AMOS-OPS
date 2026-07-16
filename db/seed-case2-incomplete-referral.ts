@@ -15,6 +15,9 @@
 
 import { sqlite } from "../api/queries/connection";
 import { randomUUID } from "crypto";
+import { assertSyntheticSeedAllowed } from "./seed-guard";
+
+assertSyntheticSeedAllowed({ scriptName: "db/seed-case2-incomplete-referral.ts" });
 
 // ─── Helpers ───────────────────────────────────────────────────
 
@@ -36,9 +39,9 @@ const daysFrom = (n: number) => {
 
 // ─── Actor IDs ─────────────────────────────────────────────────
 
-const ACTOR_INTAKE_COORD = "pilot-intake-coordinator@adolbi.com";
-const ACTOR_SYSTEM = "system@adolbi.com";
-const ACTOR_GUARDIAN = "parent@email.com";
+const ACTOR_INTAKE_COORD = "pilot-intake-coordinator@amos-ops.invalid";
+const ACTOR_SYSTEM = "system@amos-ops.invalid";
+const ACTOR_GUARDIAN = "guardian.case2@example.invalid";
 
 // ═══════════════════════════════════════════════════════════════
 // STEP 1: Create Patient B — Youth Profile
@@ -47,11 +50,11 @@ const ACTOR_GUARDIAN = "parent@email.com";
 console.log("[Case2] Step 1: Creating Patient B youth profile...");
 
 const patientBId = randomUUID();
-const patientBMRN = "MRN-C2-20250705-001";
-const patientBName = "Maya Thompson";
+const patientBMRN = "SYNTH-CASE2-RECORD-001";
+const patientBName = "Synthetic Youth Case-002";
 
 // Age calculation: 14yo, DOB = July 5, 2011
-const dob = "2011-07-05";
+const dob = "2011-01-01";
 
 sqlite.prepare(`
   INSERT OR IGNORE INTO youth_profiles (
@@ -65,22 +68,22 @@ sqlite.prepare(`
 `).run(
   patientBId,
   patientBMRN,
-  "Maya",
-  "Thompson",
+  "Synthetic",
+  "Case-002",
   dob,
   14,
   "female",
-  "Angela Thompson",    // guardian1
+  "Synthetic Guardian 15",    // guardian1
   "Mother",
-  "(512) 555-0142",
-  "angela.thompson@email.com",
-  "Marcus Thompson",    // guardian2
+  "+1-555-0101",
+  "guardian.case2@example.invalid",
+  "Synthetic Guardian 14",    // guardian2
   "Father",
-  "(512) 555-0143",
+  "+1-555-0102",
   "school",             // referral source
-  "Austin Independent School District - Counseling Department",
-  "(512) 555-0200",
-  "Ms. Jennifer Walsh, School Counselor",
+  "Synthetic School Referral Office",
+  "+1-555-0103",
+  "Synthetic School Counselor",
   daysAgo(10),          // referral date = 10 days ago
   "referral_pending",   // status
   "not_yet_determined", // level of care
@@ -113,7 +116,7 @@ sqlite.prepare(`
     { name: "clinical_criteria_checklist", required: true, description: "Clinical criteria checklist for admission" },
   ]),
   JSON.stringify([
-    { condition: "unscreened_over_48h", triggerDescription: ">48 hours unscreened", target: "supervisor", maxHours: 48 },
+    { condition: "unscreened_over_48h", triggerDescription: ">48 hours unscreened", target: "clinical-supervisor", maxHours: 48 },
     { condition: "clinical_risk_detected", triggerDescription: "Clinical risk detected during screening", target: "Treatment Director" },
   ]),
   "patient",
@@ -610,7 +613,7 @@ console.log("══════════════════════�
 console.log("  PILOT CASE 2: INCOMPLETE REFERRAL — SEED COMPLETE");
 console.log("═══════════════════════════════════════════════════════════════");
 console.log("");
-console.log("Patient B: Maya Thompson (14yo female, behavioral)");
+console.log("Patient B: Synthetic Youth Case-002 (14yo female, behavioral)");
 console.log(`  MRN:        ${patientBMRN}`);
 console.log(`  Youth ID:   ${patientBId}`);
 console.log(`  Intake ID:  ${intakeId}`);

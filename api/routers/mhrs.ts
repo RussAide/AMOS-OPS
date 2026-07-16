@@ -15,6 +15,49 @@ import { randomUUID } from "crypto";
 // Supportive Interventions, Community Integration. H2017 billing.
 // ══════════════════════════════════════════════════════════════
 
+export const M41C_MHRS_LEGACY_CANS_INPUT_QUARANTINED =
+  "M41C_MHRS_LEGACY_CANS_INPUT_QUARANTINED" as const;
+
+export function quarantineMhrsLegacyCansInput(): never {
+  throw new Error(M41C_MHRS_LEGACY_CANS_INPUT_QUARANTINED);
+}
+
+export function assertMhrsServicePlanLegacyCansInputsAbsent(input: {
+  cansDomainPrimary?: unknown;
+  cansDomainSecondary?: unknown;
+  cansBaselineScore?: unknown;
+  cansTargetScore?: unknown;
+}): void {
+  if (
+    input.cansDomainPrimary !== undefined ||
+    input.cansDomainSecondary !== undefined ||
+    input.cansBaselineScore !== undefined ||
+    input.cansTargetScore !== undefined
+  ) {
+    quarantineMhrsLegacyCansInput();
+  }
+}
+
+export function assertMhrsEncounterLegacyCansInputsAbsent(input: {
+  cansDomainTargeted?: unknown;
+  cansScoreCurrent?: unknown;
+}): void {
+  if (
+    input.cansDomainTargeted !== undefined ||
+    input.cansScoreCurrent !== undefined
+  ) {
+    quarantineMhrsLegacyCansInput();
+  }
+}
+
+export function assertMhrsSkillsAssessmentLegacyCansInputsAbsent(input: {
+  cansDomain?: unknown;
+}): void {
+  if (input.cansDomain !== undefined) {
+    quarantineMhrsLegacyCansInput();
+  }
+}
+
 export const mhrsRouter = createRouter({
 
   // ════════════════════════════════════════════════════════════
@@ -24,13 +67,13 @@ export const mhrsRouter = createRouter({
   listServicePlans: authedQuery
     .input(z.object({
       youthId: z.string().optional(),
-      status: z.string().optional(),
+      status: z.enum(["draft", "active", "under_review", "approved", "superseded", "closed"]).optional(),
       therapistId: z.string().optional(),
       overdueReview: z.boolean().optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.youthId) conditions.push(eq(mhrsServicePlans.youthId, input.youthId));
       if (input?.status) conditions.push(eq(mhrsServicePlans.planStatus, input.status));
       if (input?.therapistId) conditions.push(eq(mhrsServicePlans.therapistId, input.therapistId));
@@ -85,6 +128,7 @@ export const mhrsRouter = createRouter({
       cansTargetScore: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
+      assertMhrsServicePlanLegacyCansInputsAbsent(input);
       const db = getDb();
       const id = randomUUID();
       const now = new Date().toISOString();
@@ -105,10 +149,6 @@ export const mhrsRouter = createRouter({
         version: 1,
         intakeDate: input.intakeDate,
         planDueDate: planDue,
-        cansDomainPrimary: input.cansDomainPrimary ?? null,
-        cansDomainSecondary: input.cansDomainSecondary ?? null,
-        cansBaselineScore: input.cansBaselineScore ?? null,
-        cansTargetScore: input.cansTargetScore ?? null,
         createdAt: now,
         updatedAt: now,
       });
@@ -179,13 +219,13 @@ export const mhrsRouter = createRouter({
       youthId: z.string().optional(),
       servicePlanId: z.string().optional(),
       therapistId: z.string().optional(),
-      mhrsCategory: z.string().optional(),
+      mhrsCategory: z.enum(["psychosocial_rehabilitation", "skills_training", "supportive_interventions", "community_integration"]).optional(),
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.youthId) conditions.push(eq(mhrsEncounters.youthId, input.youthId));
       if (input?.servicePlanId) conditions.push(eq(mhrsEncounters.servicePlanId, input.servicePlanId));
       if (input?.therapistId) conditions.push(eq(mhrsEncounters.therapistId, input.therapistId));
@@ -223,6 +263,7 @@ export const mhrsRouter = createRouter({
       cansScoreCurrent: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
+      assertMhrsEncounterLegacyCansInputsAbsent(input);
       const db = getDb();
       const id = randomUUID();
       const now = new Date().toISOString();
@@ -241,7 +282,6 @@ export const mhrsRouter = createRouter({
         unitsBilled: input.unitsBilled,
         minutesDelivered: input.minutesDelivered,
         mhrsCategory: input.mhrsCategory,
-        cansDomainTargeted: input.cansDomainTargeted ?? null,
         serviceDescription: input.serviceDescription,
         skillsTaught: input.skillsTaught ?? null,
         youthProgress: input.youthProgress ?? null,
@@ -249,7 +289,6 @@ export const mhrsRouter = createRouter({
         homeworkAssignment: input.homeworkAssignment ?? null,
         nextSteps: input.nextSteps ?? null,
         goalProgress: input.goalProgress ?? "no_change",
-        cansScoreCurrent: input.cansScoreCurrent ?? null,
         documentationStatus: "draft",
         createdAt: now,
         updatedAt: now,
@@ -280,7 +319,7 @@ export const mhrsRouter = createRouter({
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.youthId) conditions.push(eq(mhrsSkillsAssessments.youthId, input.youthId));
       if (input?.servicePlanId) conditions.push(eq(mhrsSkillsAssessments.servicePlanId, input.servicePlanId));
 
@@ -299,7 +338,7 @@ export const mhrsRouter = createRouter({
       assessedBy: z.string(),
       assessedById: z.string().optional(),
       assessmentDate: z.string(),
-      cansDomain: z.enum(["behavioral_emotional", "risk_behaviors", "functioning", "strengths", "caregiver_resources", "acculturation"]),
+      cansDomain: z.enum(["behavioral_emotional", "risk_behaviors", "functioning", "strengths", "caregiver_resources", "acculturation"]).optional(),
       skillAreasJson: z.string(), // [{area, baselineScore, currentScore, targetScore}]
       overallBaseline: z.number().optional(),
       overallCurrent: z.number().optional(),
@@ -308,6 +347,7 @@ export const mhrsRouter = createRouter({
       readinessForTransition: z.enum(["not_ready", "approaching", "ready", "transitioned"]).optional(),
     }))
     .mutation(async ({ input }) => {
+      assertMhrsSkillsAssessmentLegacyCansInputsAbsent(input);
       const db = getDb();
       const id = randomUUID();
       const now = new Date().toISOString();
@@ -321,7 +361,9 @@ export const mhrsRouter = createRouter({
         assessedBy: input.assessedBy,
         assessedById: input.assessedById ?? null,
         assessmentDate: input.assessmentDate,
-        cansDomain: input.cansDomain,
+        // Compatibility value for the inherited non-null storage column only.
+        // It is fixed, not client-derived, and is never interpreted or scored.
+        cansDomain: "functioning",
         skillAreasJson: input.skillAreasJson,
         overallBaseline: input.overallBaseline ?? null,
         overallCurrent: input.overallCurrent ?? null,
@@ -428,9 +470,9 @@ export const mhrsRouter = createRouter({
     // Seed service plan
     await db.insert(mhrsServicePlans).values([
       {
-        id: "mhrs-sp-001", youthId: "youth-001", youthName: "Marcus Johnson", mrn: "MRN-2026-001",
+        id: "mhrs-sp-001", youthId: "youth-001", youthName: "Synthetic Youth 001", mrn: "SYNTH-REC-001",
         mhrsSupervisorId: "user-mhrs-001", mhrsSupervisorName: "Dr. Rebecca Torres",
-        therapistId: "user-tx-001", therapistName: "Carlos Mendez",
+        therapistId: "user-tx-001", therapistName: "Synthetic-Person-004 Mendez",
         planStatus: "active", version: 1,
         intakeDate: "2026-06-15", planDueDate: "2026-06-29", planCompletedDate: "2026-06-27",
         nextReviewDue: "2026-09-27", lastReviewDate: null,
@@ -458,13 +500,9 @@ export const mhrsRouter = createRouter({
           { objective: "Engage with community peers for 15+ minutes without prompting", targetDate: "2026-08-30" },
         ]),
         cat4CommunityCompleted: false,
-        cansDomainPrimary: "behavioral_emotional",
-        cansDomainSecondary: "functioning",
-        cansBaselineScore: 28,
-        cansTargetScore: 15,
-        preparedBy: "Carlos Mendez", preparedAt: "2026-06-27",
+        preparedBy: "Synthetic-Person-004 Mendez", preparedAt: "2026-06-27",
         reviewedBy: "Dr. Rebecca Torres", reviewedAt: "2026-06-28",
-        approvedBy: "Dr. Hall", approvedAt: "2026-06-28",
+        approvedBy: "Demo Clinical Director", approvedAt: "2026-06-28",
         createdAt: now, updatedAt: now,
       },
     ]).onConflictDoNothing();
@@ -472,94 +510,50 @@ export const mhrsRouter = createRouter({
     // Seed encounters
     await db.insert(mhrsEncounters).values([
       {
-        id: "mhrs-enc-001", youthId: "youth-001", youthName: "Marcus Johnson", mrn: "MRN-2026-001",
-        servicePlanId: "mhrs-sp-001", therapistId: "user-tx-001", therapistName: "Carlos Mendez",
+        id: "mhrs-enc-001", youthId: "youth-001", youthName: "Synthetic Youth 001", mrn: "SYNTH-REC-001",
+        servicePlanId: "mhrs-sp-001", therapistId: "user-tx-001", therapistName: "Synthetic-Person-004 Mendez",
         encounterDate: "2026-06-20", encounterType: "individual_skills", mhrsCategory: "skills_training",
         billingCode: "H2017", unitsBilled: 4, minutesDelivered: 60,
-        cansDomainTargeted: "behavioral_emotional",
         serviceDescription: "Individual skills training session focused on emotional regulation techniques.",
         skillsTaught: "Feelings thermometer, deep breathing (4-7-8 technique), grounding using 5 senses",
         youthProgress: "Youth was able to identify 3 personal triggers and practiced breathing technique twice.",
         homeworkAssignment: "Practice breathing technique daily — mark on coping skills log",
         goalProgress: "minimal_progress",
-        cansScoreCurrent: 26,
         documentationStatus: "submitted",
         createdAt: now, updatedAt: now,
       },
       {
-        id: "mhrs-enc-002", youthId: "youth-001", youthName: "Marcus Johnson", mrn: "MRN-2026-001",
-        servicePlanId: "mhrs-sp-001", therapistId: "user-tx-001", therapistName: "Carlos Mendez",
+        id: "mhrs-enc-002", youthId: "youth-001", youthName: "Synthetic Youth 001", mrn: "SYNTH-REC-001",
+        servicePlanId: "mhrs-sp-001", therapistId: "user-tx-001", therapistName: "Synthetic-Person-004 Mendez",
         encounterDate: "2026-06-27", encounterType: "group_skills", mhrsCategory: "psychosocial_rehabilitation",
         billingCode: "H2017", unitsBilled: 2, minutesDelivered: 90,
-        cansDomainTargeted: "functioning",
         serviceDescription: "Group psychoeducational session on peer communication and active listening.",
         skillsTaught: "Active listening (reflective paraphrasing), turn-taking in conversation, recognizing non-verbal cues",
         youthProgress: "Participated actively in group. Used 'I-statements' during role-play exercise.",
         goalProgress: "moderate_progress",
-        cansScoreCurrent: 24,
-        documentationStatus: "signed", signedBy: "Carlos Mendez", signedAt: "2026-06-27",
+        documentationStatus: "signed", signedBy: "Synthetic-Person-004 Mendez", signedAt: "2026-06-27",
         createdAt: now, updatedAt: now,
       },
       {
-        id: "mhrs-enc-003", youthId: "youth-001", youthName: "Marcus Johnson", mrn: "MRN-2026-001",
-        servicePlanId: "mhrs-sp-001", therapistId: "user-tx-001", therapistName: "Carlos Mendez",
+        id: "mhrs-enc-003", youthId: "youth-001", youthName: "Synthetic Youth 001", mrn: "SYNTH-REC-001",
+        servicePlanId: "mhrs-sp-001", therapistId: "user-tx-001", therapistName: "Synthetic-Person-004 Mendez",
         encounterDate: "2026-07-04", encounterType: "community_integration", mhrsCategory: "community_integration",
         billingCode: "H2017", unitsBilled: 3, minutesDelivered: 120,
-        cansDomainTargeted: "functioning",
         serviceDescription: "Supervised community outing to local recreation center. Focus on social engagement with community peers.",
         skillsTaught: "Initiating conversation with unfamiliar peers, appropriate social boundaries, community safety awareness",
         youthProgress: "Engaged with 2 community peers for 20-minute basketball game. Required one verbal prompt to initiate.",
         goalProgress: "significant_progress",
-        cansScoreCurrent: 22,
         documentationStatus: "draft",
         createdAt: now, updatedAt: now,
       },
     ]).onConflictDoNothing();
 
-    // Seed skills assessment
-    await db.insert(mhrsSkillsAssessments).values([
-      {
-        id: "mhrs-sa-001", youthId: "youth-001", youthName: "Marcus Johnson", mrn: "MRN-2026-001",
-        servicePlanId: "mhrs-sp-001",
-        assessedBy: "Carlos Mendez", assessedById: "user-tx-001",
-        assessmentDate: "2026-06-20",
-        cansDomain: "behavioral_emotional",
-        skillAreasJson: JSON.stringify([
-          { area: "Emotion identification", baselineScore: 2, currentScore: 3, targetScore: 4 },
-          { area: "Impulse control", baselineScore: 1, currentScore: 2, targetScore: 4 },
-          { area: "Stress management", baselineScore: 2, currentScore: 2, targetScore: 4 },
-          { area: "Anger management", baselineScore: 1, currentScore: 2, targetScore: 3 },
-          { area: "Coping strategy repertoire", baselineScore: 2, currentScore: 3, targetScore: 4 },
-        ]),
-        overallBaseline: 2,
-        overallCurrent: 2,
-        overallTarget: 4,
-        progressPercentage: 15,
-        readinessForTransition: "not_ready",
-        createdAt: now, updatedAt: now,
-      },
-      {
-        id: "mhrs-sa-002", youthId: "youth-001", youthName: "Marcus Johnson", mrn: "MRN-2026-001",
-        servicePlanId: "mhrs-sp-001",
-        assessedBy: "Carlos Mendez", assessedById: "user-tx-001",
-        assessmentDate: "2026-07-05",
-        cansDomain: "behavioral_emotional",
-        skillAreasJson: JSON.stringify([
-          { area: "Emotion identification", baselineScore: 2, currentScore: 4, targetScore: 4 },
-          { area: "Impulse control", baselineScore: 1, currentScore: 3, targetScore: 4 },
-          { area: "Stress management", baselineScore: 2, currentScore: 3, targetScore: 4 },
-          { area: "Anger management", baselineScore: 1, currentScore: 3, targetScore: 3 },
-          { area: "Coping strategy repertoire", baselineScore: 2, currentScore: 4, targetScore: 4 },
-        ]),
-        overallBaseline: 2,
-        overallCurrent: 3,
-        overallTarget: 4,
-        progressPercentage: 45,
-        readinessForTransition: "approaching",
-        createdAt: now, updatedAt: now,
-      },
-    ]).onConflictDoNothing();
-
-    return { success: true, message: "MHRS seeded: 1 service plan, 3 encounters (9 H2017 units), 2 skills assessments" };
+    // Governed-assessment records are intentionally not seeded. They must
+    // originate from a validated pathway and a named human review workflow.
+    return {
+      success: true,
+      message:
+        "MHRS seeded: 1 service plan and 3 encounters (9 H2017 units); governed-assessment records remain unseeded",
+    };
   }),
 });

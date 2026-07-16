@@ -1,13 +1,127 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { Cloud, RefreshCw, Users, Shield, Clock, CheckCircle, AlertTriangle, XCircle } from "lucide-react";
+import {
+  isRecord,
+  readBoolean,
+  readNullableString,
+  readNumber,
+  readString,
+  toRecords,
+} from "@/components/data/record-utils";
+
+interface EntraStatus {
+  connected: boolean;
+  tenant: string;
+  syncMode: string;
+  users: { synced: number; total: number };
+  groups: { synced: number; total: number };
+  lastSync: { startedAt: string; completedAt: string | null } | null;
+}
+
+interface EntraUser {
+  id: string;
+  display_name: string;
+  user_principal_name: string;
+  department: string;
+  job_title: string;
+  sync_status: string;
+}
+
+interface EntraGroup {
+  id: string;
+  display_name: string;
+  description: string;
+  group_type: string;
+  member_count: number;
+}
+
+interface EntraSyncHistory {
+  id: string;
+  sync_type: string;
+  status: string;
+  users_synced: number;
+  groups_synced: number;
+  started_at: string;
+  completed_at: string | null;
+}
+
+function normalizeStatus(value: unknown): EntraStatus | null {
+  if (!isRecord(value)) return null;
+  const users = isRecord(value.users) ? value.users : {};
+  const groups = isRecord(value.groups) ? value.groups : {};
+  const lastSync = isRecord(value.lastSync)
+    ? {
+        startedAt: readString(value.lastSync, "startedAt"),
+        completedAt: readNullableString(value.lastSync, "completedAt"),
+      }
+    : null;
+
+  return {
+    connected: readBoolean(value, "connected"),
+    tenant: readString(value, "tenant", "Not configured"),
+    syncMode: readString(value, "syncMode", "none"),
+    users: { synced: readNumber(users, "synced"), total: readNumber(users, "total") },
+    groups: { synced: readNumber(groups, "synced"), total: readNumber(groups, "total") },
+    lastSync,
+  };
+}
+
+function normalizeUsers(value: unknown): EntraUser[] {
+  return toRecords(value).flatMap((user) => {
+    const id = readString(user, "id");
+    if (!id) return [];
+    return [{
+      id,
+      display_name: readString(user, "display_name", "Unnamed user"),
+      user_principal_name: readString(user, "user_principal_name"),
+      department: readString(user, "department"),
+      job_title: readString(user, "job_title"),
+      sync_status: readString(user, "sync_status", "pending"),
+    }];
+  });
+}
+
+function normalizeGroups(value: unknown): EntraGroup[] {
+  return toRecords(value).flatMap((group) => {
+    const id = readString(group, "id");
+    if (!id) return [];
+    return [{
+      id,
+      display_name: readString(group, "display_name", "Unnamed group"),
+      description: readString(group, "description"),
+      group_type: readString(group, "group_type"),
+      member_count: readNumber(group, "member_count"),
+    }];
+  });
+}
+
+function normalizeHistory(value: unknown): EntraSyncHistory[] {
+  return toRecords(value).flatMap((entry) => {
+    const id = readString(entry, "id");
+    if (!id) return [];
+    return [{
+      id,
+      sync_type: readString(entry, "sync_type", "full"),
+      status: readString(entry, "status", "running"),
+      users_synced: readNumber(entry, "users_synced"),
+      groups_synced: readNumber(entry, "groups_synced"),
+      started_at: readString(entry, "started_at"),
+      completed_at: readNullableString(entry, "completed_at"),
+    }];
+  });
+}
 
 export function EntraIDPage() {
   const [activeTab, setActiveTab] = useState<"overview" | "users" | "groups" | "history">("overview");
-  const { data: status, refetch } = trpc.msgraph.status.useQuery();
-  const { data: users } = trpc.msgraph.listUsers.useQuery();
-  const { data: groups } = trpc.msgraph.listGroups.useQuery();
-  const { data: history } = trpc.msgraph.syncHistory.useQuery();
+  const { data: rawStatus, refetch } = trpc.msgraph.status.useQuery();
+  const { data: rawUsers } = trpc.msgraph.listUsers.useQuery();
+  const { data: rawGroups } = trpc.msgraph.listGroups.useQuery();
+  const { data: rawHistory } = trpc.msgraph.syncHistory.useQuery();
+  const status = normalizeStatus(rawStatus);
+  const users = normalizeUsers(rawUsers);
+  const groups = normalizeGroups(rawGroups);
+  const history = normalizeHistory(rawHistory);
 
   const syncMutation = trpc.msgraph.sync.useMutation({
     onSuccess: () => { refetch(); },
@@ -36,7 +150,7 @@ export function EntraIDPage() {
             </div>
           </div>
           <button
-            onClick={() => syncMutation.mutate({ type: "full" })}
+            onClick={() => syncMutation.mutate()}
             disabled={isSyncing}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium text-white disabled:opacity-50"
             style={{ backgroundColor: "#0078D4" }}
@@ -124,8 +238,8 @@ export function EntraIDPage() {
                 <div className="p-3 rounded-lg border" style={{ borderColor: "var(--card-border)" }}>
                   <p className="text-[12px] mb-1" style={{ color: "var(--topbar-subtitle)" }}>Quick Actions</p>
                   <div className="flex gap-2 mt-1">
-                    <button onClick={() => syncMutation.mutate({ type: "users" })} disabled={isSyncing} className="text-[11px] px-2 py-1 rounded border disabled:opacity-50" style={{ borderColor: "var(--card-border)" }}>Sync Users</button>
-                    <button onClick={() => syncMutation.mutate({ type: "groups" })} disabled={isSyncing} className="text-[11px] px-2 py-1 rounded border disabled:opacity-50" style={{ borderColor: "var(--card-border)" }}>Sync Groups</button>
+                    <button onClick={() => syncMutation.mutate()} disabled={isSyncing} className="text-[11px] px-2 py-1 rounded border disabled:opacity-50" style={{ borderColor: "var(--card-border)" }}>Sync Users</button>
+                    <button onClick={() => syncMutation.mutate()} disabled={isSyncing} className="text-[11px] px-2 py-1 rounded border disabled:opacity-50" style={{ borderColor: "var(--card-border)" }}>Sync Groups</button>
                   </div>
                 </div>
               </div>
@@ -145,7 +259,7 @@ export function EntraIDPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(users ?? []).map((u: any) => (
+                  {users.map((u) => (
                     <tr key={u.id} className="border-b" style={{ borderColor: "var(--card-border)" }}>
                       <td className="py-2 px-2 font-medium" style={{ color: "var(--topbar-title)" }}>{u.display_name}</td>
                       <td className="py-2 px-2" style={{ color: "var(--topbar-subtitle)" }}>{u.user_principal_name}</td>
@@ -161,7 +275,7 @@ export function EntraIDPage() {
                       </td>
                     </tr>
                   ))}
-                  {(!users || users.length === 0) && (
+                  {users.length === 0 && (
                     <tr><td colSpan={5} className="py-8 text-center" style={{ color: "var(--topbar-subtitle)" }}>No users synced yet. Click "Full Sync" to import from Entra ID.</td></tr>
                   )}
                 </tbody>
@@ -181,7 +295,7 @@ export function EntraIDPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(groups ?? []).map((g: any) => (
+                  {groups.map((g) => (
                     <tr key={g.id} className="border-b" style={{ borderColor: "var(--card-border)" }}>
                       <td className="py-2 px-2 font-medium" style={{ color: "var(--topbar-title)" }}>{g.display_name}</td>
                       <td className="py-2 px-2" style={{ color: "var(--topbar-subtitle)" }}>{g.description}</td>
@@ -189,7 +303,7 @@ export function EntraIDPage() {
                       <td className="py-2 px-2" style={{ color: "var(--topbar-title)" }}>{g.member_count}</td>
                     </tr>
                   ))}
-                  {(!groups || groups.length === 0) && (
+                  {groups.length === 0 && (
                     <tr><td colSpan={4} className="py-8 text-center" style={{ color: "var(--topbar-subtitle)" }}>No groups synced yet. Click "Full Sync" to import from Entra ID.</td></tr>
                   )}
                 </tbody>
@@ -211,7 +325,7 @@ export function EntraIDPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(history ?? []).map((h: any) => (
+                  {history.map((h) => (
                     <tr key={h.id} className="border-b" style={{ borderColor: "var(--card-border)" }}>
                       <td className="py-2 px-2 font-medium capitalize" style={{ color: "var(--topbar-title)" }}>{h.sync_type}</td>
                       <td className="py-2 px-2">
@@ -229,7 +343,7 @@ export function EntraIDPage() {
                       <td className="py-2 px-2" style={{ color: "var(--topbar-subtitle)" }}>{h.completed_at ? new Date(h.completed_at).toLocaleString() : "—"}</td>
                     </tr>
                   ))}
-                  {(!history || history.length === 0) && (
+                  {history.length === 0 && (
                     <tr><td colSpan={6} className="py-8 text-center" style={{ color: "var(--topbar-subtitle)" }}>No sync history yet.</td></tr>
                   )}
                 </tbody>

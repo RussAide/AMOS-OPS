@@ -1,7 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Search,
-  Filter,
   Award,
   AlertTriangle,
   CheckCircle,
@@ -13,7 +12,7 @@ import {
 
 const credentialsData = [
   {
-    employee: "Sarah Johnson",
+    employee: "Synthetic Staff 01",
     type: "RN License",
     licenseNumber: "RN-2019-TX-4821",
     issueDate: "2023-01-15",
@@ -31,7 +30,7 @@ const credentialsData = [
     daysLeft: 420,
   },
   {
-    employee: "David Park",
+    employee: "Synthetic Staff 04",
     type: "QMHP Credential",
     licenseNumber: "QMHP-2021-2056",
     issueDate: "2024-06-01",
@@ -40,7 +39,7 @@ const credentialsData = [
     daysLeft: 182,
   },
   {
-    employee: "Emily Roberts",
+    employee: "Synthetic-Person-037 Roberts",
     type: "CPI Certification",
     licenseNumber: "CPI-2023-7712",
     issueDate: "2023-11-20",
@@ -49,7 +48,7 @@ const credentialsData = [
     daysLeft: 14,
   },
   {
-    employee: "James Wilson",
+    employee: "Synthetic Staff 09",
     type: "First Aid / CPR",
     licenseNumber: "CPR-2024-AHA-3391",
     issueDate: "2024-08-05",
@@ -67,7 +66,7 @@ const credentialsData = [
     daysLeft: 360,
   },
   {
-    employee: "Marcus Lee",
+    employee: "Synthetic-Person-001 Lee",
     type: "RN License",
     licenseNumber: "RN-2018-TX-3356",
     issueDate: "2022-09-01",

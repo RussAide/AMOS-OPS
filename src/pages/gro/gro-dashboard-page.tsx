@@ -1,8 +1,7 @@
 import { trpc } from "@/providers/trpc";
 import {
   TrendingUp, Users, Handshake, Target, Megaphone, ArrowRight, Plus, X,
-  Clock, Shield, Heart, AlertTriangle, ChevronDown, ChevronUp, CheckCircle,
-  FileText, MapPin, UserCheck
+  Clock, Shield, Heart, AlertTriangle, ChevronDown, ChevronUp
 } from "lucide-react";
 import { useState } from "react";
 
@@ -858,7 +857,7 @@ export function GRODashboardPage() {
             </div>
             <div className="space-y-3">
               {(!referrals || referrals.length === 0) && <p className="text-[13px] py-4 text-center" style={{ color: "var(--topbar-subtitle)" }}>No referrals found</p>}
-              {Array.isArray(referrals) ? referrals.map((ref: any) => (
+              {Array.isArray(referrals) ? referrals.map((ref) => (
                 <div key={ref.id} className="flex items-start justify-between p-3 rounded-lg border" style={{ borderColor: "var(--card-border)" }}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -887,7 +886,7 @@ export function GRODashboardPage() {
               </h2>
               <div className="space-y-3">
                 {(!partnerships || partnerships.length === 0) && <p className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>No partnerships</p>}
-                {Array.isArray(partnerships) ? partnerships.map((p: any) => (
+                {Array.isArray(partnerships) ? partnerships.map((p) => (
                   <div key={p.id} className="p-3 rounded-lg border" style={{ borderColor: "var(--card-border)" }}>
                     <div className="flex items-center justify-between mb-1">
                       <p className="text-[13px] font-medium" style={{ color: "var(--topbar-title)" }}>{p.organization_name}</p>
@@ -906,7 +905,7 @@ export function GRODashboardPage() {
               </h2>
               <div className="space-y-3">
                 {(!campaigns || campaigns.length === 0) && <p className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>No campaigns</p>}
-                {Array.isArray(campaigns) ? campaigns.map((c: any) => (
+                {Array.isArray(campaigns) ? campaigns.map((c) => (
                   <div key={c.id} className="space-y-1">
                     <div className="flex items-center justify-between">
                       <p className="text-[13px] font-medium" style={{ color: "var(--topbar-title)" }}>{c.campaign_name}</p>
@@ -983,7 +982,7 @@ export function GRODashboardPage() {
                   <label className="block text-[12px] font-medium mb-1" style={{ color: "var(--topbar-subtitle)" }}>Email</label>
                   <input
                     type="email"
-                    placeholder="email@example.com"
+                    placeholder="email@example.invalid"
                     className="w-full rounded-lg border px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-[#245C5A]/20 min-h-[44px]"
                     style={{ borderColor: "var(--card-border)" }}
                     value={form.contactEmail}

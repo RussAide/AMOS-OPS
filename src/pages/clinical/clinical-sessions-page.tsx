@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import {
-  FileText, Search, Plus, Filter, Calendar, User, ShieldAlert, Clock, X,
+  FileText, Search, Plus, Filter, Calendar, ShieldAlert, Clock, X,
   Stethoscope
 } from "lucide-react";
 
@@ -14,10 +14,11 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Cancelled", no_show: "No Show",
 };
 const SESSION_TYPES = ["individual", "group", "family", "couples", "intake", "crisis", "telehealth"] as const;
+type SessionStatus = "scheduled" | "in_progress" | "completed" | "cancelled" | "no_show";
 
 export function ClinicalSessionsPage() {
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | SessionStatus>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 
@@ -38,7 +39,7 @@ export function ClinicalSessionsPage() {
     suicideRisk: "none" as string, homocideRisk: "none" as string, elopementRisk: "none" as string,
   });
 
-  const statuses = ["all", "scheduled", "in_progress", "completed", "cancelled", "no_show"];
+  const statuses: readonly ("all" | SessionStatus)[] = ["all", "scheduled", "in_progress", "completed", "cancelled", "no_show"];
 
   const filteredSessions = (sessionsData ?? []).filter((s) => {
     if (!search) return true;
@@ -224,13 +225,17 @@ export function ClinicalSessionsPage() {
                 if (!form.patientId || !form.sessionDate || !form.clinicianId) return;
                 createSession.mutate({
                   patientId: form.patientId, sessionDate: new Date(form.sessionDate).toISOString(),
-                  sessionType: form.sessionType as any,
+                  sessionType: form.sessionType as Parameters<typeof createSession.mutate>[0]["sessionType"],
                   durationMinutes: parseInt(form.durationMinutes) || 60,
                   chiefComplaint: form.chiefComplaint || undefined,
                   sessionNotes: form.sessionNotes || undefined,
                   clinicianId: form.clinicianId,
                   billingCode: form.billingCode || undefined,
-                  riskAssessment: { suicideRisk: form.suicideRisk as any, homocideRisk: form.homocideRisk as any, elopementRisk: form.elopementRisk as any },
+                  riskAssessment: {
+                    suicideRisk: form.suicideRisk as NonNullable<Parameters<typeof createSession.mutate>[0]["riskAssessment"]>["suicideRisk"],
+                    homocideRisk: form.homocideRisk as NonNullable<Parameters<typeof createSession.mutate>[0]["riskAssessment"]>["homocideRisk"],
+                    elopementRisk: form.elopementRisk as NonNullable<Parameters<typeof createSession.mutate>[0]["riskAssessment"]>["elopementRisk"],
+                  },
                 });
               }} disabled={createSession.isPending}
                 className="px-4 py-2 rounded-lg text-[13px] font-medium text-white disabled:opacity-50" style={{ backgroundColor: "#245C5A" }}>

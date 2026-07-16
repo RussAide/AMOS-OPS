@@ -3,9 +3,8 @@ import { PageLayout } from "@/components/shell/page-layout";
 import { trpc } from "@/providers/trpc";
 import {
   BookOpen, Search, FileText, Clock, CheckCircle, AlertTriangle,
-  Archive, Filter, ChevronRight, ExternalLink, Eye, Layers,
-  Stethoscope, Users, ShieldCheck, Building2, HardHat, ClipboardList,
-  TrendingUp, BarChart3, X,
+  Archive, ExternalLink, Eye, Layers,
+  Stethoscope, Users, ShieldCheck, Building2, HardHat, ClipboardList, X,
 } from "lucide-react";
 
 /* ─── Types ─── */
@@ -52,7 +51,7 @@ const DEMO_SOPS: SOPDocument[] = [
     title: "Crisis Intervention Protocol",
     description: "Step-by-step procedures for de-escalating behavioral crises, including physical restraint guidelines and post-incident documentation requirements.",
     category: "Clinical", version: "4.2", status: "published",
-    author: "Dr. Hall", updatedAt: "2026-06-28", effectiveDate: "2026-07-01", reviewDate: "2027-01-01",
+    author: "Demo Clinical Director", updatedAt: "2026-06-28", effectiveDate: "2026-07-01", reviewDate: "2027-01-01",
     icon: Stethoscope,
   },
   {
@@ -60,7 +59,7 @@ const DEMO_SOPS: SOPDocument[] = [
     title: "Employee Code of Conduct",
     description: "Comprehensive ethical guidelines covering professional boundaries, confidentiality, social media policy, and reporting obligations for all staff.",
     category: "HR", version: "3.1", status: "published",
-    author: "E. Russ Aideyan", updatedAt: "2026-06-25", effectiveDate: "2026-01-01", reviewDate: "2026-12-31",
+    author: "Demo Executive", updatedAt: "2026-06-25", effectiveDate: "2026-01-01", reviewDate: "2026-12-31",
     icon: Users,
   },
   {
@@ -68,7 +67,7 @@ const DEMO_SOPS: SOPDocument[] = [
     title: "HIPAA Privacy & Security Compliance",
     description: "Guidelines for handling protected health information (PHI), including access controls, breach notification procedures, and staff training requirements.",
     category: "Compliance", version: "5.0", status: "published",
-    author: "E. Russ Aideyan", updatedAt: "2026-06-20", effectiveDate: "2026-06-20", reviewDate: "2027-06-20",
+    author: "Demo Executive", updatedAt: "2026-06-20", effectiveDate: "2026-06-20", reviewDate: "2027-06-20",
     icon: ShieldCheck,
   },
   {
@@ -76,7 +75,7 @@ const DEMO_SOPS: SOPDocument[] = [
     title: "Youth Admission & Intake Procedures",
     description: "Standard procedures for admitting new residents including intake assessments, orientation, room assignment, and initial care planning.",
     category: "GRO", version: "2.3", status: "in-review",
-    author: "Lilian Ike", updatedAt: "2026-06-15", effectiveDate: "2026-07-15", reviewDate: "2027-01-15",
+    author: "Demo Clinical Lead", updatedAt: "2026-06-15", effectiveDate: "2026-07-15", reviewDate: "2027-01-15",
     icon: Building2,
   },
   {
@@ -100,7 +99,7 @@ const DEMO_SOPS: SOPDocument[] = [
     title: "Incident Report Documentation",
     description: "Standardized procedures for documenting and reporting incidents involving youth, staff, or facility issues including timelines and escalation requirements.",
     category: "Administration", version: "2.0", status: "published",
-    author: "Lilian Ike", updatedAt: "2026-06-18", effectiveDate: "2026-07-01", reviewDate: "2027-07-01",
+    author: "Demo Clinical Lead", updatedAt: "2026-06-18", effectiveDate: "2026-07-01", reviewDate: "2027-07-01",
     icon: FileText,
   },
   {
@@ -119,11 +118,9 @@ export function KnowledgePage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-
   // Fetch document stats from tRPC
   const { data: docStats } = trpc.m2.stats.useQuery();
-  const stats = docStats ?? { total: 12, published: 4, draft: 3, inReview: 2, approved: 2, archived: 1 };
+  void docStats;
 
   // Filter SOPs
   const filtered = useMemo(() => {
@@ -150,9 +147,6 @@ export function KnowledgePage() {
 
     return data;
   }, [search, categoryFilter, statusFilter]);
-
-  const categories: string[] = ["all", ...Array.from(new Set(DEMO_SOPS.map((s) => s.category)))];
-  const statuses = ["all", "published", "in-review", "draft", "archived"];
 
   // KPI calculations
   const totalSOPs = DEMO_SOPS.length;

@@ -16,14 +16,38 @@ const TYPE_COLORS: Record<string, string> = {
   education_session: "bg-yellow-100 text-yellow-700",
 };
 
+interface FamilyContact {
+  id: string;
+  youth_id: string;
+  contact_type: string;
+  contact_direction: string | null;
+  contact_date: string;
+  contacted_person: string;
+  relationship: string | null;
+  topics_discussed: string | null;
+  concerns_raised: string | null;
+  action_items: string | null;
+  outcome: string | null;
+  follow_up_needed: number | boolean;
+  follow_up_date: string | null;
+}
+
+interface ResidentialYouth {
+  id: string;
+  first_name: string;
+  last_name: string;
+}
+
 export function FamilyContactPage() {
   const [activeTab, setActiveTab] = useState("all");
-  const { data: contacts = [] } = trpc.m18.listFamilyContacts.useQuery();
-  const { data: youthList = [] } = trpc.m13.listYouth.useQuery();
+  const { data: rawContacts = [] } = trpc.m18.listFamilyContacts.useQuery();
+  const { data: rawYouthList = [] } = trpc.m13.listYouth.useQuery();
+  const contacts = rawContacts as FamilyContact[];
+  const youthList = rawYouthList as ResidentialYouth[];
 
-  const needsFollowUp = contacts.filter((c: any) => c.follow_up_needed === 1);
-  const byYouth: Record<string, any[]> = {};
-  contacts.forEach((c: any) => {
+  const needsFollowUp = contacts.filter((c) => c.follow_up_needed === 1);
+  const byYouth: Record<string, FamilyContact[]> = {};
+  contacts.forEach((c) => {
     if (!byYouth[c.youth_id]) byYouth[c.youth_id] = [];
     byYouth[c.youth_id].push(c);
   });
@@ -55,7 +79,7 @@ export function FamilyContactPage() {
 
         <TabsContent value="all" className="mt-4 space-y-4">
           {Object.entries(byYouth).map(([youthId, youthContacts]) => {
-            const youth = youthList.find((y: any) => y.id === youthId);
+            const youth = youthList.find((y) => y.id === youthId);
             return (
               <Card key={youthId}>
                 <CardHeader className="pb-2">
@@ -64,7 +88,7 @@ export function FamilyContactPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {youthContacts.map((c: any) => <ContactCard key={c.id} contact={c} />)}
+                  {youthContacts.map((c) => <ContactCard key={c.id} contact={c} />)}
                 </CardContent>
               </Card>
             );
@@ -72,7 +96,7 @@ export function FamilyContactPage() {
         </TabsContent>
 
         <TabsContent value="followup" className="mt-4 space-y-2">
-          {needsFollowUp.map((c: any) => <ContactCard key={c.id} contact={c} />)}
+          {needsFollowUp.map((c) => <ContactCard key={c.id} contact={c} />)}
           {needsFollowUp.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">No pending follow-ups.</p>}
         </TabsContent>
       </Tabs>
@@ -81,7 +105,7 @@ export function FamilyContactPage() {
   );
 }
 
-function ContactCard({ contact: c }: { contact: any }) {
+function ContactCard({ contact: c }: { contact: FamilyContact }) {
   return (
     <div className={`p-3 rounded-lg border ${c.follow_up_needed === 1 ? "border-yellow-300 bg-yellow-50/30" : "border-gray-200"}`}>
       <div className="flex items-center justify-between">

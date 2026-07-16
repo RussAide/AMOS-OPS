@@ -113,7 +113,7 @@ export function EmailNotificationPanel() {
           <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Send Test</p>
           <input
             type="email"
-            placeholder="To: email@example.com"
+            placeholder="To: email@example.invalid"
             value={to}
             onChange={(e) => setTo(e.target.value)}
             className="w-full px-2 py-1.5 rounded border text-[12px] outline-none"

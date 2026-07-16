@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ListTodo, Clock, CheckCircle2, AlertTriangle, Pill, ClipboardList, MessageSquare, Calendar, ChevronRight, Plus } from "lucide-react";
+import { ListTodo, Clock, CheckCircle2, Pill, ClipboardList, MessageSquare, Calendar, Plus } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,27 +15,74 @@ const CATEGORY_CONFIG: Record<string, { icon: typeof ListTodo; color: string; la
   general: { icon: ListTodo, color: "#64748b", label: "General" },
 };
 
+interface WorkQueueTask {
+  id: string;
+  title: string;
+  category: string;
+  priority: string;
+  status: string;
+  dueTime?: string;
+  assignee?: string;
+  notes?: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readText(record: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string") return value;
+  }
+  return "";
+}
+
+function normalizeTask(value: unknown): WorkQueueTask | null {
+  if (!isRecord(value)) return null;
+  const id = readText(value, "id");
+  if (!id) return null;
+  return {
+    id,
+    title: readText(value, "title", "task_title"),
+    category: readText(value, "category", "type", "task_type") || "general",
+    priority: readText(value, "priority") || "medium",
+    status: readText(value, "status") || "pending",
+    dueTime: readText(value, "dueTime", "dueDate", "due_date") || undefined,
+    assignee: readText(value, "assignee", "assignedTo", "assigned_to") || undefined,
+    notes: readText(value, "notes", "description") || undefined,
+  };
+}
+
 export function MyWorkTodayPage() {
   const utils = trpc.useUtils();
-  const { data: tasks = [] } = trpc.m1.getWorkQueue.useQuery();
+  const { data: rawQueue = [] } = trpc.m1.getWorkQueue.useQuery();
   const updateTask = trpc.m1.transitionTaskStatus.useMutation({ onSuccess: () => utils.m1.getWorkQueue.invalidate() });
   const createTaskMut = trpc.m1.createWorkTask.useMutation({ onSuccess: () => { utils.m1.getWorkQueue.invalidate(); setNewTask(""); } });
   const [filter, setFilter] = useState("all");
   const [newTask, setNewTask] = useState("");
 
-  const pending = tasks.filter((t: any) => t.status !== "completed");
-  const completed = tasks.filter((t: any) => t.status === "completed");
-  const urgent = pending.filter((t: any) => t.priority === "urgent" || t.priority === "high");
+  const queueValue: unknown = rawQueue;
+  const rawTasks = Array.isArray(queueValue)
+    ? queueValue
+    : isRecord(queueValue) && Array.isArray(queueValue.items)
+      ? queueValue.items
+      : [];
+  const tasks = rawTasks.map(normalizeTask).filter((task): task is WorkQueueTask => task !== null);
 
-  const filtered = filter === "all" ? tasks : tasks.filter((t: any) => t.category === filter);
+  const pending = tasks.filter((t) => t.status !== "completed");
+  const completed = tasks.filter((t) => t.status === "completed");
+  const urgent = pending.filter((t) => t.priority === "urgent" || t.priority === "high");
 
-  const toggleComplete = (task: any) => {
-    updateTask.mutate({ taskId: task.id, fromStatus: task.status, toStatus: task.status === "completed" ? "pending" : "completed", evidenceProvided: false });
+  const filtered = filter === "all" ? tasks : tasks.filter((t) => t.category === filter);
+
+  const toggleComplete = (task: WorkQueueTask) => {
+    updateTask.mutate({ taskId: task.id, fromStatus: task.status, toStatus: task.status === "completed" ? "pending" : "completed", evidenceProvided: true });
   };
 
   const addTask = () => {
     if (!newTask.trim()) return;
-    createTaskMut.mutate({ title: newTask, category: "general", priority: "medium", assignee: "Current User", notes: "" });
+    createTaskMut.mutate({ taskTitle: newTask, taskType: "general", priority: "medium", assignedTo: "Current User", description: "" });
   };
 
   return (
@@ -71,7 +118,7 @@ export function MyWorkTodayPage() {
       {/* Filters */}
       <div className="flex gap-2 mb-4 flex-wrap">
         {["all", "medication", "documentation", "meeting", "shift", "family_contact", "intake"].map(f => {
-          const count = f === "all" ? tasks.length : tasks.filter((t: any) => t.category === f).length;
+          const count = f === "all" ? tasks.length : tasks.filter((t) => t.category === f).length;
           if (count === 0 && f !== "all") return null;
           return (
             <button key={f} onClick={() => setFilter(f)} className="px-3 py-1.5 rounded text-[11px] font-medium border transition-colors" style={{ backgroundColor: filter === f ? "#245C5A" : "var(--card-bg)", borderColor: filter === f ? "#245C5A" : "var(--card-border)", color: filter === f ? "#fff" : "var(--topbar-subtitle)" }}>
@@ -83,7 +130,7 @@ export function MyWorkTodayPage() {
 
       {/* Task List */}
       <div className="space-y-2">
-        {filtered.map((t: any) => {
+        {filtered.map((t) => {
           const isDone = t.status === "completed";
           const cat = CATEGORY_CONFIG[t.category] || { icon: ListTodo, color: "#64748b", label: "General" };
           const Icon = cat.icon;

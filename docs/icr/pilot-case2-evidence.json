@@ -5,30 +5,30 @@
   "acceptance": "Case 2 proves gap detection",
   "timestamp": "2025-07-05T00:00:00.000Z",
   "patient": {
-    "id": "patient-b-maya-thompson",
-    "mrn": "MRN-C2-20250705-001",
-    "name": "Maya Thompson",
+    "id": "patient-b-synthetic-case2",
+    "mrn": "SYNTH-CASE2-RECORD-001",
+    "name": "Synthetic Youth Case-002",
     "age": 14,
     "gender": "female",
-    "date_of_birth": "2011-07-05",
+    "date_of_birth": "2011-01-01",
     "presenting_problem": "Behavioral: defiance at school, verbal aggression toward peers, declining academic performance, two disciplinary referrals in past 60 days",
     "referral_source": {
       "type": "school",
-      "name": "Austin Independent School District - Counseling Department",
-      "phone": "(512) 555-0200",
-      "referred_by": "Ms. Jennifer Walsh, School Counselor"
+      "name": "Synthetic School Referral Office",
+      "phone": "+1-555-0103",
+      "referred_by": "Synthetic School Counselor"
     },
     "guardians": [
       {
-        "name": "Angela Thompson",
+        "name": "Synthetic Guardian 15",
         "relationship": "Mother",
-        "phone": "(512) 555-0142",
-        "email": "angela.thompson@email.com"
+        "phone": "+1-555-0101",
+        "email": "guardian.case2@example.invalid"
       },
       {
-        "name": "Marcus Thompson",
+        "name": "Synthetic Guardian 14",
         "relationship": "Father",
-        "phone": "(512) 555-0143"
+        "phone": "+1-555-0102"
       }
     ]
   },
@@ -38,7 +38,7 @@
     "instance_id": "auto-increment",
     "entity_type": "patient",
     "current_status": "RECEIVED",
-    "assigned_to": "pilot-intake-coordinator@adolbi.com",
+    "assigned_to": "pilot-intake-coordinator@amos-ops.invalid",
     "escalation_level": 0
   },
   "intake_pipeline": {

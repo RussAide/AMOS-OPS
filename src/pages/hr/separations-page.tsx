@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Search,
   History,
@@ -10,11 +10,9 @@ import {
   ChevronDown,
   Eye,
   Download,
-  FileText,
   TrendingDown,
   Users,
   Building2,
-  BarChart3,
 } from "lucide-react";
 
 interface SeparationHistoryRecord {

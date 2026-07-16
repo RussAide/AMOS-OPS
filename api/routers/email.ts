@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "../middleware";
+import { adminQuery, authedQuery, createRouter } from "../middleware";
 import { randomUUID } from "crypto";
 
 // ─── In-memory log for mock mode (no SMTP configured) ────────
@@ -44,7 +44,7 @@ const TEMPLATES: Record<string, (vars: Record<string, string>) => { subject: str
 
 export const emailRouter = createRouter({
   // ─── Send email ────────────────────────────────────────────
-  send: publicQuery
+  send: adminQuery
     .input(
       z.object({
         to: z.string().email(),
@@ -73,9 +73,9 @@ export const emailRouter = createRouter({
           // const transporter = nodemailer.createTransport({...})
           // await transporter.sendMail({...})
           record.status = "sent";
-        } catch (err: any) {
+        } catch (err: unknown) {
           record.status = "failed";
-          record.error = err.message;
+          record.error = err instanceof Error ? err.message : "Unknown email error";
         }
       }
 
@@ -93,7 +93,7 @@ export const emailRouter = createRouter({
     }),
 
   // ─── Send from template ────────────────────────────────────
-  sendTemplate: publicQuery
+  sendTemplate: adminQuery
     .input(
       z.object({
         to: z.string().email(),
@@ -136,14 +136,14 @@ export const emailRouter = createRouter({
     }),
 
   // ─── List sent emails ──────────────────────────────────────
-  list: publicQuery
+  list: adminQuery
     .input(z.object({ limit: z.number().min(1).max(500).optional() }).optional())
     .query(async ({ input }) => {
       return emailLog.slice(0, input?.limit || 100);
     }),
 
   // ─── Get templates ─────────────────────────────────────────
-  templates: publicQuery.query(async () => {
+  templates: authedQuery.query(async () => {
     return Object.keys(TEMPLATES).map((key) => ({
       id: key,
       name: key.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
@@ -152,7 +152,7 @@ export const emailRouter = createRouter({
   }),
 
   // ─── Stats ─────────────────────────────────────────────────
-  stats: publicQuery.query(async () => {
+  stats: adminQuery.query(async () => {
     return {
       total: emailLog.length,
       sent: emailLog.filter((e) => e.status === "sent").length,

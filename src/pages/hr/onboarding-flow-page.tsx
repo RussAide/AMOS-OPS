@@ -1,8 +1,7 @@
 import { useState, useMemo } from "react";
 import {
   Workflow, UserPlus, Search, Filter, ArrowRight,
-  ArrowUpDown, ArrowUp, ArrowDown, Eye, Calendar,
-  CheckCircle2, Clock, AlertTriangle, ClipboardCheck,
+  ArrowUpDown, ArrowUp, ArrowDown, Eye, Calendar, ClipboardCheck,
   FileText, ShieldCheck, GraduationCap, UserCheck,
   CircleDot, X,
 } from "lucide-react";
@@ -35,7 +34,7 @@ const STAGE_MAP = Object.fromEntries(PIPELINE_STAGES.map((s) => [s.key, s]));
 // ─── Demo Data ─────────────────────────────────────────────────
 const DEMO_CANDIDATES: OnboardingCandidate[] = [
   { id: "1", name: "Alex Rivera", role: "Youth Care Worker", department: "GRO", stage: "application", appliedDate: "2025-06-01", startDate: "2025-07-15", recruiter: "Aisha Patel", notes: "Former teacher, great references" },
-  { id: "2", name: "Jordan Blake", role: "Case Manager", department: "BHC", stage: "screening", appliedDate: "2025-05-28", startDate: "2025-07-01", recruiter: "Aisha Patel", notes: "Passed phone screen, scheduling interview" },
+  { id: "2", name: "Synthetic-Person-019 Blake", role: "Case Manager", department: "BHC", stage: "screening", appliedDate: "2025-05-28", startDate: "2025-07-01", recruiter: "Aisha Patel", notes: "Passed phone screen, scheduling interview" },
   { id: "3", name: "Taylor Kim", role: "Registered Nurse", department: "Clinical", stage: "offer", appliedDate: "2025-05-15", startDate: "2025-06-30", recruiter: "Aisha Patel", notes: "Offer extended, awaiting acceptance" },
   { id: "4", name: "Morgan Lee", role: "Residential Counselor", department: "GRO", stage: "clearance", appliedDate: "2025-05-10", startDate: "2025-06-20", recruiter: "Aisha Patel", notes: "Background check in progress" },
   { id: "5", name: "Casey Martinez", role: "LPHA Therapist", department: "Clinical", stage: "orientation", appliedDate: "2025-04-20", startDate: "2025-06-15", recruiter: "Aisha Patel", notes: "Scheduled for orientation week" },
@@ -101,7 +100,7 @@ export default function OnboardingFlowPage() {
     return counts;
   }, [candidates]);
 
-  const SortIcon = ({ field }: { field: SortField }) => {
+  const renderSortIcon = (field: SortField) => {
     if (sortField !== field) return <ArrowUpDown size={12} className="ml-1" style={{ color: "#9CA3AF" }} />;
     return sortDir === "asc"
       ? <ArrowUp size={12} className="ml-1" style={{ color: "#245C5A" }} />
@@ -203,19 +202,19 @@ export default function OnboardingFlowPage() {
             <thead>
               <tr style={{ borderBottom: "2px solid var(--card-border)", backgroundColor: "rgba(36,92,90,0.03)" }}>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("name")}>
-                  <span className="flex items-center">Candidate <SortIcon field="name" /></span>
+                  <span className="flex items-center">Candidate {renderSortIcon("name")}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("role")}>
-                  <span className="flex items-center">Role / Dept <SortIcon field="role" /></span>
+                  <span className="flex items-center">Role / Dept {renderSortIcon("role")}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("stage")}>
-                  <span className="flex items-center">Stage <SortIcon field="stage" /></span>
+                  <span className="flex items-center">Stage {renderSortIcon("stage")}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("appliedDate")}>
-                  <span className="flex items-center">Applied <SortIcon field="appliedDate" /></span>
+                  <span className="flex items-center">Applied {renderSortIcon("appliedDate")}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("startDate")}>
-                  <span className="flex items-center">Start Date <SortIcon field="startDate" /></span>
+                  <span className="flex items-center">Start Date {renderSortIcon("startDate")}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold" style={{ color: "var(--topbar-subtitle)" }}>Actions</th>
               </tr>

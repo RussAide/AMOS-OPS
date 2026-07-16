@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary
 
-**Patient B** (Maya Thompson, 14yo female) was configured as a pilot case for the "Incomplete Referral" workflow, proving that the AMOS-OPS system correctly **detects, flags, tracks, and resolves documentation gaps** during the referral intake process.
+**Patient B** (Synthetic Youth Case-002, 14yo female) was configured as a pilot case for the "Incomplete Referral" workflow, proving that the AMOS-OPS system correctly **detects, flags, tracks, and resolves documentation gaps** during the referral intake process.
 
 ### Acceptance Criteria: PASSED
 
@@ -27,15 +27,15 @@
 
 | Field | Value |
 |-------|-------|
-| **Name** | Maya Thompson |
-| **MRN** | MRN-C2-20250705-001 |
+| **Name** | Synthetic Youth Case-002 |
+| **MRN** | SYNTH-CASE2-RECORD-001 |
 | **Age** | 14 |
 | **Gender** | Female |
-| **DOB** | 2011-07-05 |
+| **DOB** | 2011-01-01 |
 | **Referral Source** | Austin ISD — School Counseling Dept |
-| **Referred By** | Ms. Jennifer Walsh, School Counselor |
-| **Guardian 1** | Angela Thompson (Mother) — (512) 555-0142 |
-| **Guardian 2** | Marcus Thompson (Father) — (512) 555-0143 |
+| **Referred By** | Synthetic School Counselor |
+| **Guardian 1** | Synthetic Guardian 15 (Mother) — +1-555-0101 |
+| **Guardian 2** | Synthetic Guardian 14 (Father) — +1-555-0102 |
 | **Presenting Problem** | Behavioral: defiance, verbal aggression, declining academics |
 | **Referral Date** | Day -10 (2025-06-25) |
 
@@ -87,8 +87,8 @@ Legend:  [====] = Gap active    [----] = Gap resolved
   "id": "<uuid>",
   "type": "alert",
   "title": "GAP ALERT: Missing Guardian Consent Form",
-  "user_id": "pilot-intake-coordinator@adolbi.com",
-  "person_name": "Maya Thompson",
+  "user_id": "pilot-intake-coordinator@amos-ops.invalid",
+  "person_name": "Synthetic Youth Case-002",
   "module_name": "intake_pipeline",
   "severity": "BLOCKING",
   "missing_document": "Guardian Consent for Treatment (Form ICC-001)",
@@ -107,8 +107,8 @@ Legend:  [====] = Gap active    [----] = Gap resolved
   "id": "<uuid>",
   "type": "alert",
   "title": "GAP ALERT: Missing School Records",
-  "user_id": "pilot-intake-coordinator@adolbi.com",
-  "person_name": "Maya Thompson",
+  "user_id": "pilot-intake-coordinator@amos-ops.invalid",
+  "person_name": "Synthetic Youth Case-002",
   "module_name": "intake_pipeline",
   "severity": "BLOCKING",
   "missing_documents": [
@@ -131,8 +131,8 @@ Legend:  [====] = Gap active    [----] = Gap resolved
   "id": "<uuid>",
   "type": "alert",
   "title": "INSURANCE EXPIRED: Benefits Verification Failed",
-  "user_id": "pilot-intake-coordinator@adolbi.com",
-  "person_name": "Maya Thompson",
+  "user_id": "pilot-intake-coordinator@amos-ops.invalid",
+  "person_name": "Synthetic Youth Case-002",
   "module_name": "intake_pipeline",
   "severity": "WARNING",
   "payer": "Texas Medicaid (STAR Health)",
@@ -154,9 +154,9 @@ Legend:  [====] = Gap active    [----] = Gap resolved
 | Field | Value |
 |-------|-------|
 | id | `patientBId` (UUID) |
-| mrn | MRN-C2-20250705-001 |
-| first_name | Maya |
-| last_name | Thompson |
+| mrn | SYNTH-CASE2-RECORD-001 |
+| first_name | Synthetic |
+| last_name | Case-002 |
 | age | 14 |
 | gender | female |
 | status | referral_pending |
@@ -172,7 +172,7 @@ Legend:  [====] = Gap active    [----] = Gap resolved
 | entity_type | patient |
 | current_status | RECEIVED |
 | previous_status | (empty) |
-| assigned_to | pilot-intake-coordinator@adolbi.com |
+| assigned_to | pilot-intake-coordinator@amos-ops.invalid |
 | escalation_level | 0 |
 | notes | `[PILOT CASE 2] INCOMPLETE REFERRAL...` |
 
@@ -181,7 +181,7 @@ Legend:  [====] = Gap active    [----] = Gap resolved
 |-------|-------|
 | id | `intakeId` (UUID) |
 | youth_id | `patientBId` |
-| mrn | MRN-C2-20250705-001 |
+| mrn | SYNTH-CASE2-RECORD-001 |
 | current_step | disposition |
 | overall_status | in_progress |
 | is_blocked | 0 (false) |

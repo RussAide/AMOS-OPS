@@ -1,288 +1,838 @@
+import { randomUUID } from "node:crypto";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createRouter, authedQuery, adminQuery } from "../middleware";
+import { desc, eq } from "drizzle-orm";
+import {
+  KPI_DEFINITIONS,
+  MGMA_DOMAIN_MAPPINGS,
+  calculateKpiValue,
+  compareKpiValue,
+  evaluateMeasurementDataQuality,
+  validateDomainMappings,
+  validateKpiDefinitions,
+  type EvidenceClass,
+  type KpiDefinition,
+  type KpiMeasurementEvidence,
+  type KpiTargetStatus,
+  type ScopeId,
+  type ScopeType,
+} from "@contracts/mgma";
+import {
+  mgmaDashboardGovernance,
+  mgmaDataQualityResults,
+  mgmaDomains,
+  mgmaKpiTargets,
+  mgmaMeasurements,
+  mgmaOwnerApprovals,
+  mgmaScorecards,
+} from "@db/schema";
+import { adminQuery, createRouter, authedQuery } from "../middleware";
 import { getDb } from "../queries/connection";
-import { mgmaDomains, mgmaKpiTargets, mgmaScorecards } from "@db/schema";
-import { eq, and, desc } from "drizzle-orm";
-import { randomUUID } from "crypto";
 
-// ══════════════════════════════════════════════════════════════
-// MGMA: 7-Domain Practice Management Baseline Router (T-008)
-// Medical Group Management Association Body of Knowledge
-// ══════════════════════════════════════════════════════════════
+const viewModeSchema = z.enum(["production_baseline", "synthetic_demo"]);
+type MgmaViewMode = z.infer<typeof viewModeSchema>;
+
+const scopeCatalog = [
+  {
+    scopeId: "BHC",
+    scopeType: "profit_center",
+    label: "Behavioral Health Center",
+  },
+  {
+    scopeId: "GRO",
+    scopeType: "profit_center",
+    label: "General Residential Operation",
+  },
+  { scopeId: "EO", scopeType: "corporate_office", label: "Executive Office" },
+  {
+    scopeId: "GAD",
+    scopeType: "corporate_office",
+    label: "General Administration",
+  },
+] as const satisfies readonly {
+  scopeId: ScopeId;
+  scopeType: ScopeType;
+  label: string;
+}[];
+
+const baselinePeriod = {
+  start: "2026-06-01",
+  end: "2026-06-30",
+  asOf: "2026-07-01T12:00:00.000Z",
+  governanceReviewedAt: "2026-07-14T00:00:00.000Z",
+  nextReviewAt: "2026-08-05",
+} as const;
+
+const evidenceClassFor = (viewMode: MgmaViewMode): EvidenceClass =>
+  viewMode === "production_baseline" ? "production" : "synthetic_demo";
+
+function databaseKpiId(kpiId: string): string {
+  return kpiId.startsWith("M13-KPI-") ? kpiId : `M13-KPI-${kpiId}`;
+}
+
+function contractKpiId(kpiId: string): string {
+  return kpiId.replace(/^M13-KPI-/, "");
+}
+
+function databaseDomainId(domainId: string): string {
+  return domainId.startsWith("M13-") ? domainId : `M13-${domainId}`;
+}
+
+function contractDomainId(domainId: string): string {
+  return domainId.replace(/^M13-/, "");
+}
+
+function parseStringArray(value: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) &&
+      parsed.every((item) => typeof item === "string")
+      ? parsed
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function finiteNumber(value: string | null): number {
+  if (value === null) return Number.NaN;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+function toMeasurementEvidence(
+  row: typeof mgmaMeasurements.$inferSelect,
+): KpiMeasurementEvidence {
+  return {
+    measurementId: row.id,
+    kpiId: contractKpiId(row.kpiId),
+    evidenceClass: row.evidenceClass,
+    scopeType: row.scopeType,
+    scopeId: row.scopeId,
+    periodType: "fixed",
+    periodStart: row.periodStart,
+    periodEnd: row.periodEnd,
+    numerator: finiteNumber(row.numeratorValue),
+    denominator: finiteNumber(row.denominatorValue),
+    value: finiteNumber(row.calculatedValue),
+    sourceReferences: [row.sourceReference],
+    sourceRecordIds: parseStringArray(row.sourceRecordIdsJson),
+    collectedAt: row.collectedAt,
+  };
+}
+
+function appliesToScope(
+  definition: KpiDefinition,
+  scopeType: ScopeType,
+  scopeId: ScopeId,
+): boolean {
+  return definition.relevantScopes.some(
+    (scope) => scope.scopeType === scopeType && scope.scopeId === scopeId,
+  );
+}
+
+function worstStatus(statuses: readonly KpiTargetStatus[]): KpiTargetStatus {
+  if (statuses.includes("off_target")) return "off_target";
+  if (statuses.includes("at_risk")) return "at_risk";
+  return "on_target";
+}
+
+interface EvaluatedKpi {
+  definition: KpiDefinition;
+  current: number | null;
+  status: KpiTargetStatus | "not_measured";
+  evidenceCount: number;
+  dataQualityStatus: "pass" | "fail" | "not_measured";
+  reasonCodes: readonly string[];
+}
+
+function evaluateKpi(
+  definition: KpiDefinition,
+  measurements: readonly KpiMeasurementEvidence[],
+  asOf: string,
+): EvaluatedKpi {
+  const matching = measurements.filter(
+    (measurement) => measurement.kpiId === definition.id,
+  );
+  if (matching.length === 0) {
+    return {
+      definition,
+      current: null,
+      status: "not_measured",
+      evidenceCount: 0,
+      dataQualityStatus: "not_measured",
+      reasonCodes: ["SCORECARD_NO_MATCHING_EVIDENCE"],
+    };
+  }
+
+  const quality = evaluateMeasurementDataQuality(matching, asOf, [definition]);
+  if (!quality.passed) {
+    return {
+      definition,
+      current: null,
+      status: "not_measured",
+      evidenceCount: matching.length,
+      dataQualityStatus: "fail",
+      reasonCodes: quality.reasonCodes,
+    };
+  }
+
+  const values = matching
+    .map((measurement) =>
+      calculateKpiValue(
+        definition,
+        measurement.numerator,
+        measurement.denominator,
+      ),
+    )
+    .filter((value): value is number => value !== null);
+  if (values.length !== matching.length || values.length === 0) {
+    return {
+      definition,
+      current: null,
+      status: "not_measured",
+      evidenceCount: matching.length,
+      dataQualityStatus: "fail",
+      reasonCodes: ["DQ_VALUE_FORMULA_MISMATCH"],
+    };
+  }
+
+  const statuses = values.map((value) => compareKpiValue(definition, value));
+  const current =
+    Math.round(
+      (values.reduce((sum, value) => sum + value, 0) / values.length) * 10,
+    ) / 10;
+  return {
+    definition,
+    current,
+    status: worstStatus(statuses),
+    evidenceCount: matching.length,
+    dataQualityStatus: "pass",
+    reasonCodes: [],
+  };
+}
+
+function statusCounts(rows: readonly EvaluatedKpi[]) {
+  return {
+    onTarget: rows.filter((row) => row.status === "on_target").length,
+    atRisk: rows.filter((row) => row.status === "at_risk").length,
+    offTarget: rows.filter((row) => row.status === "off_target").length,
+    notMeasured: rows.filter((row) => row.status === "not_measured").length,
+  };
+}
+
+function percentOnTarget(
+  counts: ReturnType<typeof statusCounts>,
+): number | null {
+  const measured = counts.onTarget + counts.atRisk + counts.offTarget;
+  return measured === 0
+    ? null
+    : Math.round((counts.onTarget / measured) * 1_000) / 10;
+}
+
+function kpiResponse(row: EvaluatedKpi) {
+  return {
+    id: databaseKpiId(row.definition.id),
+    kpiId: databaseKpiId(row.definition.id),
+    name: row.definition.name,
+    description: row.definition.description,
+    target: row.definition.target,
+    current: row.current,
+    unit: row.definition.unit,
+    status: row.status,
+    formula: row.definition.formula,
+    numerator: row.definition.numerator.definition,
+    denominator: row.definition.denominator.definition,
+    owner: row.definition.owner.roleLabel,
+    cadence: row.definition.refreshCadence,
+    source: row.definition.sourceSystem,
+    sourceFields: row.definition.sourceFields,
+    threshold: row.definition.threshold.value,
+    comparison: row.definition.comparison,
+    drillDownPath: row.definition.drillDownPath,
+    staleAfterHours: row.definition.staleAfterHours,
+    targetBasis: row.definition.targetBasis,
+    approval: row.definition.approval,
+    evidenceCount: row.evidenceCount,
+    dataQualityStatus: row.dataQualityStatus,
+    reasonCodes: row.reasonCodes,
+  };
+}
+
+export async function buildMgmaDashboard(viewMode: MgmaViewMode) {
+  const db = getDb();
+  const evidenceClass = evidenceClassFor(viewMode);
+  const measurementRows = await db
+    .select()
+    .from(mgmaMeasurements)
+    .where(eq(mgmaMeasurements.evidenceClass, evidenceClass));
+  const measurements = measurementRows.map(toMeasurementEvidence);
+
+  const allKpiRows = KPI_DEFINITIONS.map((definition) =>
+    evaluateKpi(definition, measurements, baselinePeriod.asOf),
+  );
+  const overallKpis = statusCounts(allKpiRows);
+  const overallScore = percentOnTarget(overallKpis);
+
+  const domains = MGMA_DOMAIN_MAPPINGS.map((domain, index) => {
+    const rows = allKpiRows.filter(
+      (row) => row.definition.domainId === domain.id,
+    );
+    const counts = statusCounts(rows);
+    return {
+      id: databaseDomainId(domain.id),
+      domainNumber: index + 1,
+      domainName: domain.name,
+      domainDescription: domain.purpose,
+      amosOpsModule: domain.modules.join(" + "),
+      moduleRoute: domain.routes[0],
+      workflows: domain.workflows,
+      accountableOwner: domain.accountableOwner.roleLabel,
+      sourceData: domain.sourceData,
+      corporateOfficeSponsor: domain.corporateOfficeSponsor.roleLabel,
+      consumingScopes: domain.consumingScopes,
+      responsibleDivision: domain.responsibleDivision,
+      mappingStatus: "configured",
+      score: percentOnTarget(counts),
+      ...counts,
+      kpiCount: rows.length,
+      kpis: rows.map(kpiResponse),
+    };
+  });
+
+  const scopeSummaries = scopeCatalog.map((scope) => {
+    const definitions = KPI_DEFINITIONS.filter((definition) =>
+      appliesToScope(definition, scope.scopeType, scope.scopeId),
+    );
+    const scopeMeasurements = measurements.filter(
+      (measurement) =>
+        measurement.scopeType === scope.scopeType &&
+        measurement.scopeId === scope.scopeId,
+    );
+    const rows = definitions.map((definition) =>
+      evaluateKpi(definition, scopeMeasurements, baselinePeriod.asOf),
+    );
+    const counts = statusCounts(rows);
+    return {
+      code: scope.scopeId,
+      scopeId: scope.scopeId,
+      scopeType: scope.scopeType,
+      label: scope.label,
+      score: percentOnTarget(counts),
+      domainCount: new Set(definitions.map((definition) => definition.domainId))
+        .size,
+      totalKpis: rows.length,
+      ...counts,
+      evidenceLabel:
+        viewMode === "production_baseline"
+          ? "Production baseline evidence"
+          : "Synthetic demo preview — not production evidence",
+    };
+  });
+
+  const dataQualityEvaluation =
+    measurements.length > 0
+      ? evaluateMeasurementDataQuality(measurements, baselinePeriod.asOf)
+      : null;
+  const dataQuality = {
+    status:
+      dataQualityEvaluation === null
+        ? "not_measured"
+        : dataQualityEvaluation.passed
+          ? "pass"
+          : "fail",
+    evaluatedEvidenceCount: measurements.length,
+    reasonCodes: dataQualityEvaluation?.reasonCodes ?? [],
+    checks: [
+      "completeness",
+      "timeliness",
+      "duplication",
+      "denominator_validity",
+      "stale_data",
+    ].map((id) => {
+      const check = dataQualityEvaluation?.checks.find(
+        (item) => item.id === id,
+      );
+      return {
+        id,
+        label: check?.label ?? id.replace(/_/g, " "),
+        status: check ? (check.passed ? "pass" : "fail") : "not_measured",
+        value: check ? check.findings.length : null,
+        detail: check
+          ? check.passed
+            ? "No exceptions found in the selected evidence mode."
+            : check.findings.map((finding) => finding.detail).join(" ")
+          : "No production evidence is loaded; this check has not run.",
+      };
+    }),
+  };
+
+  const approvalItems = [
+    {
+      id: "M13-APR-DOMAIN",
+      label: "Seven-domain mapping",
+      status: "prototype_reviewed",
+      owner: "Managing Director",
+      decidedAt: baselinePeriod.governanceReviewedAt,
+    },
+    {
+      id: "M13-APR-FORMULA",
+      label: "KPI formulas",
+      status: "prototype_reviewed",
+      owner: "KPI owner roles",
+      decidedAt: baselinePeriod.governanceReviewedAt,
+    },
+    {
+      id: "M13-APR-TARGET",
+      label: "Internal prototype targets",
+      status: "prototype_reviewed",
+      owner: "Managing Director / CFO",
+      decidedAt: baselinePeriod.governanceReviewedAt,
+    },
+    {
+      id: "M13-APR-SOURCE",
+      label: "Sources and refresh cadence",
+      status: "prototype_reviewed",
+      owner: "Source data-owner roles",
+      decidedAt: baselinePeriod.governanceReviewedAt,
+    },
+    {
+      id: "M13-APR-PERIOD",
+      label: "Baseline period and dashboard governance",
+      status: "prototype_reviewed",
+      owner: "Managing Director / CFO",
+      decidedAt: baselinePeriod.governanceReviewedAt,
+    },
+  ];
+
+  return {
+    viewMode,
+    evidenceClass,
+    evidenceLabel:
+      viewMode === "production_baseline"
+        ? "Governed production baseline — no production evidence loaded"
+        : "Synthetic demo preview — not production evidence",
+    baselinePeriod: {
+      start: baselinePeriod.start,
+      end: baselinePeriod.end,
+      status:
+        viewMode === "production_baseline"
+          ? "not_measured"
+          : "synthetic_preview",
+      approvalStatus: "prototype_reviewed_pending_milestone_owner_acceptance",
+      cadence: "monthly",
+      closeRule:
+        "Prior full calendar month; source-owner validation before fifth-business-day publication.",
+    },
+    productionAssertion: false,
+    overallScore,
+    domains,
+    scopeSummaries,
+    overallKpis: { total: allKpiRows.length, ...overallKpis },
+    dataQuality,
+    approvals: {
+      status: "prototype_reviewed_pending_milestone_owner_acceptance",
+      required: approvalItems.length,
+      approved: 0,
+      pending: approvalItems.length,
+      rejected: 0,
+      approvedBy: null,
+      lastApprovedAt: null,
+      nextReviewAt: baselinePeriod.nextReviewAt,
+      items: approvalItems,
+    },
+  };
+}
 
 export const mgmaRouter = createRouter({
+  baselineContract: authedQuery.query(() => ({
+    version: "M1.3-v1.0",
+    domainValidation: validateDomainMappings(MGMA_DOMAIN_MAPPINGS),
+    kpiValidation: validateKpiDefinitions(KPI_DEFINITIONS),
+    domains: MGMA_DOMAIN_MAPPINGS,
+    kpis: KPI_DEFINITIONS,
+    targetAuthority: "AMOS-OPS controlled internal prototype target",
+    proprietaryBenchmarkClaim: false,
+  })),
 
-  // ════════════════════════════════════════════════════════════
-  // DOMAINS
-  // ════════════════════════════════════════════════════════════
-
-  listDomains: authedQuery.query(async () => {
-    const db = getDb();
-    return db.select().from(mgmaDomains).orderBy(mgmaDomains.domainNumber);
-  }),
+  listDomains: authedQuery.query(() =>
+    MGMA_DOMAIN_MAPPINGS.map((domain, index) => ({
+      id: databaseDomainId(domain.id),
+      domainNumber: index + 1,
+      domainName: domain.name,
+      domainDescription: domain.purpose,
+      amosOpsModule: domain.modules.join(" + "),
+      moduleRoute: domain.routes[0],
+      workflows: domain.workflows,
+      accountableOwner: domain.accountableOwner,
+      sourceData: domain.sourceData,
+      responsibleDivision: domain.responsibleDivision,
+      corporateOfficeSponsor: domain.corporateOfficeSponsor,
+      consumingScopes: domain.consumingScopes,
+      status: "active" as const,
+    })),
+  ),
 
   getDomain: authedQuery
-    .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
-      const db = getDb();
-      const domain = await db.select().from(mgmaDomains).where(eq(mgmaDomains.id, input.id)).get();
+    .input(z.object({ id: z.string().min(1) }))
+    .query(({ input }) => {
+      const id = contractDomainId(input.id);
+      const domain = MGMA_DOMAIN_MAPPINGS.find(
+        (candidate) => candidate.id === id,
+      );
       if (!domain) return null;
-      const kpis = await db.select().from(mgmaKpiTargets).where(eq(mgmaKpiTargets.domainId, input.id)).orderBy(mgmaKpiTargets.kpiName);
-      return { ...domain, kpis };
+      return {
+        ...domain,
+        id: databaseDomainId(domain.id),
+        kpis: KPI_DEFINITIONS.filter(
+          (definition) => definition.domainId === domain.id,
+        ),
+      };
     }),
 
   configureDomain: adminQuery
-    .input(z.object({
-      id: z.string(),
-      status: z.enum(["planned", "configured", "active", "under_review"]),
-      configuredBy: z.string(),
-    }))
+    .input(
+      z.object({
+        id: z.string().min(1),
+        status: z.enum(["planned", "configured", "active", "under_review"]),
+        configuredBy: z.string().min(1),
+      }),
+    )
     .mutation(async ({ input }) => {
       const db = getDb();
-      await db.update(mgmaDomains).set({
-        status: input.status,
-        configuredAt: new Date().toISOString(),
-        configuredBy: input.configuredBy,
-        updatedAt: new Date().toISOString(),
-      }).where(eq(mgmaDomains.id, input.id));
+      await db
+        .update(mgmaDomains)
+        .set({
+          status: input.status,
+          configuredAt: new Date().toISOString(),
+          configuredBy: input.configuredBy,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(mgmaDomains.id, databaseDomainId(input.id)));
       return { success: true };
     }),
 
-  // ════════════════════════════════════════════════════════════
-  // KPI TARGETS
-  // ════════════════════════════════════════════════════════════
-
   listKpiTargets: authedQuery
-    .input(z.object({
-      domainId: z.string().optional(),
-      status: z.string().optional(),
-    }).optional())
-    .query(async ({ input }) => {
-      const db = getDb();
-      let conditions = [];
-      if (input?.domainId) conditions.push(eq(mgmaKpiTargets.domainId, input.domainId));
-      if (input?.status) conditions.push(eq(mgmaKpiTargets.status, input.status));
-
-      const results = conditions.length > 0
-        ? await db.select().from(mgmaKpiTargets).where(and(...conditions)).orderBy(mgmaKpiTargets.kpiName)
-        : await db.select().from(mgmaKpiTargets).orderBy(mgmaKpiTargets.kpiName);
-      return results;
+    .input(
+      z
+        .object({
+          domainId: z.string().optional(),
+          status: z
+            .enum(["on_target", "at_risk", "off_target", "not_measured"])
+            .optional(),
+        })
+        .optional(),
+    )
+    .query(({ input }) => {
+      const domainId = input?.domainId
+        ? contractDomainId(input.domainId)
+        : null;
+      const rows = KPI_DEFINITIONS.filter(
+        (definition) => domainId === null || definition.domainId === domainId,
+      ).map((definition) => ({
+        id: databaseKpiId(definition.id),
+        domainId: databaseDomainId(definition.domainId),
+        kpiName: definition.name,
+        kpiDescription: definition.description,
+        targetValue: String(definition.target),
+        targetUnit: definition.unit,
+        comparisonOperator: definition.comparison,
+        benchmarkSource: definition.targetBasis.label,
+        formula: definition.formula,
+        numeratorDefinition: definition.numerator.definition,
+        denominatorDefinition: definition.denominator.definition,
+        sourceSystem: definition.sourceSystem,
+        sourceFields: definition.sourceFields,
+        ownerRole: definition.owner.roleLabel,
+        drillDownPath: definition.drillDownPath,
+        targetBasis: definition.targetBasis,
+        approval: definition.approval,
+        measurementFrequency: definition.refreshCadence,
+        staleAfterHours: definition.staleAfterHours,
+        currentValue: null,
+        lastMeasuredAt: null,
+        status: "not_measured" as const,
+        alertThreshold: String(definition.threshold.value),
+      }));
+      return input?.status
+        ? rows.filter((row) => row.status === input.status)
+        : rows;
     }),
 
   updateKpiCurrentValue: adminQuery
-    .input(z.object({
-      id: z.string(),
-      currentValue: z.string(),
-      status: z.enum(["on_target", "at_risk", "off_target", "not_measured"]),
-    }))
-    .mutation(async ({ input }) => {
-      const db = getDb();
-      await db.update(mgmaKpiTargets).set({
-        currentValue: input.currentValue,
-        status: input.status,
-        lastMeasuredAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }).where(eq(mgmaKpiTargets.id, input.id));
-      return { success: true };
+    .input(
+      z.object({
+        id: z.string(),
+        currentValue: z.string(),
+        status: z.enum(["on_target", "at_risk", "off_target", "not_measured"]),
+      }),
+    )
+    .mutation(() => {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "Direct current-value writes are disabled. Record evidence-classified numerator, denominator, scope, period, and provenance instead.",
+      });
     }),
 
-  // ════════════════════════════════════════════════════════════
-  // SCORECARDS
-  // ════════════════════════════════════════════════════════════
+  recordSyntheticMeasurement: adminQuery
+    .input(
+      z.object({
+        kpiId: z.string().min(1),
+        scopeType: z.enum(["profit_center", "corporate_office"]),
+        scopeId: z.enum(["BHC", "GRO", "EO", "GAD"]),
+        periodStart: z.string().date(),
+        periodEnd: z.string().date(),
+        numerator: z.number().finite(),
+        denominator: z.number().positive(),
+        sourceReferences: z.array(z.string().startsWith("synthetic://")).min(1),
+        sourceRecordIds: z.array(z.string().startsWith("SYNTHETIC-")).min(1),
+        collectedAt: z.string().datetime({ offset: true }),
+        asOf: z.string().datetime({ offset: true }),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const kpiId = contractKpiId(input.kpiId);
+      const definition = KPI_DEFINITIONS.find(
+        (candidate) => candidate.id === kpiId,
+      );
+      if (!definition)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Unknown controlled KPI",
+        });
+      if (!appliesToScope(definition, input.scopeType, input.scopeId)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "KPI is not mapped to the selected scope",
+        });
+      }
+      const value = calculateKpiValue(
+        definition,
+        input.numerator,
+        input.denominator,
+      );
+      if (value === null)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Invalid KPI numerator or denominator",
+        });
+      const evidence: KpiMeasurementEvidence = {
+        measurementId: randomUUID(),
+        kpiId,
+        evidenceClass: "synthetic_demo",
+        scopeType: input.scopeType,
+        scopeId: input.scopeId,
+        periodType: "fixed",
+        periodStart: input.periodStart,
+        periodEnd: input.periodEnd,
+        numerator: input.numerator,
+        denominator: input.denominator,
+        value,
+        sourceReferences: input.sourceReferences,
+        sourceRecordIds: input.sourceRecordIds,
+        collectedAt: input.collectedAt,
+      };
+      const quality = evaluateMeasurementDataQuality([evidence], input.asOf, [
+        definition,
+      ]);
+      if (!quality.passed) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Synthetic evidence failed data-quality controls: ${quality.reasonCodes.join(", ")}`,
+        });
+      }
+
+      const db = getDb();
+      await db.insert(mgmaMeasurements).values({
+        id: evidence.measurementId,
+        kpiId: databaseKpiId(kpiId),
+        scopeType: evidence.scopeType,
+        scopeId: evidence.scopeId,
+        evidenceClass: evidence.evidenceClass,
+        periodStart: evidence.periodStart,
+        periodEnd: evidence.periodEnd,
+        numeratorValue: String(evidence.numerator),
+        denominatorValue: String(evidence.denominator),
+        calculatedValue: String(evidence.value),
+        sourceReference: evidence.sourceReferences.join(" | "),
+        sourceRecordIdsJson: JSON.stringify(evidence.sourceRecordIds),
+        sourceRecordCount: evidence.sourceRecordIds.length,
+        collectedAt: evidence.collectedAt,
+        createdAt: new Date().toISOString(),
+      });
+      await db.insert(mgmaDataQualityResults).values(
+        quality.checks.map((check) => ({
+          id: randomUUID(),
+          measurementId: evidence.measurementId,
+          kpiId: databaseKpiId(kpiId),
+          scopeId: evidence.scopeId,
+          evidenceClass: evidence.evidenceClass,
+          checkType: check.id,
+          checkStatus: check.passed ? ("pass" as const) : ("fail" as const),
+          reasonCode:
+            check.reasonCodes.join(",") ||
+            `M13-DQ-${check.id.toUpperCase()}-PASS`,
+          details:
+            check.findings.map((finding) => finding.detail).join(" ") ||
+            "No exception found.",
+          evaluatedAt: input.asOf,
+        })),
+      );
+      return {
+        success: true,
+        measurementId: evidence.measurementId,
+        evidenceClass: "synthetic_demo" as const,
+        productionAssertion: false,
+        value,
+        status: compareKpiValue(definition, value),
+        dataQuality: quality,
+      };
+    }),
 
   listScorecards: authedQuery
-    .input(z.object({
-      division: z.string().optional(),
-    }).optional())
+    .input(
+      z
+        .object({ division: z.enum(["EO", "GAD", "GRO", "BHC"]).optional() })
+        .optional(),
+    )
     .query(async ({ input }) => {
       const db = getDb();
-      if (input?.division) {
-        return db.select().from(mgmaScorecards).where(eq(mgmaScorecards.division, input.division)).orderBy(desc(mgmaScorecards.scorecardDate));
-      }
-      return db.select().from(mgmaScorecards).orderBy(desc(mgmaScorecards.scorecardDate));
+      return input?.division
+        ? db
+            .select()
+            .from(mgmaScorecards)
+            .where(eq(mgmaScorecards.division, input.division))
+            .orderBy(desc(mgmaScorecards.scorecardDate))
+        : db
+            .select()
+            .from(mgmaScorecards)
+            .orderBy(desc(mgmaScorecards.scorecardDate));
     }),
 
   createScorecard: adminQuery
-    .input(z.object({
-      division: z.enum(["EO", "GAD", "GRO", "BHC"]),
-      scorecardDate: z.string(),
-      overallScore: z.number().optional(),
-      executiveSummary: z.string().optional(),
-      actionItems: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        division: z.enum(["EO", "GAD", "GRO", "BHC"]),
+        scorecardDate: z.string().date(),
+        viewMode: viewModeSchema.default("production_baseline"),
+        executiveSummary: z.string().optional(),
+        actionItems: z.string().optional(),
+      }),
+    )
     .mutation(async ({ input }) => {
-      const db = getDb();
-      // Count current KPI statuses for this division
-      const domains = await db.select().from(mgmaDomains).where(eq(mgmaDomains.responsibleDivision, input.division));
-      const domainIds = domains.map((d) => d.id);
-
-      let onTarget = 0, atRisk = 0, offTarget = 0, notMeasured = 0;
-      const domainScores: Record<string, { name: string; score: number; kpis: number }> = {};
-
-      for (const domain of domains) {
-        const kpis = await db.select().from(mgmaKpiTargets).where(eq(mgmaKpiTargets.domainId, domain.id));
-        let dOn = 0, dTotal = 0;
-        for (const kpi of kpis) {
-          if (kpi.status === "on_target") { onTarget++; dOn++; dTotal++; }
-          else if (kpi.status === "at_risk") { atRisk++; dTotal++; }
-          else if (kpi.status === "off_target") { offTarget++; dTotal++; }
-          else { notMeasured++; }
-        }
-        domainScores[domain.id] = {
-          name: domain.domainName,
-          score: dTotal > 0 ? Math.round((dOn / dTotal) * 100) : 0,
-          kpis: dTotal,
-        };
-      }
-
-      const totalMeasured = onTarget + atRisk + offTarget;
-      const overallScore = totalMeasured > 0 ? Math.round((onTarget / totalMeasured) * 100) : 0;
-
+      const dashboard = await buildMgmaDashboard(input.viewMode);
+      const scope = dashboard.scopeSummaries.find(
+        (item) => item.scopeId === input.division,
+      );
+      if (!scope)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Unknown scorecard scope",
+        });
       const id = randomUUID();
+      const db = getDb();
       await db.insert(mgmaScorecards).values({
         id,
         division: input.division,
+        scopeType: scope.scopeType,
+        evidenceClass: evidenceClassFor(input.viewMode),
+        baselineStatus: scope.score === null ? "not_measured" : "measured",
+        dataQualityStatus:
+          dashboard.dataQuality.status === "pass"
+            ? "pass"
+            : dashboard.dataQuality.status === "fail"
+              ? "fail"
+              : "not_run",
         scorecardDate: input.scorecardDate,
-        overallScore,
-        kpisOnTarget: onTarget,
-        kpisAtRisk: atRisk,
-        kpisOffTarget: offTarget,
-        kpisNotMeasured: notMeasured,
-        domainScoresJson: JSON.stringify(domainScores),
+        overallScore: scope.score === null ? null : Math.round(scope.score),
+        kpisOnTarget: scope.onTarget,
+        kpisAtRisk: scope.atRisk,
+        kpisOffTarget: scope.offTarget,
+        kpisNotMeasured: scope.notMeasured,
+        domainScoresJson: JSON.stringify(
+          dashboard.domains.map((domain) => ({
+            id: domain.id,
+            score: domain.score,
+          })),
+        ),
         executiveSummary: input.executiveSummary ?? null,
         actionItems: input.actionItems ?? null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
-
-      return { success: true, id, overallScore, kpisOnTarget: onTarget, kpisAtRisk: atRisk, kpisOffTarget: offTarget };
+      return {
+        success: true,
+        id,
+        viewMode: input.viewMode,
+        evidenceClass: evidenceClassFor(input.viewMode),
+        productionAssertion: false,
+        baselineStatus:
+          scope.score === null
+            ? ("not_measured" as const)
+            : ("measured" as const),
+        overallScore: scope.score,
+      };
     }),
 
-  // ════════════════════════════════════════════════════════════
-  // EXECUTIVE DASHBOARD
-  // ════════════════════════════════════════════════════════════
+  executiveDashboard: authedQuery
+    .input(z.object({ viewMode: viewModeSchema }).optional())
+    .query(({ input }) =>
+      buildMgmaDashboard(input?.viewMode ?? "production_baseline"),
+    ),
 
-  executiveDashboard: authedQuery.query(async () => {
+  dataQualityReport: authedQuery
+    .input(z.object({ viewMode: viewModeSchema }).optional())
+    .query(async ({ input }) => {
+      const dashboard = await buildMgmaDashboard(
+        input?.viewMode ?? "production_baseline",
+      );
+      return {
+        viewMode: dashboard.viewMode,
+        evidenceLabel: dashboard.evidenceLabel,
+        productionAssertion: false,
+        ...dashboard.dataQuality,
+      };
+    }),
+
+  governanceSummary: authedQuery.query(async () => {
     const db = getDb();
-
-    // All domains with their KPIs
-    const domains = await db.select().from(mgmaDomains).orderBy(mgmaDomains.domainNumber);
-    const domainCards = [];
-
-    for (const domain of domains) {
-      const kpis = await db.select().from(mgmaKpiTargets).where(eq(mgmaKpiTargets.domainId, domain.id));
-      const onTarget = kpis.filter((k) => k.status === "on_target").length;
-      const atRisk = kpis.filter((k) => k.status === "at_risk").length;
-      const offTarget = kpis.filter((k) => k.status === "off_target").length;
-      const notMeasured = kpis.filter((k) => k.status === "not_measured").length;
-      const measured = onTarget + atRisk + offTarget;
-      const score = measured > 0 ? Math.round((onTarget / measured) * 100) : 0;
-
-      domainCards.push({
-        ...domain,
-        kpiCount: kpis.length,
-        onTarget,
-        atRisk,
-        offTarget,
-        notMeasured,
-        score,
-        kpis: kpis.map((k) => ({
-          name: k.kpiName,
-          target: k.targetValue,
-          unit: k.targetUnit,
-          current: k.currentValue,
-          status: k.status,
-        })),
-      });
-    }
-
-    // Division summaries
-    const divisions = ["EO", "GAD", "GRO", "BHC"] as const;
-    const divisionSummaries = [];
-    for (const div of divisions) {
-      const divDomains = domainCards.filter((d) => d.responsibleDivision === div);
-      const totalKpis = divDomains.reduce((sum, d) => sum + d.kpiCount, 0);
-      const totalOnTarget = divDomains.reduce((sum, d) => sum + d.onTarget, 0);
-      const totalMeasured = totalKpis - divDomains.reduce((sum, d) => sum + d.notMeasured, 0);
-      divisionSummaries.push({
-        division: div,
-        domainCount: divDomains.length,
-        totalKpis,
-        onTarget: totalOnTarget,
-        score: totalMeasured > 0 ? Math.round((totalOnTarget / totalMeasured) * 100) : 0,
-      });
-    }
-
+    const [governance, approvals] = await Promise.all([
+      db.select().from(mgmaDashboardGovernance),
+      db.select().from(mgmaOwnerApprovals),
+    ]);
     return {
-      domains: domainCards,
-      divisionSummaries,
-      overallKpis: {
-        total: domainCards.reduce((sum, d) => sum + d.kpiCount, 0),
-        onTarget: domainCards.reduce((sum, d) => sum + d.onTarget, 0),
-        atRisk: domainCards.reduce((sum, d) => sum + d.atRisk, 0),
-        offTarget: domainCards.reduce((sum, d) => sum + d.offTarget, 0),
-        notMeasured: domainCards.reduce((sum, d) => sum + d.notMeasured, 0),
-      },
+      baselinePeriod,
+      governance,
+      approvals,
+      status: "prototype_reviewed_pending_milestone_owner_acceptance",
+      productionEvidenceLoaded: false,
     };
   }),
 
-  // ════════════════════════════════════════════════════════════
-  // SEED DATA
-  // ════════════════════════════════════════════════════════════
-
   seedMgmaData: adminQuery.mutation(async () => {
     const db = getDb();
-    const now = new Date().toISOString();
-
-    // Seed 7 MGMA domains
-    await db.insert(mgmaDomains).values([
-      { id: "mgma-d1", domainNumber: 1, domainName: "Operations Management", domainDescription: "Patient flow, scheduling, facility management, supply chain, and day-to-day operational efficiency", amosOpsModule: "GRO Residential + BHC Clinical Operations", moduleRoute: "/operations", responsibleDivision: "GAD", status: "active", configuredAt: now, configuredBy: "AMOS-Domain", createdAt: now, updatedAt: now },
-      { id: "mgma-d2", domainNumber: 2, domainName: "Financial Management", domainDescription: "Revenue cycle, billing, collections, budgeting, financial reporting, and cost management", amosOpsModule: "Revenue Dashboard + Claims Management", moduleRoute: "/revenue", responsibleDivision: "GAD", status: "active", configuredAt: now, configuredBy: "AMOS-Domain", createdAt: now, updatedAt: now },
-      { id: "mgma-d3", domainNumber: 3, domainName: "Human Resource Management", domainDescription: "Staffing, recruitment, retention, credentialing, training, and performance management", amosOpsModule: "HR Personnel Files + Credentials + Performance", moduleRoute: "/hr", responsibleDivision: "GAD", status: "active", configuredAt: now, configuredBy: "AMOS-Domain", createdAt: now, updatedAt: now },
-      { id: "mgma-d4", domainNumber: 4, domainName: "Compliance & Risk Management", domainDescription: "Regulatory compliance, risk mitigation, quality assurance, accreditation, and legal adherence", amosOpsModule: "Compliance + QA + 42CFR2 + T-748", moduleRoute: "/compliance", responsibleDivision: "EO", status: "active", configuredAt: now, configuredBy: "AMOS-Domain", createdAt: now, updatedAt: now },
-      { id: "mgma-d5", domainNumber: 5, domainName: "Patient Care & Clinical Quality", domainDescription: "Clinical outcomes, care coordination, treatment effectiveness, patient safety, and satisfaction", amosOpsModule: "BHC Clinical + GRO Care + CANS Tracking", moduleRoute: "/clinical", responsibleDivision: "BHC", status: "active", configuredAt: now, configuredBy: "AMOS-Domain", createdAt: now, updatedAt: now },
-      { id: "mgma-d6", domainNumber: 6, domainName: "Information Management", domainDescription: "EHR systems, data analytics, reporting infrastructure, cybersecurity, and health information exchange", amosOpsModule: "AMOS-OPS Platform + NIL Knowledge Graph", moduleRoute: "/intelligence", responsibleDivision: "EO", status: "configured", configuredAt: now, configuredBy: "AMOS-Domain", createdAt: now, updatedAt: now },
-      { id: "mgma-d7", domainNumber: 7, domainName: "Transformation & Strategy", domainDescription: "Strategic planning, organizational development, innovation, market expansion, and change management", amosOpsModule: "Executive Dashboard + Agent Swarm + Milestone Tracking", moduleRoute: "/executive", responsibleDivision: "EO", status: "configured", configuredAt: now, configuredBy: "AMOS-Domain", createdAt: now, updatedAt: now },
-    ]).onConflictDoNothing();
-
-    // Seed KPI targets per domain
-    await db.insert(mgmaKpiTargets).values([
-      // Domain 1: Operations
-      { id: "kpi-001", domainId: "mgma-d1", kpiName: "Average Days to Appointment", kpiDescription: "Days from referral to first scheduled appointment", targetValue: "7", targetUnit: "days", comparisonOperator: "less_than", benchmarkSource: "MGMA 2024", currentValue: "5", lastMeasuredAt: now, measurementFrequency: "monthly", status: "on_target", alertThreshold: "10" },
-      { id: "kpi-002", domainId: "mgma-d1", kpiName: "No-Show Rate", kpiDescription: "Percentage of scheduled appointments where patient did not show", targetValue: "8", targetUnit: "percentage", comparisonOperator: "less_than", benchmarkSource: "MGMA 2024", currentValue: "12", lastMeasuredAt: now, measurementFrequency: "monthly", status: "off_target", alertThreshold: "10" },
-      { id: "kpi-003", domainId: "mgma-d1", kpiName: "Bed Occupancy Rate", kpiDescription: "Percentage of licensed beds occupied", targetValue: "85", targetUnit: "percentage", comparisonOperator: "between", benchmarkSource: "HHSC Target", currentValue: "62", lastMeasuredAt: now, measurementFrequency: "daily", status: "at_risk", alertThreshold: "70" },
-
-      // Domain 2: Financial
-      { id: "kpi-004", domainId: "mgma-d2", kpiName: "Days in Accounts Receivable", kpiDescription: "Average days to collect payment after service delivery", targetValue: "40", targetUnit: "days", comparisonOperator: "less_than", benchmarkSource: "MGMA 2024", currentValue: "38", lastMeasuredAt: now, measurementFrequency: "monthly", status: "on_target", alertThreshold: "45" },
-      { id: "kpi-005", domainId: "mgma-d2", kpiName: "Clean Claim Rate", kpiDescription: "Percentage of claims paid on first submission without denial", targetValue: "95", targetUnit: "percentage", comparisonOperator: "greater_than", benchmarkSource: "MGMA 2024", currentValue: "92", lastMeasuredAt: now, measurementFrequency: "monthly", status: "at_risk", alertThreshold: "90" },
-      { id: "kpi-006", domainId: "mgma-d2", kpiName: "Net Collection Rate", kpiDescription: "Percentage of collectible revenue actually collected", targetValue: "97", targetUnit: "percentage", comparisonOperator: "greater_than", benchmarkSource: "MGMA 2024", currentValue: "97", lastMeasuredAt: now, measurementFrequency: "monthly", status: "on_target", alertThreshold: "95" },
-      { id: "kpi-007", domainId: "mgma-d2", kpiName: "Cost per Encounter", kpiDescription: "Average operational cost per clinical encounter", targetValue: "125", targetUnit: "dollars", comparisonOperator: "less_than", benchmarkSource: "Internal Benchmark", currentValue: null, lastMeasuredAt: null, measurementFrequency: "quarterly", status: "not_measured", alertThreshold: "150" },
-
-      // Domain 3: HR
-      { id: "kpi-008", domainId: "mgma-d3", kpiName: "Staff Turnover Rate", kpiDescription: "Annual percentage of staff leaving the organization", targetValue: "15", targetUnit: "percentage", comparisonOperator: "less_than", benchmarkSource: "MGMA 2024", currentValue: "18", lastMeasuredAt: now, measurementFrequency: "quarterly", status: "off_target", alertThreshold: "20" },
-      { id: "kpi-009", domainId: "mgma-d3", kpiName: "Credentialing Completion Time", kpiDescription: "Days to complete full credentialing for new hires", targetValue: "21", targetUnit: "days", comparisonOperator: "less_than", benchmarkSource: "MGMA 2024", currentValue: "24", lastMeasuredAt: now, measurementFrequency: "monthly", status: "at_risk", alertThreshold: "30" },
-      { id: "kpi-010", domainId: "mgma-d3", kpiName: "Training Compliance Rate", kpiDescription: "Percentage of staff with current required training certifications", targetValue: "95", targetUnit: "percentage", comparisonOperator: "greater_than", benchmarkSource: "HHSC Requirement", currentValue: "88", lastMeasuredAt: now, measurementFrequency: "monthly", status: "off_target", alertThreshold: "90" },
-
-      // Domain 4: Compliance
-      { id: "kpi-011", domainId: "mgma-d4", kpiName: "Documentation Timeliness", kpiDescription: "Percentage of clinical notes completed within 24 hours", targetValue: "95", targetUnit: "percentage", comparisonOperator: "greater_than", benchmarkSource: "Internal Policy", currentValue: "91", lastMeasuredAt: now, measurementFrequency: "weekly", status: "at_risk", alertThreshold: "90" },
-      { id: "kpi-012", domainId: "mgma-d4", kpiName: "42 CFR Part 2 Training Rate", kpiDescription: "Percentage of staff trained on SUD confidentiality requirements", targetValue: "100", targetUnit: "percentage", comparisonOperator: "equal_to", benchmarkSource: "Federal Regulation", currentValue: "75", lastMeasuredAt: now, measurementFrequency: "quarterly", status: "off_target", alertThreshold: "95" },
-      { id: "kpi-013", domainId: "mgma-d4", kpiName: "Incident Report Closure Time", kpiDescription: "Average days to close a restraint/seclusion incident report", targetValue: "3", targetUnit: "days", comparisonOperator: "less_than", benchmarkSource: "T-748 Requirement", currentValue: "2", lastMeasuredAt: now, measurementFrequency: "monthly", status: "on_target", alertThreshold: "5" },
-
-      // Domain 5: Patient Care
-      { id: "kpi-014", domainId: "mgma-d5", kpiName: "CANS Completion Rate", kpiDescription: "Percentage of youth with completed CANS assessment within 14 days", targetValue: "100", targetUnit: "percentage", comparisonOperator: "equal_to", benchmarkSource: "HHSC Requirement", currentValue: "33", lastMeasuredAt: now, measurementFrequency: "weekly", status: "off_target", alertThreshold: "90" },
-      { id: "kpi-015", domainId: "mgma-d5", kpiName: "Treatment Plan Review Adherence", kpiDescription: "Percentage of active treatment plans reviewed within 90-day window", targetValue: "95", targetUnit: "percentage", comparisonOperator: "greater_than", benchmarkSource: "HHSC Requirement", currentValue: "100", lastMeasuredAt: now, measurementFrequency: "monthly", status: "on_target", alertThreshold: "90" },
-      { id: "kpi-016", domainId: "mgma-d5", kpiName: "Youth Rights Acknowledgment Rate", kpiDescription: "Percentage of youth with fully completed rights acknowledgment", targetValue: "100", targetUnit: "percentage", comparisonOperator: "equal_to", benchmarkSource: "T-748 Requirement", currentValue: "50", lastMeasuredAt: now, measurementFrequency: "weekly", status: "off_target", alertThreshold: "95" },
-      { id: "kpi-017", domainId: "mgma-d5", kpiName: "Client Satisfaction Score", kpiDescription: "Average satisfaction rating from youth/guardian surveys", targetValue: "85", targetUnit: "percentage", comparisonOperator: "greater_than", benchmarkSource: "Internal Benchmark", currentValue: null, lastMeasuredAt: null, measurementFrequency: "quarterly", status: "not_measured", alertThreshold: "80" },
-
-      // Domain 6: Information Management
-      { id: "kpi-018", domainId: "mgma-d6", kpiName: "System Uptime", kpiDescription: "Percentage of time AMOS-OPS platform is available", targetValue: "99.9", targetUnit: "percentage", comparisonOperator: "greater_than", benchmarkSource: "Industry Standard", currentValue: "99.5", lastMeasuredAt: now, measurementFrequency: "daily", status: "at_risk", alertThreshold: "99" },
-      { id: "kpi-019", domainId: "mgma-d6", kpiName: "Data Backup Completion", kpiDescription: "Percentage of scheduled backups completed successfully", targetValue: "100", targetUnit: "percentage", comparisonOperator: "equal_to", benchmarkSource: "Internal Policy", currentValue: "100", lastMeasuredAt: now, measurementFrequency: "daily", status: "on_target", alertThreshold: "100" },
-
-      // Domain 7: Strategy
-      { id: "kpi-020", domainId: "mgma-d7", kpiName: "Milestone Completion Rate", kpiDescription: "Percentage of project milestones completed on schedule", targetValue: "80", targetUnit: "percentage", comparisonOperator: "greater_than", benchmarkSource: "Internal Target", currentValue: "70", lastMeasuredAt: now, measurementFrequency: "monthly", status: "at_risk", alertThreshold: "70" },
-      { id: "kpi-021", domainId: "mgma-d7", kpiName: "Agent Swarm Task Velocity", kpiDescription: "Average tasks completed per development cycle", targetValue: "8", targetUnit: "count", comparisonOperator: "greater_than", benchmarkSource: "Internal Target", currentValue: "7", lastMeasuredAt: now, measurementFrequency: "weekly", status: "at_risk", alertThreshold: "6" },
-    ]).onConflictDoNothing();
-
-    return { success: true, message: "MGMA seeded: 7 domains, 21 KPI targets" };
+    const [domains, kpis, synthetic, production] = await Promise.all([
+      db.select().from(mgmaDomains),
+      db.select().from(mgmaKpiTargets),
+      db
+        .select()
+        .from(mgmaMeasurements)
+        .where(eq(mgmaMeasurements.evidenceClass, "synthetic_demo")),
+      db
+        .select()
+        .from(mgmaMeasurements)
+        .where(eq(mgmaMeasurements.evidenceClass, "production")),
+    ]);
+    return {
+      success: true,
+      message:
+        "M1.3 controlled baseline is migration-owned; no unlabeled current values were written.",
+      domains: domains.length,
+      kpis: kpis.length,
+      syntheticMeasurements: synthetic.length,
+      productionMeasurements: production.length,
+      productionAssertion: false,
+    };
   }),
 });

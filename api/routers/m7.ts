@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { createRouter, publicQuery, authedQuery, adminQuery, auditLog } from "../middleware";
-import { sqlite } from "../queries/connection";
 import { randomUUID } from "crypto";
 
 // ═══════════════════════════════════════════════════════════════
@@ -9,24 +8,119 @@ import { randomUUID } from "crypto";
 
 // ─── Seed Data ─────────────────────────────────────────────
 
-const workOrdersStore: any[] = [];
-const facilitiesStore: any[] = [];
-const vendorsStore: any[] = [];
-const procurementStore: any[] = [];
-const safetyInspectionsStore: any[] = [];
-const vendorContractsStore: any[] = [];
+interface WorkOrderRecord extends Record<string, unknown> {
+  id: string;
+  facility_id: string | null;
+  vendor_id: string | null;
+  status: string;
+  priority: string;
+  completed_at: string | null;
+  due_date: string | null;
+  wo_number: string;
+  actual_cost: number | null;
+  assigned_to: string | null;
+  completion_notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface FacilityRecord extends Record<string, unknown> {
+  id: string;
+  facility_name: string;
+  bedrooms: number;
+  common_areas: number;
+  status: string;
+  manager_id: string | null;
+  current_occupancy?: number;
+  notes?: string;
+  updated_at?: string;
+}
+
+interface VendorRecord extends Record<string, unknown> {
+  id: string;
+  vendor_name: string;
+  vendor_type: string;
+  contact_person: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  address: string | null;
+  tax_id: string | null;
+  payment_terms: string | null;
+  status: string;
+  rating: number | null;
+  notes: string | null;
+  contract_expiry: string | null;
+  created_at: string;
+}
+
+interface ProcurementRecord extends Record<string, unknown> {
+  id: string;
+  request_number: string;
+  facility_id: string | null;
+  vendor_id: string | null;
+  status: string;
+  priority: string;
+  estimated_total_cost: number;
+  received_at: string | null;
+  received_by: string | null;
+  po_number: string | null;
+  notes: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface SafetyInspectionRecord extends Record<string, unknown> {
+  id: string;
+  facility_id: string;
+  inspection_number: string;
+  inspection_type: string;
+  inspection_date: string;
+  next_due_date: string | null;
+  status: string;
+  score: number | null;
+  findings: string | null;
+  corrective_actions: string | null;
+  corrective_actions_completed: boolean;
+  corrective_actions_completed_at: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  notes: string | null;
+  updated_at: string;
+}
+
+interface VendorContractRecord extends Record<string, unknown> {
+  id: string;
+  vendor_id: string;
+  contract_number: string;
+  status: string;
+  end_date: string;
+  value: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+const workOrdersStore: WorkOrderRecord[] = [];
+const facilitiesStore: FacilityRecord[] = [];
+const vendorsStore: VendorRecord[] = [];
+const procurementStore: ProcurementRecord[] = [];
+const safetyInspectionsStore: SafetyInspectionRecord[] = [];
+const vendorContractsStore: VendorContractRecord[] = [];
 
 function seedGAD() {
   if (workOrdersStore.length === 0) {
     workOrdersStore.push(
-      { id: "wo1", wo_number: "WO-2026-001", title: "HVAC Repair — Wing B", description: "Air conditioning unit in Wing B common area not cooling properly. Temperature reached 82F.", work_type: "hvac", priority: "high", status: "in_progress", facility_id: "f1", vendor_id: "v1", assigned_to: "gad.ops@adolbi.com", estimated_cost: 85000, actual_cost: null, requested_by: "rcs-lead@adolbi.com", approved_by: "E. Russ Aideyan", due_date: "2026-07-02", completed_at: null, created_at: "2026-06-25T10:00:00Z", updated_at: "2026-06-26T14:00:00Z" },
-      { id: "wo2", wo_number: "WO-2026-002", title: "Replace fire extinguisher — Wing B", description: "Fire extinguisher expired per safety audit AUD-2026-003. Replace with new 10lb ABC unit.", work_type: "safety", priority: "urgent", status: "completed", facility_id: "f1", vendor_id: "v2", assigned_to: "gad.ops@adolbi.com", estimated_cost: 15000, actual_cost: 12500, requested_by: "gro.admin@adolbi.com", approved_by: "E. Russ Aideyan", due_date: "2026-06-20", completed_at: "2026-06-19T14:00:00Z", created_at: "2026-06-18T09:00:00Z", updated_at: "2026-06-19T14:00:00Z" },
-      { id: "wo3", wo_number: "WO-2026-003", title: "Plumbing leak — Kitchen sink", description: "Slow drain and minor leak under kitchen sink. Water damage to cabinet base.", work_type: "plumbing", priority: "medium", status: "open", facility_id: "f1", vendor_id: "v3", assigned_to: "gad.ops@adolbi.com", estimated_cost: 35000, actual_cost: null, requested_by: "rcs-day@adolbi.com", approved_by: null, due_date: "2026-07-05", completed_at: null, created_at: "2026-06-27T08:00:00Z", updated_at: "2026-06-27T08:00:00Z" },
-      { id: "wo4", wo_number: "WO-2026-004", title: "Security camera upgrade", description: "Replace 4 analog cameras with IP cameras. Add coverage to courtyard blind spot.", work_type: "security", priority: "medium", status: "pending_parts", facility_id: "f1", vendor_id: "v4", assigned_to: "gad.ops@adolbi.com", estimated_cost: 450000, actual_cost: null, requested_by: "E. Russ Aideyan", approved_by: "E. Russ Aideyan", due_date: "2026-07-15", completed_at: null, created_at: "2026-06-20T11:00:00Z", updated_at: "2026-06-28T09:00:00Z" },
-      { id: "wo5", wo_number: "WO-2026-005", title: "Landscaping — Front entrance", description: "Refresh mulch, trim hedges, replace damaged plants at main entrance.", work_type: "grounds", priority: "low", status: "open", facility_id: "f1", vendor_id: "v5", assigned_to: "gad.ops@adolbi.com", estimated_cost: 22000, actual_cost: null, requested_by: "gro.admin@adolbi.com", approved_by: null, due_date: "2026-07-10", completed_at: null, created_at: "2026-06-26T13:00:00Z", updated_at: "2026-06-26T13:00:00Z" },
-      { id: "wo6", wo_number: "WO-2026-006", title: "Generator monthly test", description: "Monthly load bank test for backup generator. Log results per fire marshal requirements.", work_type: "electrical", priority: "high", status: "completed", facility_id: "f1", vendor_id: "v6", assigned_to: "gad.ops@adolbi.com", estimated_cost: 8000, actual_cost: 8000, requested_by: "gad.ops@adolbi.com", approved_by: null, due_date: "2026-06-30", completed_at: "2026-06-28T10:00:00Z", created_at: "2026-06-28T08:00:00Z", updated_at: "2026-06-28T10:00:00Z" },
-      { id: "wo7", wo_number: "WO-2026-007", title: "Paint — Common room refresh", description: "Repaint youth common room. Repair drywall damage near south wall.", work_type: "maintenance", priority: "low", status: "in_progress", facility_id: "f1", vendor_id: "v7", assigned_to: "gad.ops@adolbi.com", estimated_cost: 180000, actual_cost: null, requested_by: "rcs-lead@adolbi.com", approved_by: "E. Russ Aideyan", due_date: "2026-07-08", completed_at: null, created_at: "2026-06-24T09:00:00Z", updated_at: "2026-06-27T15:00:00Z" },
-      { id: "wo8", wo_number: "WO-2026-008", title: "IT Network switch replacement", description: "Replace aging 24-port switch in server closet. Intermittent connectivity issues reported.", work_type: "it", priority: "high", status: "open", facility_id: "f1", vendor_id: null, assigned_to: "gad.ops@adolbi.com", estimated_cost: 65000, actual_cost: null, requested_by: "E. Russ Aideyan", approved_by: "E. Russ Aideyan", due_date: "2026-07-03", completed_at: null, created_at: "2026-06-28T16:00:00Z", updated_at: "2026-06-28T16:00:00Z" },
+      { id: "wo1", wo_number: "WO-2026-001", title: "HVAC Repair — Wing B", description: "Air conditioning unit in Wing B common area not cooling properly. Temperature reached 82F.", work_type: "hvac", priority: "high", status: "in_progress", facility_id: "f1", vendor_id: "v1", assigned_to: "gad.ops@amos-ops.invalid", estimated_cost: 85000, actual_cost: null, requested_by: "rcs-lead@amos-ops.invalid", approved_by: "Demo Executive", due_date: "2026-07-02", completed_at: null, created_at: "2026-06-25T10:00:00Z", updated_at: "2026-06-26T14:00:00Z" },
+      { id: "wo2", wo_number: "WO-2026-002", title: "Replace fire extinguisher — Wing B", description: "Fire extinguisher expired per safety audit AUD-2026-003. Replace with new 10lb ABC unit.", work_type: "safety", priority: "urgent", status: "completed", facility_id: "f1", vendor_id: "v2", assigned_to: "gad.ops@amos-ops.invalid", estimated_cost: 15000, actual_cost: 12500, requested_by: "gro.admin@amos-ops.invalid", approved_by: "Demo Executive", due_date: "2026-06-20", completed_at: "2026-06-19T14:00:00Z", created_at: "2026-06-18T09:00:00Z", updated_at: "2026-06-19T14:00:00Z" },
+      { id: "wo3", wo_number: "WO-2026-003", title: "Plumbing leak — Kitchen sink", description: "Slow drain and minor leak under kitchen sink. Water damage to cabinet base.", work_type: "plumbing", priority: "medium", status: "open", facility_id: "f1", vendor_id: "v3", assigned_to: "gad.ops@amos-ops.invalid", estimated_cost: 35000, actual_cost: null, requested_by: "rcs-day@amos-ops.invalid", approved_by: null, due_date: "2026-07-05", completed_at: null, created_at: "2026-06-27T08:00:00Z", updated_at: "2026-06-27T08:00:00Z" },
+      { id: "wo4", wo_number: "WO-2026-004", title: "Security camera upgrade", description: "Replace 4 analog cameras with IP cameras. Add coverage to courtyard blind spot.", work_type: "security", priority: "medium", status: "pending_parts", facility_id: "f1", vendor_id: "v4", assigned_to: "gad.ops@amos-ops.invalid", estimated_cost: 450000, actual_cost: null, requested_by: "Demo Executive", approved_by: "Demo Executive", due_date: "2026-07-15", completed_at: null, created_at: "2026-06-20T11:00:00Z", updated_at: "2026-06-28T09:00:00Z" },
+      { id: "wo5", wo_number: "WO-2026-005", title: "Landscaping — Front entrance", description: "Refresh mulch, trim hedges, replace damaged plants at main entrance.", work_type: "grounds", priority: "low", status: "open", facility_id: "f1", vendor_id: "v5", assigned_to: "gad.ops@amos-ops.invalid", estimated_cost: 22000, actual_cost: null, requested_by: "gro.admin@amos-ops.invalid", approved_by: null, due_date: "2026-07-10", completed_at: null, created_at: "2026-06-26T13:00:00Z", updated_at: "2026-06-26T13:00:00Z" },
+      { id: "wo6", wo_number: "WO-2026-006", title: "Generator monthly test", description: "Monthly load bank test for backup generator. Log results per fire marshal requirements.", work_type: "electrical", priority: "high", status: "completed", facility_id: "f1", vendor_id: "v6", assigned_to: "gad.ops@amos-ops.invalid", estimated_cost: 8000, actual_cost: 8000, requested_by: "gad.ops@amos-ops.invalid", approved_by: null, due_date: "2026-06-30", completed_at: "2026-06-28T10:00:00Z", created_at: "2026-06-28T08:00:00Z", updated_at: "2026-06-28T10:00:00Z" },
+      { id: "wo7", wo_number: "WO-2026-007", title: "Paint — Common room refresh", description: "Repaint youth common room. Repair drywall damage near south wall.", work_type: "maintenance", priority: "low", status: "in_progress", facility_id: "f1", vendor_id: "v7", assigned_to: "gad.ops@amos-ops.invalid", estimated_cost: 180000, actual_cost: null, requested_by: "rcs-lead@amos-ops.invalid", approved_by: "Demo Executive", due_date: "2026-07-08", completed_at: null, created_at: "2026-06-24T09:00:00Z", updated_at: "2026-06-27T15:00:00Z" },
+      { id: "wo8", wo_number: "WO-2026-008", title: "IT Network switch replacement", description: "Replace aging 24-port switch in server closet. Intermittent connectivity issues reported.", work_type: "it", priority: "high", status: "open", facility_id: "f1", vendor_id: null, assigned_to: "gad.ops@amos-ops.invalid", estimated_cost: 65000, actual_cost: null, requested_by: "Demo Executive", approved_by: "Demo Executive", due_date: "2026-07-03", completed_at: null, created_at: "2026-06-28T16:00:00Z", updated_at: "2026-06-28T16:00:00Z" },
     );
   }
   if (facilitiesStore.length === 0) {
@@ -37,37 +131,37 @@ function seedGAD() {
   }
   if (vendorsStore.length === 0) {
     vendorsStore.push(
-      { id: "v1", vendor_name: "Cypress Mechanical Services", vendor_type: "hvac", contact_person: "Mike Torres", contact_phone: "(281) 555-1100", contact_email: "service@cypressmech.com", address: "890 Industrial Dr, Cypress, TX 77429", tax_id: "12-3456789", payment_terms: "Net 30", status: "active", rating: 5, notes: "Preferred HVAC vendor. 24/7 emergency service.", contract_expiry: "2026-12-31", created_at: "2026-01-01" },
-      { id: "v2", vendor_name: "Houston Safety Supply", vendor_type: "safety_equipment", contact_person: "Lisa Park", contact_phone: "(713) 555-2200", contact_email: "orders@houstonsafety.com", address: "2200 Safety Way, Houston, TX 77001", tax_id: "23-4567890", payment_terms: "Net 15", status: "active", rating: 4, notes: "Fire safety equipment and inspections.", contract_expiry: "2027-03-31", created_at: "2026-01-01" },
-      { id: "v3", vendor_name: "Cypress Plumbing Co", vendor_type: "plumbing", contact_person: "Jake Rivera", contact_phone: "(281) 555-3300", contact_email: "jobs@cypressplumbing.net", address: "456 Pipe Lane, Cypress, TX 77429", tax_id: "34-5678901", payment_terms: "Net 30", status: "active", rating: 4, notes: "General plumbing. Good response time.", contract_expiry: "2026-09-30", created_at: "2026-01-01" },
-      { id: "v4", vendor_name: "SecureView Systems", vendor_type: "security", contact_person: "David Chen", contact_phone: "(832) 555-4400", contact_email: "install@secureview.io", address: "1200 Tech Blvd, Houston, TX 77002", tax_id: "45-6789012", payment_terms: "50% upfront, 50% on completion", status: "active", rating: 5, notes: "IP camera systems and access control.", contract_expiry: "2027-06-30", created_at: "2026-01-01" },
-      { id: "v5", vendor_name: "GreenScape Cypress", vendor_type: "landscaping", contact_person: "Maria Green", contact_phone: "(281) 555-5500", contact_email: "service@greenscape.com", address: "77 Garden Rd, Cypress, TX 77429", tax_id: "56-7890123", payment_terms: "Net 30", status: "active", rating: 4, notes: "Monthly landscaping maintenance.", contract_expiry: "2026-12-31", created_at: "2026-01-01" },
-      { id: "v6", vendor_name: "PowerGuard Generator Services", vendor_type: "electrical", contact_person: "Robert Watts", contact_phone: "(713) 555-6600", contact_email: "service@powerguard.com", address: "300 Power Ave, Houston, TX 77003", tax_id: "67-8901234", payment_terms: "Net 15", status: "active", rating: 5, notes: "Generator maintenance and load bank testing.", contract_expiry: "2027-01-31", created_at: "2026-01-01" },
-      { id: "v7", vendor_name: "Cypress Painting & Drywall", vendor_type: "general_contractor", contact_person: "Ana Lopez", contact_phone: "(281) 555-7700", contact_email: "estimates@cypresspaint.com", address: "55 Brush St, Cypress, TX 77429", tax_id: "78-9012345", payment_terms: "Net 30", status: "active", rating: 4, notes: "Interior painting and minor repairs.", contract_expiry: "2026-08-31", created_at: "2026-01-01" },
+      { id: "v1", vendor_name: "Cypress Mechanical Services", vendor_type: "hvac", contact_person: "Synthetic Staff 02", contact_phone: "(281) 555-1100", contact_email: "service@example.invalid", address: "890 Industrial Dr, Cypress, TX 77429", tax_id: "SYNTH-TAX-001", payment_terms: "Net 30", status: "active", rating: 5, notes: "Preferred HVAC vendor. 24/7 emergency service.", contract_expiry: "2026-12-31", created_at: "2026-01-01" },
+      { id: "v2", vendor_name: "Houston Safety Supply", vendor_type: "safety_equipment", contact_person: "Lisa Park", contact_phone: "(713) 555-2200", contact_email: "orders@example.invalid", address: "2200 Safety Way, Houston, TX 77001", tax_id: "SYNTH-TAX-002", payment_terms: "Net 15", status: "active", rating: 4, notes: "Fire safety equipment and inspections.", contract_expiry: "2027-03-31", created_at: "2026-01-01" },
+      { id: "v3", vendor_name: "Cypress Plumbing Co", vendor_type: "plumbing", contact_person: "Jake Rivera", contact_phone: "(281) 555-3300", contact_email: "jobs@example.invalid", address: "456 Pipe Lane, Cypress, TX 77429", tax_id: "SYNTH-TAX-003", payment_terms: "Net 30", status: "active", rating: 4, notes: "General plumbing. Good response time.", contract_expiry: "2026-09-30", created_at: "2026-01-01" },
+      { id: "v4", vendor_name: "SecureView Systems", vendor_type: "security", contact_person: "David Chen", contact_phone: "(832) 555-4400", contact_email: "install@example.invalid", address: "1200 Tech Blvd, Houston, TX 77002", tax_id: "SYNTH-TAX-004", payment_terms: "50% upfront, 50% on completion", status: "active", rating: 5, notes: "IP camera systems and access control.", contract_expiry: "2027-06-30", created_at: "2026-01-01" },
+      { id: "v5", vendor_name: "GreenScape Cypress", vendor_type: "landscaping", contact_person: "Maria Green", contact_phone: "(281) 555-5500", contact_email: "service@example.invalid", address: "77 Garden Rd, Cypress, TX 77429", tax_id: "SYNTH-TAX-005", payment_terms: "Net 30", status: "active", rating: 4, notes: "Monthly landscaping maintenance.", contract_expiry: "2026-12-31", created_at: "2026-01-01" },
+      { id: "v6", vendor_name: "PowerGuard Generator Services", vendor_type: "electrical", contact_person: "Robert Watts", contact_phone: "(713) 555-6600", contact_email: "service@example.invalid", address: "300 Power Ave, Houston, TX 77003", tax_id: "SYNTH-TAX-006", payment_terms: "Net 15", status: "active", rating: 5, notes: "Generator maintenance and load bank testing.", contract_expiry: "2027-01-31", created_at: "2026-01-01" },
+      { id: "v7", vendor_name: "Cypress Painting & Drywall", vendor_type: "general_contractor", contact_person: "Ana Lopez", contact_phone: "(281) 555-7700", contact_email: "estimates@example.invalid", address: "55 Brush St, Cypress, TX 77429", tax_id: "SYNTH-TAX-007", payment_terms: "Net 30", status: "active", rating: 4, notes: "Interior painting and minor repairs.", contract_expiry: "2026-08-31", created_at: "2026-01-01" },
     );
   }
   if (procurementStore.length === 0) {
     procurementStore.push(
-      { id: "pr1", request_number: "PR-2026-001", title: "Youth program laptops", description: "5 Chromebooks for youth education program", category: "technology", quantity: 5, estimated_unit_cost: 29900, estimated_total_cost: 149500, vendor_id: null, vendor_name: "Best Buy Business", facility_id: "f1", facility_name: "BHC at Cypress — Main Campus", requested_by: "program.director@adolbi.com", requested_by_id: "u8", approved_by: null, approved_at: null, status: "submitted", priority: "high", justification: "Current devices are 4 years old, batteries failing", rejection_reason: null, po_number: null, received_at: null, received_by: null, notes: "Need before school semester starts", created_at: "2026-06-20T10:00:00Z", updated_at: "2026-06-20T10:00:00Z" },
-      { id: "pr2", request_number: "PR-2026-002", title: "Office supplies Q3", description: "Quarterly restock of paper, toner, pens, folders", category: "supplies", quantity: 1, estimated_unit_cost: 45000, estimated_total_cost: 45000, vendor_id: "v2", vendor_name: "Houston Safety Supply", facility_id: "f2", facility_name: "BHC at Cypress — Administrative Annex", requested_by: "admin@adolbi.com", requested_by_id: "u1", approved_by: "E. Russ Aideyan", approved_at: "2026-06-22T14:00:00Z", status: "approved", priority: "medium", justification: "Quarterly office supply replenishment", rejection_reason: null, po_number: null, received_at: null, received_by: null, notes: "", created_at: "2026-06-22T09:00:00Z", updated_at: "2026-06-22T14:00:00Z" },
-      { id: "pr3", request_number: "PR-2026-003", title: "Dining room chairs", description: "Replace 12 damaged chairs in youth dining room", category: "furniture", quantity: 12, estimated_unit_cost: 8500, estimated_total_cost: 102000, vendor_id: null, vendor_name: "Office Depot", facility_id: "f1", facility_name: "BHC at Cypress — Main Campus", requested_by: "rcs-lead@adolbi.com", requested_by_id: "u5", approved_by: "E. Russ Aideyan", approved_at: "2026-06-25T11:00:00Z", status: "ordered", priority: "medium", justification: "Safety hazard - chairs have broken legs", rejection_reason: null, po_number: "PO-2026-089", received_at: null, received_by: null, notes: "Delivery expected July 5", created_at: "2026-06-24T13:00:00Z", updated_at: "2026-06-26T09:00:00Z" },
-      { id: "pr4", request_number: "PR-2026-004", title: "Generator annual service contract", description: "Annual maintenance contract for backup generator", category: "services", quantity: 1, estimated_unit_cost: 240000, estimated_total_cost: 240000, vendor_id: "v6", vendor_name: "PowerGuard Generator Services", facility_id: "f1", facility_name: "BHC at Cypress — Main Campus", requested_by: "gad.ops@adolbi.com", requested_by_id: "u7", approved_by: "E. Russ Aideyan", approved_at: "2026-06-28T10:00:00Z", status: "received", priority: "high", justification: "Required per fire marshal, annual inspection due", rejection_reason: null, po_number: "PO-2026-092", received_at: "2026-06-28T10:00:00Z", received_by: "gad.ops@adolbi.com", notes: "Contract renewed through June 2027", created_at: "2026-06-15T08:00:00Z", updated_at: "2026-06-28T10:00:00Z" },
-      { id: "pr5", request_number: "PR-2026-005", title: "Kitchen fire suppression inspection", description: "Semi-annual Ansul system inspection and certification", category: "safety", quantity: 1, estimated_unit_cost: 35000, estimated_total_cost: 35000, vendor_id: "v2", vendor_name: "Houston Safety Supply", facility_id: "f1", facility_name: "BHC at Cypress — Main Campus", requested_by: "gad.ops@adolbi.com", requested_by_id: "u7", approved_by: null, approved_at: null, status: "draft", priority: "urgent", justification: "Health department requirement, expires July 15", rejection_reason: null, po_number: null, received_at: null, received_by: null, notes: "Schedule ASAP", created_at: "2026-06-29T09:00:00Z", updated_at: "2026-06-29T09:00:00Z" },
+      { id: "pr1", request_number: "PR-2026-001", title: "Youth program laptops", description: "5 Chromebooks for youth education program", category: "technology", quantity: 5, estimated_unit_cost: 29900, estimated_total_cost: 149500, vendor_id: null, vendor_name: "Best Buy Business", facility_id: "f1", facility_name: "BHC at Cypress — Main Campus", requested_by: "program.director@amos-ops.invalid", requested_by_id: "u8", approved_by: null, approved_at: null, status: "submitted", priority: "high", justification: "Current devices are 4 years old, batteries failing", rejection_reason: null, po_number: null, received_at: null, received_by: null, notes: "Need before school semester starts", created_at: "2026-06-20T10:00:00Z", updated_at: "2026-06-20T10:00:00Z" },
+      { id: "pr2", request_number: "PR-2026-002", title: "Office supplies Q3", description: "Quarterly restock of paper, toner, pens, folders", category: "supplies", quantity: 1, estimated_unit_cost: 45000, estimated_total_cost: 45000, vendor_id: "v2", vendor_name: "Houston Safety Supply", facility_id: "f2", facility_name: "BHC at Cypress — Administrative Annex", requested_by: "admin@amos-ops.invalid", requested_by_id: "u1", approved_by: "Demo Executive", approved_at: "2026-06-22T14:00:00Z", status: "approved", priority: "medium", justification: "Quarterly office supply replenishment", rejection_reason: null, po_number: null, received_at: null, received_by: null, notes: "", created_at: "2026-06-22T09:00:00Z", updated_at: "2026-06-22T14:00:00Z" },
+      { id: "pr3", request_number: "PR-2026-003", title: "Dining room chairs", description: "Replace 12 damaged chairs in youth dining room", category: "furniture", quantity: 12, estimated_unit_cost: 8500, estimated_total_cost: 102000, vendor_id: null, vendor_name: "Office Depot", facility_id: "f1", facility_name: "BHC at Cypress — Main Campus", requested_by: "rcs-lead@amos-ops.invalid", requested_by_id: "u5", approved_by: "Demo Executive", approved_at: "2026-06-25T11:00:00Z", status: "ordered", priority: "medium", justification: "Safety hazard - chairs have broken legs", rejection_reason: null, po_number: "PO-2026-089", received_at: null, received_by: null, notes: "Delivery expected July 5", created_at: "2026-06-24T13:00:00Z", updated_at: "2026-06-26T09:00:00Z" },
+      { id: "pr4", request_number: "PR-2026-004", title: "Generator annual service contract", description: "Annual maintenance contract for backup generator", category: "services", quantity: 1, estimated_unit_cost: 240000, estimated_total_cost: 240000, vendor_id: "v6", vendor_name: "PowerGuard Generator Services", facility_id: "f1", facility_name: "BHC at Cypress — Main Campus", requested_by: "gad.ops@amos-ops.invalid", requested_by_id: "u7", approved_by: "Demo Executive", approved_at: "2026-06-28T10:00:00Z", status: "received", priority: "high", justification: "Required per fire marshal, annual inspection due", rejection_reason: null, po_number: "PO-2026-092", received_at: "2026-06-28T10:00:00Z", received_by: "gad.ops@amos-ops.invalid", notes: "Contract renewed through June 2027", created_at: "2026-06-15T08:00:00Z", updated_at: "2026-06-28T10:00:00Z" },
+      { id: "pr5", request_number: "PR-2026-005", title: "Kitchen fire suppression inspection", description: "Semi-annual Ansul system inspection and certification", category: "safety", quantity: 1, estimated_unit_cost: 35000, estimated_total_cost: 35000, vendor_id: "v2", vendor_name: "Houston Safety Supply", facility_id: "f1", facility_name: "BHC at Cypress — Main Campus", requested_by: "gad.ops@amos-ops.invalid", requested_by_id: "u7", approved_by: null, approved_at: null, status: "draft", priority: "urgent", justification: "Health department requirement, expires July 15", rejection_reason: null, po_number: null, received_at: null, received_by: null, notes: "Schedule ASAP", created_at: "2026-06-29T09:00:00Z", updated_at: "2026-06-29T09:00:00Z" },
     );
   }
   if (safetyInspectionsStore.length === 0) {
     safetyInspectionsStore.push(
-      { id: "si1", inspection_number: "SI-2026-001", facility_id: "f1", facility_name: "BHC at Cypress — Main Campus", inspection_type: "extinguisher", inspected_by: "Lisa Park", inspected_by_id: null, inspection_date: "2026-06-19", next_due_date: "2026-07-19", frequency_days: 30, status: "passed", score: 100, checklist_json: JSON.stringify([{ item: "All units charged", pass: true }, { item: "Tags current", pass: true }, { item: "Access clear", pass: true }, { item: "Mounts secure", pass: true }]), findings: "All 18 units passed inspection.", corrective_actions: null, corrective_actions_completed: true, corrective_actions_completed_at: "2026-06-19", photos_json: null, reviewed_by: "gad.ops@adolbi.com", reviewed_at: "2026-06-20", notes: "No issues found", created_at: "2026-06-19T10:00:00Z", updated_at: "2026-06-20T10:00:00Z" },
+      { id: "si1", inspection_number: "SI-2026-001", facility_id: "f1", facility_name: "BHC at Cypress — Main Campus", inspection_type: "extinguisher", inspected_by: "Lisa Park", inspected_by_id: null, inspection_date: "2026-06-19", next_due_date: "2026-07-19", frequency_days: 30, status: "passed", score: 100, checklist_json: JSON.stringify([{ item: "All units charged", pass: true }, { item: "Tags current", pass: true }, { item: "Access clear", pass: true }, { item: "Mounts secure", pass: true }]), findings: "All 18 units passed inspection.", corrective_actions: null, corrective_actions_completed: true, corrective_actions_completed_at: "2026-06-19", photos_json: null, reviewed_by: "gad.ops@amos-ops.invalid", reviewed_at: "2026-06-20", notes: "No issues found", created_at: "2026-06-19T10:00:00Z", updated_at: "2026-06-20T10:00:00Z" },
       { id: "si2", inspection_number: "SI-2026-002", facility_id: "f1", facility_name: "BHC at Cypress — Main Campus", inspection_type: "generator", inspected_by: "Robert Watts", inspected_by_id: null, inspection_date: "2026-06-28", next_due_date: "2026-07-28", frequency_days: 30, status: "passed", score: 95, checklist_json: JSON.stringify([{ item: "Load bank test", pass: true }, { item: "Oil level", pass: true }, { item: "Coolant level", pass: true }, { item: "Battery voltage", pass: true }, { item: "Transfer switch", pass: true }, { item: "Run time 30min", pass: false }]), findings: "Generator started and carried load. Runtime test incomplete - reached 22 minutes before automatic shutdown.", corrective_actions: "Schedule extended runtime test. Check fuel filter.", corrective_actions_completed: false, corrective_actions_completed_at: null, photos_json: null, reviewed_by: null, reviewed_at: null, notes: "Minor runtime issue", created_at: "2026-06-28T10:00:00Z", updated_at: "2026-06-28T10:00:00Z" },
-      { id: "si3", inspection_number: "SI-2026-003", facility_id: "f1", facility_name: "BHC at Cypress — Main Campus", inspection_type: "sprinkler", inspected_by: "Houston Fire Marshal", inspected_by_id: null, inspection_date: "2026-06-01", next_due_date: "2026-08-01", frequency_days: 60, status: "passed_with_notes", score: 88, checklist_json: JSON.stringify([{ item: "Water flow alarm", pass: true }, { item: "Valve tamper switches", pass: true }, { item: "Head condition", pass: true }, { item: "Pipe condition", pass: true }, { item: "Gauge readings", pass: false }, { item: "Drain test", pass: true }]), findings: "One pressure gauge reading 5 PSI below spec. All other components passed.", corrective_actions: "Replace pressure gauge on Zone 3 riser.", corrective_actions_completed: true, corrective_actions_completed_at: "2026-06-05", photos_json: null, reviewed_by: "gad.ops@adolbi.com", reviewed_at: "2026-06-06", notes: "Gauge replaced, re-inspection passed", created_at: "2026-06-01T09:00:00Z", updated_at: "2026-06-06T10:00:00Z" },
-      { id: "si4", inspection_number: "SI-2026-004", facility_id: "f1", facility_name: "BHC at Cypress — Main Campus", inspection_type: "emergency_lighting", inspected_by: "gad.ops@adolbi.com", inspected_by_id: null, inspection_date: "2026-04-15", next_due_date: "2026-07-15", frequency_days: 90, status: "failed", score: 72, checklist_json: JSON.stringify([{ item: "90-minute test", pass: false }, { item: "Exit sign illumination", pass: true }, { item: "Battery backup", pass: false }, { item: "Bulb condition", pass: true }, { item: "Coverage adequacy", pass: true }]), findings: "3 of 12 units failed 90-minute runtime test. 2 units had weak battery backup.", corrective_actions: "Replace batteries in units EL-03, EL-07, EL-11. Replace full units EL-05, EL-09.", corrective_actions_completed: false, corrective_actions_completed_at: null, photos_json: null, reviewed_by: null, reviewed_at: null, notes: "Parts on order", created_at: "2026-04-15T14:00:00Z", updated_at: "2026-04-15T14:00:00Z" },
+      { id: "si3", inspection_number: "SI-2026-003", facility_id: "f1", facility_name: "BHC at Cypress — Main Campus", inspection_type: "sprinkler", inspected_by: "Houston Fire Marshal", inspected_by_id: null, inspection_date: "2026-06-01", next_due_date: "2026-08-01", frequency_days: 60, status: "passed_with_notes", score: 88, checklist_json: JSON.stringify([{ item: "Water flow alarm", pass: true }, { item: "Valve tamper switches", pass: true }, { item: "Head condition", pass: true }, { item: "Pipe condition", pass: true }, { item: "Gauge readings", pass: false }, { item: "Drain test", pass: true }]), findings: "One pressure gauge reading 5 PSI below spec. All other components passed.", corrective_actions: "Replace pressure gauge on Zone 3 riser.", corrective_actions_completed: true, corrective_actions_completed_at: "2026-06-05", photos_json: null, reviewed_by: "gad.ops@amos-ops.invalid", reviewed_at: "2026-06-06", notes: "Gauge replaced, re-inspection passed", created_at: "2026-06-01T09:00:00Z", updated_at: "2026-06-06T10:00:00Z" },
+      { id: "si4", inspection_number: "SI-2026-004", facility_id: "f1", facility_name: "BHC at Cypress — Main Campus", inspection_type: "emergency_lighting", inspected_by: "gad.ops@amos-ops.invalid", inspected_by_id: null, inspection_date: "2026-04-15", next_due_date: "2026-07-15", frequency_days: 90, status: "failed", score: 72, checklist_json: JSON.stringify([{ item: "90-minute test", pass: false }, { item: "Exit sign illumination", pass: true }, { item: "Battery backup", pass: false }, { item: "Bulb condition", pass: true }, { item: "Coverage adequacy", pass: true }]), findings: "3 of 12 units failed 90-minute runtime test. 2 units had weak battery backup.", corrective_actions: "Replace batteries in units EL-03, EL-07, EL-11. Replace full units EL-05, EL-09.", corrective_actions_completed: false, corrective_actions_completed_at: null, photos_json: null, reviewed_by: null, reviewed_at: null, notes: "Parts on order", created_at: "2026-04-15T14:00:00Z", updated_at: "2026-04-15T14:00:00Z" },
     );
   }
   if (vendorContractsStore.length === 0) {
     vendorContractsStore.push(
-      { id: "vc1", vendor_id: "v1", contract_number: "VC-2026-001", contract_type: "service_agreement", start_date: "2026-01-01", end_date: "2026-12-31", value: 1200000, payment_terms: "Monthly, Net 15", auto_renew: true, renewal_terms: "Auto-renew for 1 year unless 60-day notice given", termination_notice_days: 60, status: "active", scope_of_work: "HVAC maintenance, repair, and emergency service for all campus buildings", documents_json: null, primary_contact_name: "Mike Torres", primary_contact_email: "service@cypressmech.com", primary_contact_phone: "(281) 555-1100", notes: "Includes 24/7 emergency service", created_at: "2026-01-01", updated_at: "2026-01-01" },
-      { id: "vc2", vendor_id: "v6", contract_number: "VC-2026-002", contract_type: "maintenance", start_date: "2026-07-01", end_date: "2027-06-30", value: 240000, payment_terms: "Annual, Net 15", auto_renew: true, renewal_terms: "Auto-renew for 1 year unless 30-day notice given", termination_notice_days: 30, status: "active", scope_of_work: "Monthly generator load bank testing, quarterly maintenance, annual certification", documents_json: null, primary_contact_name: "Robert Watts", primary_contact_email: "service@powerguard.com", primary_contact_phone: "(713) 555-6600", notes: "Just renewed via PR-2026-004", created_at: "2026-07-01", updated_at: "2026-07-01" },
-      { id: "vc3", vendor_id: "v4", contract_number: "VC-2026-003", contract_type: "service_agreement", start_date: "2026-07-01", end_date: "2027-06-30", value: 1800000, payment_terms: "Quarterly, 50% upfront", auto_renew: false, renewal_terms: "Requires new quote for renewal", termination_notice_days: 90, status: "active", scope_of_work: "Security camera system: installation, monitoring, maintenance, cloud storage", documents_json: null, primary_contact_name: "David Chen", primary_contact_email: "install@secureview.io", primary_contact_phone: "(832) 555-4400", notes: "Phase 2 camera upgrade in progress", created_at: "2026-07-01", updated_at: "2026-07-01" },
+      { id: "vc1", vendor_id: "v1", contract_number: "VC-2026-001", contract_type: "service_agreement", start_date: "2026-01-01", end_date: "2026-12-31", value: 1200000, payment_terms: "Monthly, Net 15", auto_renew: true, renewal_terms: "Auto-renew for 1 year unless 60-day notice given", termination_notice_days: 60, status: "active", scope_of_work: "HVAC maintenance, repair, and emergency service for all campus buildings", documents_json: null, primary_contact_name: "Synthetic Staff 02", primary_contact_email: "service@example.invalid", primary_contact_phone: "(281) 555-1100", notes: "Includes 24/7 emergency service", created_at: "2026-01-01", updated_at: "2026-01-01" },
+      { id: "vc2", vendor_id: "v6", contract_number: "VC-2026-002", contract_type: "maintenance", start_date: "2026-07-01", end_date: "2027-06-30", value: 240000, payment_terms: "Annual, Net 15", auto_renew: true, renewal_terms: "Auto-renew for 1 year unless 30-day notice given", termination_notice_days: 30, status: "active", scope_of_work: "Monthly generator load bank testing, quarterly maintenance, annual certification", documents_json: null, primary_contact_name: "Robert Watts", primary_contact_email: "service@example.invalid", primary_contact_phone: "(713) 555-6600", notes: "Just renewed via PR-2026-004", created_at: "2026-07-01", updated_at: "2026-07-01" },
+      { id: "vc3", vendor_id: "v4", contract_number: "VC-2026-003", contract_type: "service_agreement", start_date: "2026-07-01", end_date: "2027-06-30", value: 1800000, payment_terms: "Quarterly, 50% upfront", auto_renew: false, renewal_terms: "Requires new quote for renewal", termination_notice_days: 90, status: "active", scope_of_work: "Security camera system: installation, monitoring, maintenance, cloud storage", documents_json: null, primary_contact_name: "David Chen", primary_contact_email: "install@example.invalid", primary_contact_phone: "(832) 555-4400", notes: "Phase 2 camera upgrade in progress", created_at: "2026-07-01", updated_at: "2026-07-01" },
     );
   }
 }
@@ -104,17 +198,13 @@ export const m7Router = createRouter({
         return due >= now && due <= thirtyDaysFromNow;
       });
       // Inspections by type
-      const inspectionsByType = facilityInspections.reduce((acc: Record<string, any[]>, s) => {
+      const inspectionsByType = facilityInspections.reduce((acc: Record<string, SafetyInspectionRecord[]>, s) => {
         if (!acc[s.inspection_type]) acc[s.inspection_type] = [];
         acc[s.inspection_type].push(s);
         return acc;
       }, {});
       // Open work orders
       const openWO = facilityWorkOrders.filter((w) => w.status !== "completed" && w.status !== "cancelled");
-      // Occupancy rate
-      const occupancyRate = facility.bedrooms > 0
-        ? Math.round(((facility.bedrooms - facility.common_areas) / facility.bedrooms) * 100)
-        : 0;
       return {
         ...facility,
         workOrders: facilityWorkOrders,
@@ -764,7 +854,11 @@ export const m7Router = createRouter({
 
 // ─── Helpers ─────────────────────────────────────────────────
 
-function computeReadinessScore(facility: any, inspections: any[], openWorkOrders: any[]): number {
+function computeReadinessScore(
+  facility: FacilityRecord,
+  inspections: SafetyInspectionRecord[],
+  openWorkOrders: WorkOrderRecord[],
+): number {
   let score = 100;
 
   // Deduct for overdue inspections (max -30)

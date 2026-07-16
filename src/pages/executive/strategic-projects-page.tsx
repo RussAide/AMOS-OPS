@@ -1,8 +1,7 @@
 import { useState, useMemo } from "react";
 import {
   Target, TrendingUp, AlertTriangle, CheckCircle2, Clock, PauseCircle,
-  Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, Eye, Calendar, Users,
-  ArrowUpRight, X, BarChart3,
+  Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, Eye, Calendar, X,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────
@@ -43,20 +42,29 @@ const DIVISION_COLORS: Record<string, string> = {
 // ─── Demo Data ─────────────────────────────────────────────────
 const DEMO_PROJECTS: StrategicProject[] = [
   { id: "SP-001", name: "EHR Integration v3.0", owner: "Michael Foster", division: "EO", startDate: "2025-01-15", targetDate: "2025-12-31", status: "active", progress: 65, priority: "critical", budget: 450000, description: "Full EHR system integration with clinical workflows" },
-  { id: "SP-002", name: "Campus Expansion", owner: "Marcus Williams", division: "GAD", startDate: "2024-06-01", targetDate: "2026-06-01", status: "active", progress: 40, priority: "high", budget: 2800000, description: "New residential facility with 48 beds" },
-  { id: "SP-003", name: "Telehealth Platform", owner: "Dr. Sarah Chen", division: "BHC", startDate: "2025-03-01", targetDate: "2025-09-30", status: "at_risk", progress: 35, priority: "critical", budget: 320000, description: "Remote therapy and psychiatry services" },
+  { id: "SP-002", name: "Campus Expansion", owner: "Synthetic-Person-001 Williams", division: "GAD", startDate: "2024-06-01", targetDate: "2026-06-01", status: "active", progress: 40, priority: "high", budget: 2800000, description: "New residential facility with 48 beds" },
+  { id: "SP-003", name: "Telehealth Platform", owner: "Dr. Synthetic Youth 035", division: "BHC", startDate: "2025-03-01", targetDate: "2025-09-30", status: "at_risk", progress: 35, priority: "critical", budget: 320000, description: "Remote therapy and psychiatry services" },
   { id: "SP-004", name: "Staff Training Portal", owner: "Aisha Patel", division: "EO", startDate: "2025-02-01", targetDate: "2025-08-15", status: "active", progress: 78, priority: "medium", budget: 85000, description: "Unified training and certification tracking" },
   { id: "SP-005", name: "GRO Safety Audit", owner: "James Rodriguez", division: "GRO", startDate: "2025-05-01", targetDate: "2025-07-31", status: "completed", progress: 100, priority: "high", budget: 45000, description: "Comprehensive safety and compliance review" },
   { id: "SP-006", name: "Revenue Cycle Optimization", owner: "Rachel Kim", division: "EO", startDate: "2025-04-01", targetDate: "2025-10-31", status: "active", progress: 52, priority: "high", budget: 180000, description: "Claims processing and denial management overhaul" },
-  { id: "SP-007", name: "AI Documentation Assistant", owner: "Dr. Sarah Chen", division: "BHC", startDate: "2025-06-01", targetDate: "2026-03-31", status: "planning", progress: 10, priority: "medium", budget: 250000, description: "AI-powered clinical documentation helper" },
-  { id: "SP-008", name: "Family Portal", owner: "Marcus Williams", division: "BHC", startDate: "2025-01-01", targetDate: "2025-11-30", status: "on_hold", progress: 30, priority: "low", budget: 120000, description: "Secure family communication and visit scheduling" },
+  { id: "SP-007", name: "AI Documentation Assistant", owner: "Dr. Synthetic Youth 035", division: "BHC", startDate: "2025-06-01", targetDate: "2026-03-31", status: "planning", progress: 10, priority: "medium", budget: 250000, description: "AI-powered clinical documentation helper" },
+  { id: "SP-008", name: "Family Portal", owner: "Synthetic-Person-001 Williams", division: "BHC", startDate: "2025-01-01", targetDate: "2025-11-30", status: "on_hold", progress: 30, priority: "low", budget: 120000, description: "Secure family communication and visit scheduling" },
   { id: "SP-009", name: "Compliance Automation", owner: "David Thompson", division: "GAD", startDate: "2025-03-15", targetDate: "2025-09-15", status: "active", progress: 60, priority: "high", budget: 175000, description: "Automated compliance monitoring and alerts" },
-  { id: "SP-010", name: "CANS Digital Workflow", owner: "Dr. Sarah Chen", division: "BHC", startDate: "2024-09-01", targetDate: "2025-07-01", status: "completed", progress: 100, priority: "critical", budget: 95000, description: "Digital CANS assessment and auto-scoring" },
+  { id: "SP-010", name: "CANS Digital Workflow", owner: "Dr. Synthetic Youth 035", division: "BHC", startDate: "2024-09-01", targetDate: "2025-07-01", status: "completed", progress: 100, priority: "critical", budget: 95000, description: "Digital CANS assessment and auto-scoring" },
 ];
 
 // ─── Sort ──────────────────────────────────────────────────────
 type SortField = "name" | "owner" | "startDate" | "targetDate" | "status" | "progress";
 type SortDir = "asc" | "desc";
+
+function renderSortIcon(field: SortField, activeField: SortField, direction: SortDir) {
+  if (activeField !== field) {
+    return <ArrowUpDown size={12} className="ml-1" style={{ color: "#9CA3AF" }} />;
+  }
+  return direction === "asc"
+    ? <ArrowUp size={12} className="ml-1" style={{ color: "#245C5A" }} />
+    : <ArrowDown size={12} className="ml-1" style={{ color: "#245C5A" }} />;
+}
 
 export default function StrategicProjectsPage() {
   const [projects] = useState<StrategicProject[]>(DEMO_PROJECTS);
@@ -110,13 +118,6 @@ export default function StrategicProjectsPage() {
     atRisk: projects.filter((r) => r.status === "at_risk").length,
     completed: projects.filter((r) => r.status === "completed").length,
   }), [projects]);
-
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return <ArrowUpDown size={12} className="ml-1" style={{ color: "#9CA3AF" }} />;
-    return sortDir === "asc"
-      ? <ArrowUp size={12} className="ml-1" style={{ color: "#245C5A" }} />
-      : <ArrowDown size={12} className="ml-1" style={{ color: "#245C5A" }} />;
-  };
 
   const hasFilters = searchQuery || statusFilter !== "all" || divisionFilter !== "all";
 
@@ -204,20 +205,20 @@ export default function StrategicProjectsPage() {
             <thead>
               <tr style={{ borderBottom: "2px solid var(--card-border)", backgroundColor: "rgba(36,92,90,0.03)" }}>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("name")}>
-                  <span className="flex items-center">Project <SortIcon field="name" /></span>
+                  <span className="flex items-center">Project {renderSortIcon("name", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("owner")}>
-                  <span className="flex items-center">Owner <SortIcon field="owner" /></span>
+                  <span className="flex items-center">Owner {renderSortIcon("owner", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold" style={{ color: "var(--topbar-subtitle)" }}>Division</th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("startDate")}>
-                  <span className="flex items-center">Start Date <SortIcon field="startDate" /></span>
+                  <span className="flex items-center">Start Date {renderSortIcon("startDate", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("targetDate")}>
-                  <span className="flex items-center">Target Date <SortIcon field="targetDate" /></span>
+                  <span className="flex items-center">Target Date {renderSortIcon("targetDate", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("status")}>
-                  <span className="flex items-center">Status <SortIcon field="status" /></span>
+                  <span className="flex items-center">Status {renderSortIcon("status", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold" style={{ color: "var(--topbar-subtitle)" }}>Progress</th>
                 <th className="text-left py-2.5 px-3 font-semibold" style={{ color: "var(--topbar-subtitle)" }}>Actions</th>

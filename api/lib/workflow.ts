@@ -4,6 +4,7 @@
 import { getDb } from "../queries/connection";
 import { notifications } from "@db/schema";
 import { randomUUID } from "crypto";
+import type { UserRole } from "../../src/constants/roles";
 
 // ─── Workflow Rule Types ─────────────────────────────────────
 
@@ -35,7 +36,7 @@ export interface WorkflowCondition {
 
 export interface WorkflowAction {
   type: "notify" | "escalate" | "email";
-  target: "hr-director" | "supervisor" | "person" | "all-admin" | "qa-officer" | "self";
+  target: UserRole | "person" | "all-admin" | "self";
   title: string;
   message: string;
   priority?: "low" | "normal" | "high" | "urgent";
@@ -100,7 +101,7 @@ export const DEFAULT_WORKFLOW_RULES: WorkflowRule[] = [
       },
       {
         type: "notify",
-        target: "supervisor",
+        target: "shift-supervisor",
         title: "New Staff Cleared: {personName}",
         message: "{personName} is cleared for duty and ready for scheduling.",
         priority: "normal",
@@ -116,7 +117,7 @@ export const DEFAULT_WORKFLOW_RULES: WorkflowRule[] = [
     actions: [
       {
         type: "notify",
-        target: "qa-officer",
+        target: "hr-compliance-officer",
         title: "Credential Expired: {personName}",
         message: "{personName}'s credential has expired. Immediate renewal required before next shift.",
         priority: "urgent",
@@ -197,7 +198,7 @@ export const DEFAULT_WORKFLOW_RULES: WorkflowRule[] = [
       },
       {
         type: "notify",
-        target: "supervisor",
+        target: "shift-supervisor",
         title: "Training Complete: {userName}",
         message: "{userName} has completed {moduleTitle}.",
         priority: "normal",
@@ -345,10 +346,10 @@ function resolveTarget(target: WorkflowAction["target"], ctx: TriggerContext): s
   switch (target) {
     case "hr-director":
       return ["hr-director"]; // Will match the role-based notification filtering
-    case "supervisor":
-      return ["supervisor"];
-    case "qa-officer":
-      return ["qa-officer"];
+    case "shift-supervisor":
+      return ["shift-supervisor"];
+    case "hr-compliance-officer":
+      return ["hr-compliance-officer"];
     case "all-admin":
       return ["administrator", "hr-director"];
     case "self":

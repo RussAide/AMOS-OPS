@@ -3,11 +3,17 @@ import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  readNullableString,
+  readNumber,
+  readString,
+  toRecords,
+} from "@/components/data/record-utils";
 
 const TIERS = [
   {
@@ -70,10 +76,92 @@ const STATUS_MAP: Record<string, string> = {
   monitoring: "bg-gray-100 text-gray-700",
 };
 
+type EscalationTier = "routine" | "clinical" | "urgent" | "crisis" | "post_crisis";
+type TriggerSource =
+  | "observation"
+  | "staff_report"
+  | "family_report"
+  | "youth_self_report"
+  | "automated_alert";
+
+interface EscalationRecord {
+  id: string;
+  youth_name: string;
+  mrn: string;
+  tier: EscalationTier;
+  status: string;
+  trigger_description: string;
+  trigger_source: string | null;
+  trigger_detail: string | null;
+  response_actions: string | null;
+  responder_name: string | null;
+  responder_role: string | null;
+  resolution_notes: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  requires_post_crisis_review: number;
+  post_crisis_review_completed: number;
+  post_crisis_review_by: string | null;
+  post_crisis_review_date: string | null;
+}
+
+interface EscalationFormState {
+  youthId: string;
+  youthName: string;
+  tier: EscalationTier;
+  triggerSource: TriggerSource;
+  triggerDescription: string;
+  triggerDetail: string;
+}
+
+function normalizeEscalation(value: Record<string, unknown>): EscalationRecord | null {
+  const id = readString(value, "id");
+  if (!id) return null;
+  const rawTier = readString(value, "tier", "routine");
+  const tier = TIERS.some((candidate) => candidate.key === rawTier)
+    ? rawTier as EscalationTier
+    : "routine";
+  return {
+    id,
+    youth_name: readString(value, "youth_name", "Unnamed youth"),
+    mrn: readString(value, "mrn"),
+    tier,
+    status: readString(value, "status", "active"),
+    trigger_description: readString(value, "trigger_description"),
+    trigger_source: readNullableString(value, "trigger_source"),
+    trigger_detail: readNullableString(value, "trigger_detail"),
+    response_actions: readNullableString(value, "response_actions"),
+    responder_name: readNullableString(value, "responder_name"),
+    responder_role: readNullableString(value, "responder_role"),
+    resolution_notes: readNullableString(value, "resolution_notes"),
+    resolved_at: readNullableString(value, "resolved_at"),
+    resolved_by: readNullableString(value, "resolved_by"),
+    requires_post_crisis_review: readNumber(value, "requires_post_crisis_review"),
+    post_crisis_review_completed: readNumber(value, "post_crisis_review_completed"),
+    post_crisis_review_by: readNullableString(value, "post_crisis_review_by"),
+    post_crisis_review_date: readNullableString(value, "post_crisis_review_date"),
+  };
+}
+
+function parseStringArray(value: string | null): string[] {
+  try {
+    const parsed: unknown = JSON.parse(value ?? "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 export function EscalationLadderPage() {
-  const { data: escalations = [] } = trpc.m15.listEscalations.useQuery();
-  const activeEscalations = escalations.filter((e: any) => e.status !== "resolved");
-  const resolvedEscalations = escalations.filter((e: any) => e.status === "resolved");
+  const { data: rawEscalations } = trpc.m15.listEscalations.useQuery();
+  const escalations = toRecords(rawEscalations).flatMap((escalation) => {
+    const normalized = normalizeEscalation(escalation);
+    return normalized ? [normalized] : [];
+  });
+  const activeEscalations = escalations.filter((e) => e.status !== "resolved");
+  const resolvedEscalations = escalations.filter((e) => e.status === "resolved");
 
   return (
     <>
@@ -135,11 +223,11 @@ export function EscalationLadderPage() {
         <div>
           <div className="text-sm font-semibold text-red-700 mb-2 flex items-center gap-2">
             Active Escalations ({activeEscalations.length})
-            {activeEscalations.some((e: any) => e.tier === "crisis") && (
+            {activeEscalations.some((e) => e.tier === "crisis") && (
               <Badge className="bg-red-600 text-white animate-pulse">CRISIS ACTIVE</Badge>
             )}
           </div>
-          {activeEscalations.map((e: any) => <EscalationCard key={e.id} escalation={e} />)}
+          {activeEscalations.map((e) => <EscalationCard key={e.id} escalation={e} />)}
         </div>
       )}
 
@@ -147,7 +235,7 @@ export function EscalationLadderPage() {
       {resolvedEscalations.length > 0 && (
         <div>
           <div className="text-sm font-semibold text-muted-foreground mb-2">Resolved ({resolvedEscalations.length})</div>
-          {resolvedEscalations.map((e: any) => <EscalationCard key={e.id} escalation={e} />)}
+          {resolvedEscalations.map((e) => <EscalationCard key={e.id} escalation={e} />)}
         </div>
       )}
 
@@ -161,12 +249,11 @@ export function EscalationLadderPage() {
   );
 }
 
-function EscalationCard({ escalation: e }: { escalation: any }) {
+function EscalationCard({ escalation: e }: { escalation: EscalationRecord }) {
   const [expanded, setExpanded] = useState(false);
   const tierInfo = TIERS.find(t => t.key === e.tier) ?? TIERS[0];
 
-  let responseActions: string[] = [];
-  try { responseActions = JSON.parse(e.response_actions ?? "[]"); } catch { /* ignore */ }
+  const responseActions = parseStringArray(e.response_actions);
 
   return (
     <Card className={`mb-2 ${e.tier === "crisis" ? "border-red-400" : e.tier === "urgent" ? "border-orange-300" : ""}`}>
@@ -245,19 +332,29 @@ function EscalationCard({ escalation: e }: { escalation: any }) {
 }
 
 function NewEscalationForm() {
-  const [form, setForm] = useState({
-    youthId: "", youthName: "", tier: "clinical" as string,
-    triggerSource: "observation" as string, triggerDescription: "", triggerDetail: "",
+  const [form, setForm] = useState<EscalationFormState>({
+    youthId: "", youthName: "", tier: "clinical",
+    triggerSource: "observation", triggerDescription: "", triggerDetail: "",
   });
 
   const createEsc = trpc.m15.createEscalation.useMutation({ onSuccess: () => setForm({ youthId: "", youthName: "", tier: "clinical", triggerSource: "observation", triggerDescription: "", triggerDetail: "" }) });
-  const handleSubmit = () => { createEsc.mutate({ youthName: form.youthName, tier: form.tier, triggerDescription: form.triggerDescription, status: "active" } as any); };
+  const handleSubmit = () => {
+    createEsc.mutate({
+      youthId: form.youthId || "demo-escalation-youth",
+      youthName: form.youthName || "Demo Youth",
+      mrn: "DEMO-MRN",
+      tier: form.tier,
+      triggerSource: form.triggerSource,
+      triggerDescription: form.triggerDescription,
+      triggerDetail: form.triggerDetail,
+    });
+  };
 
   return (
     <div className="space-y-4">
       <div>
         <Label className="text-xs">Tier *</Label>
-        <Select value={form.tier} onValueChange={v => setForm({ ...form, tier: v })}>
+        <Select value={form.tier} onValueChange={v => setForm({ ...form, tier: v as EscalationTier })}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="routine">Tier 1: Routine</SelectItem>
@@ -270,7 +367,7 @@ function NewEscalationForm() {
       </div>
       <div>
         <Label className="text-xs">Trigger Source</Label>
-        <Select value={form.triggerSource} onValueChange={v => setForm({ ...form, triggerSource: v })}>
+        <Select value={form.triggerSource} onValueChange={v => setForm({ ...form, triggerSource: v as TriggerSource })}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="observation">Observation</SelectItem>

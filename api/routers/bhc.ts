@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createRouter, authedQuery, adminQuery } from "../middleware";
 import { getDb } from "../queries/connection";
 import {
@@ -9,7 +10,6 @@ import {
   insurancePlans,
   hrPeople,
   assessments,
-  assessmentDomains,
   ccmgReferrals,
   ccmgCareCoordination,
   mhtcmEncounters,
@@ -32,16 +32,56 @@ function generatePlanNumber() {
   return `TP-${year}-${seq}`;
 }
 
-function generateAssessmentNumber() {
-  const year = new Date().getFullYear();
-  const seq = Math.floor(Math.random() * 9999).toString().padStart(4, "0");
-  return `CANS-${year}-${seq}`;
+export function quarantineLegacyCansLogic(): never {
+  throw new TRPCError({
+    code: "FORBIDDEN",
+    message:
+      "M41C_LEGACY_CANS_LOGIC_QUARANTINED: Legacy CANS entry, scoring, risk-band, and level-of-care logic is unavailable. Use the governed M4.1C program-specific profile workflow.",
+  });
 }
 
-function generateReferralNumber() {
-  const year = new Date().getFullYear();
-  const seq = Math.floor(Math.random() * 9999).toString().padStart(4, "0");
-  return `REF-${year}-${seq}`;
+export const M41C_BHC_UNGOVERNED_INSTRUMENT_LOGIC_QUARANTINED =
+  "M41C_UNGOVERNED_INSTRUMENT_LOGIC_QUARANTINED" as const;
+
+export function quarantineBhcUngovernedOutcomeInstrument(): never {
+  throw new TRPCError({
+    code: "FORBIDDEN",
+    message:
+      `${M41C_BHC_UNGOVERNED_INSTRUMENT_LOGIC_QUARANTINED}: ` +
+      "Legacy outcome-instrument entry, numeric interpretation, and longitudinal output are unavailable. Use the governed M4.1C instrument-profile workflow.",
+  });
+}
+
+export function buildBhcGovernedOutcomeMeasureReference(subjectId: string) {
+  return Object.freeze({
+    milestone: "M4.1C" as const,
+    subjectId,
+    disposition: "legacy_numeric_rows_quarantined" as const,
+    mode: "metadata_only_evaluation" as const,
+    sourceOfTruth:
+      "M4.1C Clinical Intelligence Fabric governed instrument-profile workflow",
+    humanReviewRequired: true as const,
+    liveWrites: 0 as const,
+  });
+}
+
+export function buildBhcGovernedAssessmentReference(subjectId: string) {
+  return Object.freeze({
+    milestone: "M4.1C" as const,
+    subjectId,
+    disposition: "legacy_assessment_rows_quarantined" as const,
+    rawLegacyRowsReturned: false as const,
+    governedProfileIds: Object.freeze([
+      "M41C-INSTRUMENT-TRR-CANS",
+      "M41C-INSTRUMENT-DFPS-CANS-3",
+    ]),
+    sourceOfTruth:
+      "M4.1C Clinical Knowledge Registry and governed program-specific pathway workflow",
+    humanReviewRequired: true as const,
+    productionRows: 0 as const,
+    liveWrites: 0 as const,
+    evidenceClass: "synthetic_clinical_demo" as const,
+  });
 }
 
 // ─── Patient Router ──────────────────────────────────────────
@@ -118,7 +158,7 @@ export const bhcRouter = createRouter({
     .input(
       z.object({
         search: z.string().optional(),
-        status: z.string().optional(),
+        status: z.enum(["intake", "active", "hold", "discharged", "transferred"]).optional(),
         clinicianId: z.string().optional(),
         page: z.number().int().positive().default(1),
         pageSize: z.number().int().positive().default(25),
@@ -126,9 +166,15 @@ export const bhcRouter = createRouter({
     )
     .query(async ({ input }) => {
       const db = getDb();
-      const params = input ?? {};
+      const params: {
+        search?: string;
+        status?: "intake" | "active" | "hold" | "discharged" | "transferred";
+        clinicianId?: string;
+        page?: number;
+        pageSize?: number;
+      } = input ?? {};
 
-      let query = db.select().from(patients);
+      const query = db.select().from(patients);
       const conditions = [];
 
       if (params.status) conditions.push(eq(patients.status, params.status));
@@ -178,24 +224,24 @@ export const bhcRouter = createRouter({
         .where(eq(clinicalSessions.patientId, input.id))
         .orderBy(desc(clinicalSessions.sessionDate)).limit(10).all();
 
-      const outcomes = await db
-        .select().from(outcomeMeasures)
-        .where(eq(outcomeMeasures.patientId, input.id))
-        .orderBy(desc(outcomeMeasures.administeredAt)).all();
-
-      // Get CANS assessments
-      const cansAssessments = await db
-        .select().from(assessments)
-        .where(eq(assessments.youthId, input.id))
-        .orderBy(desc(assessments.assessmentDate)).all();
-
       // Get care coordination
       const careCoordination = await db
         .select().from(ccmgCareCoordination)
         .where(eq(ccmgCareCoordination.youthId, input.id))
         .orderBy(desc(ccmgCareCoordination.createdAt)).all();
 
-      return { patient, treatmentPlans: plans, recentSessions: sessions, outcomeMeasures: outcomes, cansAssessments, careCoordination };
+      return {
+        patient,
+        treatmentPlans: plans,
+        recentSessions: sessions,
+        outcomeMeasures: [] as Array<typeof outcomeMeasures.$inferSelect>,
+        governedOutcomeMeasureReference:
+          buildBhcGovernedOutcomeMeasureReference(input.id),
+        governedAssessmentReference: buildBhcGovernedAssessmentReference(
+          input.id,
+        ),
+        careCoordination,
+      };
     }),
 
   createPatient: authedQuery
@@ -297,11 +343,15 @@ export const bhcRouter = createRouter({
   // ════════════════════════════════════════════════════════════
 
   listTreatmentPlans: authedQuery
-    .input(z.object({ patientId: z.string().optional(), clinicianId: z.string().optional(), status: z.string().optional() }).optional())
+    .input(z.object({
+      patientId: z.string().optional(),
+      clinicianId: z.string().optional(),
+      status: z.enum(["draft", "active", "under_review", "completed", "discontinued"]).optional(),
+    }).optional())
     .query(async ({ input }) => {
       const db = getDb();
       const params = input ?? {};
-      let query = db.select().from(treatmentPlans);
+      const query = db.select().from(treatmentPlans);
 
       const conditions = [];
       if (params.patientId) conditions.push(eq(treatmentPlans.patientId, params.patientId));
@@ -423,13 +473,13 @@ export const bhcRouter = createRouter({
         clinicianId: z.string().optional(),
         dateFrom: z.string().optional(),
         dateTo: z.string().optional(),
-        status: z.string().optional(),
+        status: z.enum(["scheduled", "in_progress", "completed", "cancelled", "no_show"]).optional(),
       }).optional()
     )
     .query(async ({ input }) => {
       const db = getDb();
       const params = input ?? {};
-      let query = db.select().from(clinicalSessions);
+      const query = db.select().from(clinicalSessions);
 
       const conditions = [];
       if (params.patientId) conditions.push(eq(clinicalSessions.patientId, params.patientId));
@@ -547,42 +597,23 @@ export const bhcRouter = createRouter({
     }),
 
   // ════════════════════════════════════════════════════════════
-  // 5. OUTCOME MEASURES — Full CRUD
+  // 5. OUTCOME MEASURES — Quarantined legacy surface
   // ════════════════════════════════════════════════════════════
 
   listOutcomeMeasures: authedQuery
     .input(
       z.object({
         patientId: z.string().optional(),
-        measureType: z.string().optional(),
+        measureType: z.enum(["PHQ-9", "GAD-7", "PSS-10", "WHO-5", "DASS-21", "PCL-5", "CGI-S"]).optional(),
         dateFrom: z.string().optional(),
         dateTo: z.string().optional(),
       }).optional()
     )
-    .query(async ({ input }) => {
-      const db = getDb();
-      const params = input ?? {};
-      let query = db.select().from(outcomeMeasures);
-
-      const conditions = [];
-      if (params.patientId) conditions.push(eq(outcomeMeasures.patientId, params.patientId));
-      if (params.measureType) conditions.push(eq(outcomeMeasures.measureType, params.measureType));
-
-      if (conditions.length > 0) {
-        const condition = conditions.length === 1 ? conditions[0] : and(...conditions);
-        return query.where(condition).orderBy(desc(outcomeMeasures.administeredAt)).all();
-      }
-      return query.orderBy(desc(outcomeMeasures.administeredAt)).all();
-    }),
+    .query(() => quarantineBhcUngovernedOutcomeInstrument()),
 
   getOutcomeMeasure: authedQuery
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
-      const db = getDb();
-      const om = await db.select().from(outcomeMeasures).where(eq(outcomeMeasures.id, input.id)).get();
-      if (!om) throw new Error("Outcome measure not found");
-      return om;
-    }),
+    .query(() => quarantineBhcUngovernedOutcomeInstrument()),
 
   createOutcomeMeasure: authedQuery
     .input(
@@ -597,85 +628,29 @@ export const bhcRouter = createRouter({
         notes: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
-      const db = getDb();
-      const id = randomUUID();
-
-      await db.insert(outcomeMeasures).values({
-        id,
-        patientId: input.patientId,
-        sessionId: input.sessionId ?? null,
-        measureType: input.measureType,
-        score: input.score,
-        maxScore: input.maxScore,
-        severityLevel: input.severityLevel ?? null,
-        administeredBy: input.administeredBy,
-        notes: input.notes ?? null,
-      });
-
-      return db.select().from(outcomeMeasures).where(eq(outcomeMeasures.id, id)).get();
-    }),
+    .mutation(() => quarantineBhcUngovernedOutcomeInstrument()),
 
   getOutcomeTrends: authedQuery
-    .input(z.object({ patientId: z.string(), measureType: z.string().optional() }))
-    .query(async ({ input }) => {
-      const db = getDb();
-      let query = db
-        .select().from(outcomeMeasures)
-        .where(eq(outcomeMeasures.patientId, input.patientId))
-        .orderBy(outcomeMeasures.administeredAt);
-
-      if (input.measureType) {
-        query = query.where(eq(outcomeMeasures.measureType, input.measureType)) as typeof query;
-      }
-
-      const results = await query.all();
-
-      const grouped: Record<string, typeof results> = {};
-      for (const r of results) {
-        if (!grouped[r.measureType]) grouped[r.measureType] = [];
-        grouped[r.measureType].push(r);
-      }
-
-      return grouped;
-    }),
+    .input(z.object({
+      patientId: z.string(),
+      measureType: z.enum(["PHQ-9", "GAD-7", "PSS-10", "WHO-5", "DASS-21", "PCL-5", "CGI-S"]).optional(),
+    }))
+    .query(() => quarantineBhcUngovernedOutcomeInstrument()),
 
   // ════════════════════════════════════════════════════════════
   // 6. CANS / TRR ASSESSMENT TOOLS
   // ════════════════════════════════════════════════════════════
 
   listCansAssessments: authedQuery
-    .input(z.object({ youthId: z.string().optional(), status: z.string().optional() }).optional())
-    .query(async ({ input }) => {
-      const db = getDb();
-      const params = input ?? {};
-      let query = db.select().from(assessments);
-
-      const conditions = [];
-      if (params.youthId) conditions.push(eq(assessments.youthId, params.youthId));
-      if (params.status) conditions.push(eq(assessments.status, params.status));
-
-      if (conditions.length > 0) {
-        const condition = conditions.length === 1 ? conditions[0] : and(...conditions);
-        return query.where(condition).orderBy(desc(assessments.assessmentDate)).all();
-      }
-      return query.orderBy(desc(assessments.assessmentDate)).all();
-    }),
+    .input(z.object({
+      youthId: z.string().optional(),
+      status: z.enum(["draft", "in_progress", "pending_review", "completed", "superseded"]).optional(),
+    }).optional())
+    .query(() => quarantineLegacyCansLogic()),
 
   getCansAssessment: authedQuery
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
-      const db = getDb();
-      const assessment = await db.select().from(assessments).where(eq(assessments.id, input.id)).get();
-      if (!assessment) throw new Error("Assessment not found");
-
-      const domains = await db
-        .select().from(assessmentDomains)
-        .where(eq(assessmentDomains.assessmentId, input.id))
-        .orderBy(assessmentDomains.domainNumber).all();
-
-      return { ...assessment, domains };
-    }),
+    .query(() => quarantineLegacyCansLogic()),
 
   createCansAssessment: authedQuery
     .input(
@@ -704,41 +679,7 @@ export const bhcRouter = createRouter({
         safetyPlanRequired: z.boolean().optional(),
       })
     )
-    .mutation(async ({ input }) => {
-      const db = getDb();
-      const id = randomUUID();
-      const now = new Date().toISOString();
-
-      await db.insert(assessments).values({
-        id,
-        youthId: input.youthId,
-        mrn: input.mrn,
-        youthName: input.youthName,
-        assessmentType: input.assessmentType,
-        assessmentDate: input.assessmentDate,
-        completedBy: input.completedBy,
-        completedById: input.completedById ?? null,
-        presentingProblems: input.presentingProblems ?? null,
-        psychiatricHistory: input.psychiatricHistory ?? null,
-        substanceUseHistory: input.substanceUseHistory ?? null,
-        traumaHistory: input.traumaHistory ?? null,
-        medicalHistory: input.medicalHistory ?? null,
-        familyHistory: input.familyHistory ?? null,
-        educationalHistory: input.educationalHistory ?? null,
-        riskSuicide: input.riskSuicide ?? null,
-        riskSelfHarm: input.riskSelfHarm ?? null,
-        riskAggression: input.riskAggression ?? null,
-        riskElopement: input.riskElopement ?? null,
-        riskSubstanceUse: input.riskSubstanceUse ?? null,
-        riskVulnerability: input.riskVulnerability ?? null,
-        safetyPlanRequired: input.safetyPlanRequired ?? false,
-        status: "draft",
-        createdAt: now,
-        updatedAt: now,
-      });
-
-      return { success: true, id };
-    }),
+    .mutation(() => quarantineLegacyCansLogic()),
 
   updateCansAssessment: authedQuery
     .input(
@@ -769,53 +710,17 @@ export const bhcRouter = createRouter({
         status: z.enum(["draft", "in_progress", "pending_review", "completed", "superseded"]).optional(),
       })
     )
-    .mutation(async ({ input }) => {
-      const db = getDb();
-      const { id, ...fields } = input;
-      const now = new Date().toISOString();
-
-      const updateData: Record<string, unknown> = { updatedAt: now };
-      for (const [key, value] of Object.entries(fields)) {
-        if (value !== undefined) updateData[key] = value;
-      }
-
-      await db.update(assessments).set(updateData).where(eq(assessments.id, id));
-      return { success: true };
-    }),
+    .mutation(() => quarantineLegacyCansLogic()),
 
   completeCansAssessment: adminQuery
     .input(z.object({ id: z.string(), reviewedBy: z.string().optional(), approvedBy: z.string().optional() }))
-    .mutation(async ({ input }) => {
-      const db = getDb();
-      const now = new Date().toISOString();
-
-      const updateData: Record<string, unknown> = {
-        status: "completed",
-        updatedAt: now,
-      };
-      if (input.reviewedBy) {
-        updateData.reviewedBy = input.reviewedBy;
-        updateData.reviewedAt = now;
-      }
-      if (input.approvedBy) {
-        updateData.approvedBy = input.approvedBy;
-        updateData.approvedAt = now;
-      }
-
-      await db.update(assessments).set(updateData).where(eq(assessments.id, input.id));
-      return { success: true };
-    }),
+    .mutation(() => quarantineLegacyCansLogic()),
 
   // ─── CANS Domain Scoring ───────────────────────────────────
 
   listAssessmentDomains: authedQuery
     .input(z.object({ assessmentId: z.string() }))
-    .query(async ({ input }) => {
-      const db = getDb();
-      return db.select().from(assessmentDomains)
-        .where(eq(assessmentDomains.assessmentId, input.assessmentId))
-        .orderBy(assessmentDomains.domainNumber).all();
-    }),
+    .query(() => quarantineLegacyCansLogic()),
 
   createAssessmentDomain: authedQuery
     .input(
@@ -833,48 +738,7 @@ export const bhcRouter = createRouter({
         interventionDescription: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
-      const db = getDb();
-      const id = randomUUID();
-      const now = new Date().toISOString();
-
-      await db.insert(assessmentDomains).values({
-        id,
-        assessmentId: input.assessmentId,
-        domainNumber: input.domainNumber,
-        domainName: input.domainName,
-        score: input.score ?? null,
-        scoreLabel: input.scoreLabel ?? null,
-        strengths: input.strengths ?? null,
-        needs: input.needs ?? null,
-        observations: input.observations ?? null,
-        clinicalNotes: input.clinicalNotes ?? null,
-        interventionNeeded: input.interventionNeeded ?? false,
-        interventionDescription: input.interventionDescription ?? null,
-        createdAt: now,
-        updatedAt: now,
-      });
-
-      // Recalculate total CANS score
-      const domains = await db.select().from(assessmentDomains)
-        .where(eq(assessmentDomains.assessmentId, input.assessmentId)).all();
-      const totalScore = domains.reduce((sum, d) => sum + (d.score ?? 0), 0);
-
-      let riskLevel: string | null = null;
-      if (totalScore <= 20) riskLevel = "low";
-      else if (totalScore <= 40) riskLevel = "moderate";
-      else if (totalScore <= 60) riskLevel = "high";
-      else riskLevel = "very_high";
-
-      await db.update(assessments).set({
-        cansTotalScore: totalScore,
-        cansRiskLevel: riskLevel,
-        cansCompleted: domains.length >= 10,
-        updatedAt: now,
-      }).where(eq(assessments.id, input.assessmentId));
-
-      return { success: true, id, totalScore, riskLevel };
-    }),
+    .mutation(() => quarantineLegacyCansLogic()),
 
   updateAssessmentDomain: authedQuery
     .input(
@@ -890,19 +754,7 @@ export const bhcRouter = createRouter({
         interventionDescription: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
-      const db = getDb();
-      const { id, ...fields } = input;
-      const now = new Date().toISOString();
-
-      const updateData: Record<string, unknown> = { updatedAt: now };
-      for (const [key, value] of Object.entries(fields)) {
-        if (value !== undefined) updateData[key] = value;
-      }
-
-      await db.update(assessmentDomains).set(updateData).where(eq(assessmentDomains.id, id));
-      return { success: true };
-    }),
+    .mutation(() => quarantineLegacyCansLogic()),
 
   // ════════════════════════════════════════════════════════════
   // 7. REFERRAL INTAKE WORKFLOW
@@ -912,16 +764,16 @@ export const bhcRouter = createRouter({
     .input(
       z.object({
         youthId: z.string().optional(),
-        status: z.string().optional(),
-        fromDepartment: z.string().optional(),
-        toDepartment: z.string().optional(),
-        urgency: z.string().optional(),
+        status: z.enum(["pending", "accepted", "scheduled", "completed", "declined", "cancelled"]).optional(),
+        fromDepartment: z.enum(["CCMG", "MHTCM", "MHRS", "GRO"]).optional(),
+        toDepartment: z.enum(["CCMG", "MHTCM", "MHRS", "GRO"]).optional(),
+        urgency: z.enum(["routine", "urgent", "emergency"]).optional(),
       }).optional()
     )
     .query(async ({ input }) => {
       const db = getDb();
       const params = input ?? {};
-      let query = db.select().from(ccmgReferrals);
+      const query = db.select().from(ccmgReferrals);
 
       const conditions = [];
       if (params.youthId) conditions.push(eq(ccmgReferrals.youthId, params.youthId));
@@ -1047,7 +899,7 @@ export const bhcRouter = createRouter({
       const params = input ?? {};
 
       // Get MHTCM encounters
-      let mhtcmQuery = db.select().from(mhtcmEncounters);
+      const mhtcmQuery = db.select().from(mhtcmEncounters);
       const mhtcmConditions = [];
       if (params.youthId) mhtcmConditions.push(eq(mhtcmEncounters.youthId, params.youthId));
       if (params.dateFrom) mhtcmConditions.push(sql`${mhtcmEncounters.encounterDate} >= ${params.dateFrom}`);
@@ -1058,7 +910,7 @@ export const bhcRouter = createRouter({
         : await mhtcmQuery.orderBy(desc(mhtcmEncounters.encounterDate)).all();
 
       // Get MHRS encounters
-      let mhrsQuery = db.select().from(mhrsEncounters);
+      const mhrsQuery = db.select().from(mhrsEncounters);
       const mhrsConditions = [];
       if (params.youthId) mhrsConditions.push(eq(mhrsEncounters.youthId, params.youthId));
       if (params.dateFrom) mhrsConditions.push(sql`${mhrsEncounters.encounterDate} >= ${params.dateFrom}`);
@@ -1069,7 +921,7 @@ export const bhcRouter = createRouter({
         : await mhrsQuery.orderBy(desc(mhrsEncounters.encounterDate)).all();
 
       // Get clinical sessions
-      let clinicalQuery = db.select().from(clinicalSessions);
+      const clinicalQuery = db.select().from(clinicalSessions);
       const clinicalConditions = [];
       if (params.youthId) clinicalConditions.push(eq(clinicalSessions.patientId, params.youthId));
       if (params.dateFrom) clinicalConditions.push(sql`${clinicalSessions.sessionDate} >= ${params.dateFrom}`);

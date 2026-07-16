@@ -2,11 +2,11 @@ import { useState, useMemo } from "react";
 import { PageLayout } from "@/components/shell/page-layout";
 import { trpc } from "@/providers/trpc";
 import {
-  GitBranch, Play, Pause, Pencil, Trash2, Search, Filter,
-  Activity, Clock, CheckCircle2, AlertCircle, Zap, ChevronDown,
-  ChevronUp, X, Plus, RotateCw, User, Calendar, Layers,
+  GitBranch, Play, Pause, Pencil, Trash2, Search,
+  Activity, CheckCircle2, AlertCircle, ChevronDown,
+  ChevronUp,
   Briefcase, Stethoscope, ShieldAlert, DollarSign, FileCheck,
-  Timer, TrendingUp,
+  Timer,
 } from "lucide-react";
 
 /* ─── Types ─── */
@@ -37,7 +37,7 @@ const DEMO_WORKFLOWS: WorkflowDef[] = [
     category: "HR Onboarding",
     trigger: "HR record created",
     status: "active",
-    createdBy: "E. Russ Aideyan",
+    createdBy: "Demo Executive",
     createdAt: "2026-01-15",
     lastRun: "2026-07-08 09:23",
     runCount: 47,
@@ -51,7 +51,7 @@ const DEMO_WORKFLOWS: WorkflowDef[] = [
     category: "Clinical Intake",
     trigger: "Admission approved",
     status: "active",
-    createdBy: "Dr. Hall",
+    createdBy: "Demo Clinical Director",
     createdAt: "2026-02-01",
     lastRun: "2026-07-08 08:45",
     runCount: 128,
@@ -65,7 +65,7 @@ const DEMO_WORKFLOWS: WorkflowDef[] = [
     category: "Incident Response",
     trigger: "Incident report filed",
     status: "active",
-    createdBy: "Lilian Ike",
+    createdBy: "Demo Clinical Lead",
     createdAt: "2026-01-20",
     lastRun: "2026-07-07 16:30",
     runCount: 34,
@@ -79,7 +79,7 @@ const DEMO_WORKFLOWS: WorkflowDef[] = [
     category: "Compliance Review",
     trigger: "Scheduled monthly",
     status: "active",
-    createdBy: "E. Russ Aideyan",
+    createdBy: "Demo Executive",
     createdAt: "2026-03-10",
     lastRun: "2026-07-08 06:00",
     runCount: 156,
@@ -93,7 +93,7 @@ const DEMO_WORKFLOWS: WorkflowDef[] = [
     category: "Revenue Cycle",
     trigger: "Service note signed",
     status: "paused",
-    createdBy: "Jonthan Guidry",
+    createdBy: "Demo Case Manager",
     createdAt: "2026-04-05",
     lastRun: "2026-07-06 14:20",
     runCount: 892,
@@ -146,11 +146,16 @@ export function WorkflowsPage() {
   const { data: pendingApprovalsData } = trpc.workflow.listPendingApprovals.useQuery();
   const { data: instancesData } = trpc.workflow.listInstances.useQuery();
 
-  const kpis = kpiData ?? { activeRules: 0, triggeredToday: 0, pendingApprovals: 0, avgProcessingTime: 0 };
-  const pendingApprovals = (pendingApprovalsData as any)?.approvals ?? [];
-  const instances = (instancesData as any)?.instances ?? [];
+  const activeRuleCount = kpiData && "activeRules" in kpiData && typeof kpiData.activeRules === "number"
+    ? kpiData.activeRules
+    : DEMO_WORKFLOWS.filter((workflow) => workflow.status === "active").length;
+  const averageProcessingTime = kpiData && "avgProcessingTime" in kpiData && typeof kpiData.avgProcessingTime === "number"
+    ? kpiData.avgProcessingTime
+    : "4.2";
+  const pendingApprovals = pendingApprovalsData ?? [];
+  const instances = instancesData ?? [];
 
-  const completedToday = instances.filter((i: any) => i.status === "completed").length;
+  const completedToday = instances.filter((i) => i.status === "completed").length;
 
   // Filter & sort workflows
   const filtered = useMemo(() => {
@@ -186,9 +191,6 @@ export function WorkflowsPage() {
     return data;
   }, [search, categoryFilter, statusFilter, sortBy, sortDir]);
 
-  const categories = ["all", ...Array.from(new Set(DEMO_WORKFLOWS.map((w) => w.category)))];
-  const statuses = ["all", "active", "paused", "draft", "archived"];
-
   return (
     <PageLayout>
       <div className="px-4 md:px-6 pb-8">
@@ -206,10 +208,10 @@ export function WorkflowsPage() {
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           {[
-            { label: "Active Workflows", value: kpis.activeRules ?? DEMO_WORKFLOWS.filter(w => w.status === "active").length, color: "#245C5A", bg: "#F0FDFA", icon: Activity },
-            { label: "Pending Approvals", value: pendingApprovals.length ?? kpis.pendingApprovals ?? 0, color: "#D97706", bg: "#FFFBEB", icon: AlertCircle },
+            { label: "Active Workflows", value: activeRuleCount, color: "#245C5A", bg: "#F0FDFA", icon: Activity },
+            { label: "Pending Approvals", value: pendingApprovals.length, color: "#D97706", bg: "#FFFBEB", icon: AlertCircle },
             { label: "Completed Today", value: completedToday, color: "#059669", bg: "#ECFDF5", icon: CheckCircle2 },
-            { label: "Avg Processing Time", value: `${kpis.avgProcessingTime ?? "4.2"}m`, color: "#2563EB", bg: "#EFF6FF", icon: Timer },
+            { label: "Avg Processing Time", value: `${averageProcessingTime}m`, color: "#2563EB", bg: "#EFF6FF", icon: Timer },
           ].map((kpi) => {
             const Icon = kpi.icon;
             return (

@@ -59,7 +59,7 @@ export function HRModulePage() {
     if (gate) {
       const person = people.find((p) => p.id === personId);
       const hasRequired = gate.requiredStatusIds.some((req) =>
-        Object.entries(person?.moduleStatuses || {}).some(([_, v]) => v === req)
+        Object.values(person?.moduleStatuses || {}).some((v) => v === req)
       );
       if (!hasRequired) {
         setGateError(`${gate.id}: ${gate.description}`);

@@ -4,7 +4,6 @@
  * Navigation hub for Shift Logs, Safety Rounds, Care Logs, Incidents, Supervision, Handoffs
  */
 
-import { useState } from "react";
 import { PageLayout } from "@/components/shell/page-layout";
 import { trpc } from "@/providers/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,14 +12,35 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import {
+  type LucideIcon,
   Clock, ShieldCheck, Heart, AlertTriangle, StickyNote,
-  ClipboardSignature, CheckCircle2, AlertCircle, ChevronRight,
+  ClipboardSignature, AlertCircle, ChevronRight,
   RefreshCw, Activity
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-const FEATURE_CARDS = [
+interface FeatureStatData {
+  active?: number;
+  completionRate?: number;
+  today?: number;
+  open?: number;
+  pendingAcknowledgment?: number;
+  pending?: number;
+}
+
+interface FeatureCard {
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  path: string;
+  color: string;
+  iconColor: string;
+  statKey: "shiftLogs" | "safetyRounds" | "youthCareLogs" | "incidents" | "supervisionNotes" | "shiftHandoffs";
+  statLabel: (data: FeatureStatData | undefined) => string;
+}
+
+const FEATURE_CARDS: FeatureCard[] = [
   {
     title: "Shift Logs",
     description: "Digital shift logs with timestamps",
@@ -29,7 +49,7 @@ const FEATURE_CARDS = [
     color: "bg-green-50 text-green-700 border-green-200",
     iconColor: "text-green-600",
     statKey: "shiftLogs" as const,
-    statLabel: (d: any) => `${d?.active ?? 0} active`,
+    statLabel: (d) => `${d?.active ?? 0} active`,
   },
   {
     title: "Safety Rounds",
@@ -39,7 +59,7 @@ const FEATURE_CARDS = [
     color: "bg-blue-50 text-blue-700 border-blue-200",
     iconColor: "text-blue-600",
     statKey: "safetyRounds" as const,
-    statLabel: (d: any) => `${d?.completionRate ?? 0}% pass rate`,
+    statLabel: (d) => `${d?.completionRate ?? 0}% pass rate`,
   },
   {
     title: "Care Logs",
@@ -49,7 +69,7 @@ const FEATURE_CARDS = [
     color: "bg-pink-50 text-pink-700 border-pink-200",
     iconColor: "text-pink-600",
     statKey: "youthCareLogs" as const,
-    statLabel: (d: any) => `${d?.today ?? 0} today`,
+    statLabel: (d) => `${d?.today ?? 0} today`,
   },
   {
     title: "Incident Reports",
@@ -59,7 +79,7 @@ const FEATURE_CARDS = [
     color: "bg-red-50 text-red-700 border-red-200",
     iconColor: "text-red-600",
     statKey: "incidents" as const,
-    statLabel: (d: any) => `${d?.open ?? 0} open`,
+    statLabel: (d) => `${d?.open ?? 0} open`,
   },
   {
     title: "Supervision",
@@ -69,7 +89,7 @@ const FEATURE_CARDS = [
     color: "bg-indigo-50 text-indigo-700 border-indigo-200",
     iconColor: "text-indigo-600",
     statKey: "supervisionNotes" as const,
-    statLabel: (d: any) => `${d?.pendingAcknowledgment ?? 0} pending ack`,
+    statLabel: (d) => `${d?.pendingAcknowledgment ?? 0} pending ack`,
   },
   {
     title: "Shift Handoffs",
@@ -79,7 +99,7 @@ const FEATURE_CARDS = [
     color: "bg-teal-50 text-teal-700 border-teal-200",
     iconColor: "text-teal-600",
     statKey: "shiftHandoffs" as const,
-    statLabel: (d: any) => `${d?.pending ?? 0} pending`,
+    statLabel: (d) => `${d?.pending ?? 0} pending`,
   },
 ];
 

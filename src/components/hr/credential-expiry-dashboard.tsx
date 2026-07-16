@@ -40,6 +40,7 @@ export function CredentialExpiryDashboard() {
   const { data: apiCredentials = [] } = trpc.credentials.list.useQuery(undefined);
   const [filter, setFilter] = useState("all");
   const [deptFilter, setDeptFilter] = useState("all");
+  const [currentTime] = useState(() => Date.now());
 
   // Build credential records from API data + person lookup
   const credentialRecords: CredentialRecord[] = useMemo(() => {
@@ -48,7 +49,7 @@ export function CredentialExpiryDashboard() {
       const person = people.find((p) => p.id === c.personId);
       const expiry = c.expiryDate ? new Date(c.expiryDate) : null;
       const daysRemaining = expiry
-        ? Math.ceil((expiry.getTime() - Date.now()) / 86400000)
+        ? Math.ceil((expiry.getTime() - currentTime) / 86400000)
         : -999;
       records.push({
         id: c.id,
@@ -62,7 +63,7 @@ export function CredentialExpiryDashboard() {
       });
     }
     return records;
-  }, [apiCredentials, people]);
+  }, [apiCredentials, currentTime, people]);
 
   // Compute departments from people
   const departments = useMemo(

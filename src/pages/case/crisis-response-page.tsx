@@ -4,10 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  isRecord,
+  readNullableNumber,
+  readNullableString,
+  readNumber,
+  readString,
+  toRecords,
+} from "@/components/data/record-utils";
 
 const CRISIS_TYPES: Record<string, { label: string; color: string }> = {
   behavioral_escalation: { label: "Behavioral Escalation", color: "bg-orange-100 text-orange-700" },
@@ -34,18 +40,131 @@ const STEPS = [
   { num: 7, label: "Reviewed", desc: "Post-crisis review and debrief" },
 ];
 
+type CrisisType =
+  | "behavioral_escalation"
+  | "suicide_self_harm"
+  | "medical_emergency"
+  | "elopement"
+  | "substance_intoxication";
+
+interface CrisisDebrief {
+  completed_at?: string | null;
+  completed_by?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+  field1_event_summary?: string | null;
+  field2_triggers_identified?: string | null;
+  field3_early_warning_signs?: string | null;
+  field4_interventions_used?: string | null;
+  field5_what_worked?: string | null;
+  field6_what_did_not_work?: string | null;
+  field7_youth_perspective?: string | null;
+  field8_staff_perspective?: string | null;
+  field9_plan_adjustments?: string | null;
+  safety_plan_updated?: number | null;
+  safety_plan_changes?: string | null;
+  follow_up_required?: number | null;
+  follow_up_date?: string | null;
+  follow_up_actions?: string | null;
+}
+
+interface CrisisRecord extends Record<string, unknown> {
+  id: string;
+  youth_name: string;
+  mrn: string;
+  crisis_type: string;
+  current_step: number;
+  overall_status: string;
+  step1_identified_by: string | null;
+  step3_response_actions: string | null;
+  step4_safety_measures: string | null;
+  step5_notified_parties: string | null;
+  step7_review_notes: string | null;
+  step7_reviewed_by: string | null;
+  step7_reviewed_at: string | null;
+  restrictive_intervention_used: number | null;
+  restrictive_intervention_type: string | null;
+  debrief: CrisisDebrief | null;
+}
+
+function normalizeDebrief(value: unknown): CrisisDebrief | null {
+  if (!isRecord(value)) return null;
+  return {
+    completed_at: readNullableString(value, "completed_at"),
+    completed_by: readNullableString(value, "completed_by"),
+    reviewed_at: readNullableString(value, "reviewed_at"),
+    reviewed_by: readNullableString(value, "reviewed_by"),
+    field1_event_summary: readNullableString(value, "field1_event_summary"),
+    field2_triggers_identified: readNullableString(value, "field2_triggers_identified"),
+    field3_early_warning_signs: readNullableString(value, "field3_early_warning_signs"),
+    field4_interventions_used: readNullableString(value, "field4_interventions_used"),
+    field5_what_worked: readNullableString(value, "field5_what_worked"),
+    field6_what_did_not_work: readNullableString(value, "field6_what_did_not_work"),
+    field7_youth_perspective: readNullableString(value, "field7_youth_perspective"),
+    field8_staff_perspective: readNullableString(value, "field8_staff_perspective"),
+    field9_plan_adjustments: readNullableString(value, "field9_plan_adjustments"),
+    safety_plan_updated: readNullableNumber(value, "safety_plan_updated"),
+    safety_plan_changes: readNullableString(value, "safety_plan_changes"),
+    follow_up_required: readNullableNumber(value, "follow_up_required"),
+    follow_up_date: readNullableString(value, "follow_up_date"),
+    follow_up_actions: readNullableString(value, "follow_up_actions"),
+  };
+}
+
+function normalizeCrisisRecord(value: Record<string, unknown>): CrisisRecord | null {
+  const id = readString(value, "id");
+  if (!id) return null;
+  return {
+    ...value,
+    id,
+    youth_name: readString(value, "youth_name", "Unnamed youth"),
+    mrn: readString(value, "mrn"),
+    crisis_type: readString(value, "crisis_type", "behavioral_escalation"),
+    current_step: readNumber(value, "current_step", 1),
+    overall_status: readString(value, "overall_status", "active"),
+    step1_identified_by: readNullableString(value, "step1_identified_by"),
+    step3_response_actions: readNullableString(value, "step3_response_actions"),
+    step4_safety_measures: readNullableString(value, "step4_safety_measures"),
+    step5_notified_parties: readNullableString(value, "step5_notified_parties"),
+    step7_review_notes: readNullableString(value, "step7_review_notes"),
+    step7_reviewed_by: readNullableString(value, "step7_reviewed_by"),
+    step7_reviewed_at: readNullableString(value, "step7_reviewed_at"),
+    restrictive_intervention_used: readNullableNumber(value, "restrictive_intervention_used"),
+    restrictive_intervention_type: readNullableString(value, "restrictive_intervention_type"),
+    debrief: normalizeDebrief(value.debrief),
+  };
+}
+
+function parseStringArray(value: string | null): string[] {
+  try {
+    const parsed: unknown = JSON.parse(value ?? "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 export function CrisisResponsePage() {
   const [selectedCrisisId, setSelectedCrisisId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("active");
-  const { data: crises = [] } = trpc.m17.listCrises.useQuery();
+  const { data: rawCrises } = trpc.m17.listCrises.useQuery();
   const { data: summary } = trpc.m17.crisisSummary.useQuery();
-  const { data: crisisDetail } = trpc.m17.getCrisis.useQuery(
+  const { data: rawCrisisDetail } = trpc.m17.getCrisis.useQuery(
     { id: selectedCrisisId ?? "" },
     { enabled: !!selectedCrisisId }
   );
+  const crises = toRecords(rawCrises).flatMap((crisis) => {
+    const normalized = normalizeCrisisRecord(crisis);
+    return normalized ? [normalized] : [];
+  });
+  const crisisDetail = isRecord(rawCrisisDetail)
+    ? normalizeCrisisRecord(rawCrisisDetail)
+    : null;
 
-  const activeCrises = crises.filter((c: any) => c.overall_status !== "resolved");
-  const resolvedCrises = crises.filter((c: any) => c.overall_status === "resolved");
+  const activeCrises = crises.filter((c) => c.overall_status !== "resolved");
+  const resolvedCrises = crises.filter((c) => c.overall_status === "resolved");
 
   return (
     <>
@@ -91,7 +210,7 @@ export function CrisisResponsePage() {
       {/* Crisis Type Breakdown */}
       {summary && summary.byType.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {summary.byType.map((t: any) => {
+          {summary.byType.map((t) => {
             const info = CRISIS_TYPES[t.crisis_type] ?? { label: t.crisis_type, color: "bg-gray-100" };
             return <Badge key={t.crisis_type} className={`${info.color} text-xs`}>{info.label}: {t.c}</Badge>;
           })}
@@ -105,7 +224,7 @@ export function CrisisResponsePage() {
         </TabsList>
 
         <TabsContent value="active" className="space-y-3 mt-4">
-          {activeCrises.map((c: any) => (
+          {activeCrises.map((c) => (
             <CrisisCard key={c.id} crisis={c} selected={selectedCrisisId === c.id} onClick={() => setSelectedCrisisId(c.id === selectedCrisisId ? null : c.id)} />
           ))}
           {activeCrises.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">No active crises.</p>}
@@ -113,7 +232,7 @@ export function CrisisResponsePage() {
         </TabsContent>
 
         <TabsContent value="resolved" className="space-y-3 mt-4">
-          {resolvedCrises.map((c: any) => (
+          {resolvedCrises.map((c) => (
             <CrisisCard key={c.id} crisis={c} selected={selectedCrisisId === c.id} onClick={() => setSelectedCrisisId(c.id === selectedCrisisId ? null : c.id)} />
           ))}
           {resolvedCrises.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">No resolved crises.</p>}
@@ -125,7 +244,7 @@ export function CrisisResponsePage() {
   );
 }
 
-function CrisisCard({ crisis: c, selected, onClick }: { crisis: any; selected: boolean; onClick: () => void }) {
+function CrisisCard({ crisis: c, selected, onClick }: { crisis: CrisisRecord; selected: boolean; onClick: () => void }) {
   const typeInfo = CRISIS_TYPES[c.crisis_type] ?? { label: c.crisis_type, color: "bg-gray-100" };
   const stepPct = Math.min(100, ((c.current_step - 1) / 7) * 100);
 
@@ -161,11 +280,9 @@ function CrisisCard({ crisis: c, selected, onClick }: { crisis: any; selected: b
   );
 }
 
-function CrisisDetail({ crisis: c }: { crisis: any }) {
-  const [showDebrief, setShowDebrief] = useState(false);
-
-  let responseActions: string[] = []; try { responseActions = JSON.parse(c.step3_response_actions ?? "[]"); } catch { /* */ }
-  let notifiedParties: string[] = []; try { notifiedParties = JSON.parse(c.step5_notified_parties ?? "[]"); } catch { /* */ }
+function CrisisDetail({ crisis: c }: { crisis: CrisisRecord }) {
+  const responseActions = parseStringArray(c.step3_response_actions);
+  const notifiedParties = parseStringArray(c.step5_notified_parties);
 
   return (
     <div className="space-y-4">
@@ -180,9 +297,10 @@ function CrisisDetail({ crisis: c }: { crisis: any }) {
           {STEPS.map((step) => {
             const isCompleted = c.current_step > step.num || (c.current_step === 8 && step.num <= 7);
             const isCurrent = c.current_step === step.num;
-            const timeField = `step${step.num}_${step.label.toLowerCase().replace(/ /g, "_")}_at` as keyof typeof c;
-            const byField = `step${step.num}_${step.label.toLowerCase().replace(/ /g, "_")}_by` as keyof typeof c;
-            const notesField = `step${step.num}_${step.label.toLowerCase().replace(/ /g, "_")}_notes` as keyof typeof c;
+            const timeField = `step${step.num}_${step.label.toLowerCase().replace(/ /g, "_")}_at`;
+            const byField = `step${step.num}_${step.label.toLowerCase().replace(/ /g, "_")}_by`;
+            const completedAt = c[timeField];
+            const completedBy = c[byField];
 
             return (
               <div key={step.num} className={`flex items-start gap-3 p-2.5 rounded-lg border ${
@@ -196,9 +314,9 @@ function CrisisDetail({ crisis: c }: { crisis: any }) {
                 <div className="flex-1">
                   <div className={`text-sm font-medium ${isCurrent ? "text-red-700" : ""}`}>{step.label}</div>
                   <div className="text-xs text-muted-foreground">{step.desc}</div>
-                  {isCompleted && c[timeField as string] && (
+                  {isCompleted && typeof completedAt === "string" && (
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {c[timeField as string]} {c[byField as string] && `by ${c[byField as string]}`}
+                      {completedAt} {typeof completedBy === "string" && `by ${completedBy}`}
                     </div>
                   )}
                 </div>
@@ -307,7 +425,7 @@ function CrisisDetail({ crisis: c }: { crisis: any }) {
   );
 }
 
-function DebriefField({ label, value }: { label: string; value: string | null }) {
+function DebriefField({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null;
   return (
     <div>
@@ -319,12 +437,20 @@ function DebriefField({ label, value }: { label: string; value: string | null })
 
 function NewCrisisForm() {
   const [form, setForm] = useState({
-    youthId: "", youthName: "", crisisType: "behavioral_escalation" as string,
+    youthName: "", crisisType: "behavioral_escalation" as CrisisType,
   });
 
   const utils = trpc.useUtils();
-  const createCrisis = trpc.m17.createCrisis.useMutation({ onSuccess: () => { utils.m17.listCrises.invalidate(); setForm({ youthId: "", youthName: "", crisisType: "behavioral_escalation" }); } });
-  const handleSubmit = () => { createCrisis.mutate({ youthName: form.youthName, crisisType: form.crisisType, description: "Crisis response activated", time: new Date().toTimeString().slice(0,5), location: "Unit", staffResponse: "Protocol activated", category: "crisis", severity: "high" } as any); };
+  const createCrisis = trpc.m17.createCrisis.useMutation({ onSuccess: () => { utils.m17.listCrises.invalidate(); setForm({ youthName: "", crisisType: "behavioral_escalation" }); } });
+  const handleSubmit = () => {
+    const demoYouthId = `demo-${form.youthName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") || "youth"}`;
+    createCrisis.mutate({
+      youthId: demoYouthId,
+      youthName: form.youthName,
+      mrn: "DEMO-MRN",
+      crisisType: form.crisisType,
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -337,7 +463,7 @@ function NewCrisisForm() {
       </div>
       <div>
         <Label className="text-xs">Crisis Type *</Label>
-        <select className="w-full border rounded px-2 py-1 text-sm" value={form.crisisType} onChange={e => setForm({ ...form, crisisType: e.target.value })}>
+        <select className="w-full border rounded px-2 py-1 text-sm" value={form.crisisType} onChange={e => setForm({ ...form, crisisType: e.target.value as CrisisType })}>
           <option value="behavioral_escalation">Behavioral Escalation</option>
           <option value="suicide_self_harm">Suicide / Self-Harm</option>
           <option value="medical_emergency">Medical Emergency</option>

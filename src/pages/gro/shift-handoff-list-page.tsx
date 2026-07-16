@@ -21,16 +21,21 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
-  ClipboardCheck, Plus, Search, Clock, Calendar, Users, ShieldCheck,
-  Heart, AlertTriangle, CheckCircle2, XCircle, ChevronRight, RefreshCw,
+  ClipboardCheck, Plus, Search, Clock, Calendar, ShieldCheck, AlertTriangle, CheckCircle2, XCircle, ChevronRight, RefreshCw,
   Activity, FileCheck, Pill, Bell
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+interface YouthStatusEntry {
+  name: string;
+  status: string;
+  concerns?: string;
+}
+
 export default function ShiftHandoffListPage() {
   const utils = trpc.useUtils();
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"" | "pending" | "in_progress" | "completed">("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
@@ -139,7 +144,7 @@ export default function ShiftHandoffListPage() {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input placeholder="Search handoffs..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as typeof filterStatus)}>
             <SelectTrigger className="w-[140px]"><SelectValue placeholder="All Statuses" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="">All Statuses</SelectItem>
@@ -329,7 +334,7 @@ export default function ShiftHandoffListPage() {
                 <TabsContent value="youth" className="space-y-3">
                   {detail.youthStatusJson ? (
                     <div className="space-y-2">
-                      {Array.isArray(JSON.parse(detail.youthStatusJson)) ? (JSON.parse(detail.youthStatusJson) as any[]).map((y: any, i: number) => (
+                      {Array.isArray(JSON.parse(detail.youthStatusJson)) ? (JSON.parse(detail.youthStatusJson) as YouthStatusEntry[]).map((y, i: number) => (
                         <Card key={i}>
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between">

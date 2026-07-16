@@ -9,7 +9,6 @@ import {
   ChevronDown,
   Plus,
   ClipboardList,
-  UserCheck,
   GraduationCap,
 } from "lucide-react";
 
@@ -49,7 +48,7 @@ const demoOrientations: Orientation[] = [
     orientationDate: "2026-07-11",
     status: "Completed",
     completion: 100,
-    assignedTrainer: "Sarah Martinez",
+    assignedTrainer: "Synthetic Staff 08",
   },
   {
     id: 4,
@@ -58,7 +57,7 @@ const demoOrientations: Orientation[] = [
     orientationDate: "2026-06-30",
     status: "Completed",
     completion: 100,
-    assignedTrainer: "Sarah Martinez",
+    assignedTrainer: "Synthetic Staff 08",
   },
   {
     id: 5,
@@ -67,7 +66,7 @@ const demoOrientations: Orientation[] = [
     orientationDate: "2026-06-28",
     status: "No-Show",
     completion: 15,
-    assignedTrainer: "James Wilson",
+    assignedTrainer: "Synthetic Staff 09",
   },
 ];
 

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1.0",
+  "packageId": "AMOS-OPS-M5.1B-PACKAGE-V1.0",
+  "milestone": "M5.1B",
+  "disposition": "ACCEPTED",
+  "evidenceClass": "synthetic_microsoft_365_workflow_integration_demo",
+  "sourceSnapshot": "AMOS-OPS_M5_1B_Canonical_Source_Snapshot_v1_0.zip",
+  "sourceFileCount": 898,
+  "sourceAggregateSha256": "d76a0ec38f942f73289147b1e57e771492ce62eb45421d3748d590776ae19506",
+  "sourceSnapshotSha256": "06ddf16bddae0c95fb478517e455bcb0f9f1552263204a9223cddc9628705cf2",
+  "qaStepsPassed": 10,
+  "acceptanceCriteriaPassed": 8,
+  "assertionCount": 117,
+  "productionRows": 0,
+  "liveGraphCalls": 0,
+  "liveMicrosoftReads": 0,
+  "liveMicrosoftWrites": 0,
+  "realNotificationsSent": 0,
+  "liveWrites": 0,
+  "productionDeployment": false,
+  "githubPush": false,
+  "synthetic": true
+}

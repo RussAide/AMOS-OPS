@@ -2,8 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, FileWarning, Search, Plus, CheckCircle, Clock,
-  AlertTriangle, XCircle, Filter,
+  ArrowLeft, FileWarning, Search,
 } from "lucide-react";
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -21,15 +20,15 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
 export function CAPTrackerPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [priorityFilter, setPriorityFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"" | "open" | "completed" | "in_progress" | "pending_verification" | "overdue">("");
+  const [priorityFilter, setPriorityFilter] = useState<"" | "low" | "high" | "medium" | "urgent">("");
 
   const { data: caps, refetch } = trpc.m3.capList.useQuery({ status: statusFilter || undefined, priority: priorityFilter || undefined, search: search || undefined });
   const { data: stats } = trpc.m3.capStats.useQuery();
   const updateCap = trpc.m3.capUpdateStatus.useMutation({ onSuccess: () => refetch() });
 
   const handleStatusChange = (id: string, newStatus: string) => {
-    updateCap.mutate({ id, status: newStatus as any });
+    updateCap.mutate({ id, status: newStatus as Parameters<typeof updateCap.mutate>[0]["status"] });
   };
 
   return (
@@ -80,7 +79,7 @@ export function CAPTrackerPage() {
         </div>
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
           className="rounded-lg border px-3 py-2 text-[13px] outline-none"
           style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}
         >
@@ -93,7 +92,7 @@ export function CAPTrackerPage() {
         </select>
         <select
           value={priorityFilter}
-          onChange={(e) => setPriorityFilter(e.target.value)}
+          onChange={(e) => setPriorityFilter(e.target.value as typeof priorityFilter)}
           className="rounded-lg border px-3 py-2 text-[13px] outline-none"
           style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}
         >

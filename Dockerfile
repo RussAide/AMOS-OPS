@@ -1,52 +1,66 @@
-# AMOS-OPS Production Dockerfile
-# Railway-compatible — builds both frontend and backend
-# Uses node:20-slim (Debian) for better-sqlite3 compatibility
+# AMOS-OPS single-build container
+# The immutable artifact selects Demo or Production only at process startup.
 
-FROM node:20-slim AS builder
+FROM node:24-slim AS builder
 
 WORKDIR /app
 
 # Install build tools for native modules
 RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-COPY package*.json ./
-RUN npm install --legacy-peer-deps
+# Install the exact dependency graph recorded in package-lock.json.
+COPY package.json package-lock.json ./
+RUN npm ci
 
 # Copy source
 COPY . .
 
-# Build frontend + backend
+# Build frontend and backend.
 RUN npm run build
 
-# Production image
-FROM node:20-slim AS production
+FROM node:24-slim AS production
 
 WORKDIR /app
 
-# Set production environment (REQUIRED for server to start)
+# Safe default: the image starts against isolated synthetic resources. A host
+# may select Production with runtime variables, but startup remains locked
+# until the production release authorization variables are also present.
+ENV APP_ENV=demo
+ENV AMOS_RUNTIME_MODE=demo
+ENV AMOS_ENVIRONMENT_ID=amos-ops-demo
+ENV CREDENTIAL_NAMESPACE=amos-ops/demo
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV DATABASE_PATH=/app/data/demo/amos-ops.db
+ENV TRAINING_DATABASE_PATH=/app/data/demo/training/amos-ops-training.db
+ENV UPLOAD_PATH=/app/uploads/demo
+ENV TRAINING_UPLOAD_PATH=/app/uploads/demo/training
 
-# Copy built node_modules from builder (already compiled)
-COPY --from=builder /app/node_modules ./node_modules
+# Install runtime dependencies only. Runtime secrets are injected by the host.
+RUN apt-get update && apt-get install -y python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev \
+  && npm cache clean --force \
+  && apt-get purge -y python3 make g++ \
+  && apt-get autoremove -y \
+  && rm -rf /var/lib/apt/lists/*
 
 # Copy built assets
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/db ./db
 COPY --from=builder /app/docs ./docs
+COPY --from=builder /app/accepted-baselines ./accepted-baselines
 
-# Copy runtime files
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/tsconfig*.json ./
-COPY --from=builder /app/.env* ./
+RUN mkdir -p /app/data/demo/training /app/uploads/demo/training \
+  /app/data/staging/training /app/uploads/staging/training \
+  /app/data/production/training /app/uploads/production/training
 
 # Expose port
 EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://localhost:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))" || exit 1
+  CMD node -e "fetch('http://localhost:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
-# Start server (backend bundle is at dist/boot.js)
-CMD ["node", "dist/boot.js"]
+CMD ["npm", "run", "start"]

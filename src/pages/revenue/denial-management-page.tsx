@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
-import { Ban, ArrowLeft, TrendingUp, AlertTriangle, ShieldAlert, FileText, ChevronRight, RotateCcw, X, CheckCircle } from "lucide-react";
+import { Ban, ArrowLeft, TrendingUp, AlertTriangle, ShieldAlert, RotateCcw, X, CheckCircle } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   denied: "#DC2626", appealed: "#7C3AED",

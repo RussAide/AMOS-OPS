@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/providers/trpc";
 import {
   Award, AlertTriangle, CheckCircle2, Clock, Users,
-  BookOpen, ShieldCheck, TrendingUp, Calendar,
-  ChevronDown, ChevronUp, FileText, AlertOctagon,
+  BookOpen, ShieldCheck, TrendingUp,
+  ChevronDown, ChevronUp, AlertOctagon,
 } from "lucide-react";
 
 const TRAINING_MODULES = [
@@ -26,7 +25,7 @@ const TRAINING_MODULES = [
 ];
 
 const STAFF_TRAINING_STATUS = [
-  { staffId: "s1", name: "Dr. Hall", role: "Clinical Director", modules: [
+  { staffId: "s1", name: "Demo Clinical Director", role: "Clinical Director", modules: [
     { moduleId: "tm1", status: "completed", completedDate: "2026-01-15" },
     { moduleId: "tm2", status: "completed", completedDate: "2026-02-01" },
     { moduleId: "tm3", status: "completed", completedDate: "2026-03-10" },
@@ -41,7 +40,7 @@ const STAFF_TRAINING_STATUS = [
     { moduleId: "tm12", status: "completed", completedDate: "2026-02-01" },
     { moduleId: "tm15", status: "completed", completedDate: "2026-03-15" },
   ]},
-  { staffId: "s2", name: "Lilian Ike", role: "BHC Lead / Revenue", modules: [
+  { staffId: "s2", name: "Demo Clinical Lead", role: "BHC Lead / Revenue", modules: [
     { moduleId: "tm1", status: "completed", completedDate: "2026-01-20" },
     { moduleId: "tm2", status: "completed", completedDate: "2026-02-10" },
     { moduleId: "tm3", status: "completed", completedDate: "2026-03-15" },
@@ -54,7 +53,7 @@ const STAFF_TRAINING_STATUS = [
     { moduleId: "tm13", status: "in_progress", completedDate: null },
     { moduleId: "tm15", status: "completed", completedDate: "2026-03-20" },
   ]},
-  { staffId: "s3", name: "Sarah RCS", role: "Residential Care Staff", modules: [
+  { staffId: "s3", name: "Synthetic Staff 01", role: "Residential Care Staff", modules: [
     { moduleId: "tm1", status: "completed", completedDate: "2026-02-01" },
     { moduleId: "tm2", status: "pending", completedDate: null },
     { moduleId: "tm3", status: "completed", completedDate: "2026-03-01" },
@@ -65,7 +64,7 @@ const STAFF_TRAINING_STATUS = [
     { moduleId: "tm11", status: "completed", completedDate: "2026-05-01" },
     { moduleId: "tm15", status: "in_progress", completedDate: null },
   ]},
-  { staffId: "s4", name: "Mike RCS", role: "Residential Care Staff", modules: [
+  { staffId: "s4", name: "Synthetic Staff 02", role: "Residential Care Staff", modules: [
     { moduleId: "tm1", status: "completed", completedDate: "2026-02-15" },
     { moduleId: "tm3", status: "completed", completedDate: "2026-03-10" },
     { moduleId: "tm4", status: "completed", completedDate: "2026-02-01" },
@@ -119,7 +118,6 @@ export function TrainingTrackerPage() {
 
   // Per-staff completion
   const staffCompletion = STAFF_TRAINING_STATUS.map(s => {
-    const required = TRAINING_MODULES.filter(tm => tm.required && s.modules.some(sm => sm.moduleId === tm.id));
     const completed = s.modules.filter(m => m.status === "completed").length;
     const total = s.modules.length;
     return { ...s, completionPct: Math.round((completed / total) * 100), completed, total };
@@ -401,7 +399,7 @@ export function TrainingTrackerPage() {
             <h3 className="text-[13px] font-semibold mb-3" style={{ color: "var(--topbar-title)" }}>All Credentials</h3>
             {credDashboard?.items && credDashboard.items.length > 0 ? (
               <div className="space-y-2">
-                {credDashboard.items.map((cred: any) => {
+                {credDashboard.items.map((cred) => {
                   const statusColors: Record<string, { bg: string; color: string }> = {
                     valid: { bg: "#ECFDF5", color: "#059669" },
                     expiring: { bg: "#FFFBEB", color: "#D97706" },

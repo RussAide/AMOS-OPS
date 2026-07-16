@@ -1,8 +1,9 @@
 import { trpc } from "@/providers/trpc";
 import {
   Building2, Users, Bed, AlertTriangle, AlertOctagon,
-  TrendingUp, ArrowUpRight, ArrowDownRight, Clock, MapPin,
+  TrendingUp, ArrowUpRight,
 } from "lucide-react";
+import { CAMPUS_STAGES } from "@/constants/organization";
 
 const STAGE_COLORS = [
   { bg: "#FEF2F2", border: "#FECACA", text: "#DC2626", bar: "#EF4444" },
@@ -18,7 +19,7 @@ const ALERT_LEVELS = {
 
 export function CampusCensusDashboardPage() {
   const { data: census } = trpc.m19.getStageCensus.useQuery();
-  const { data: stages } = trpc.m19.listCampusStages.useQuery();
+  trpc.m19.listCampusStages.useQuery();
   const { data: alerts } = trpc.m19.listCensusAlerts.useQuery({});
 
   const summary = census?.summary;
@@ -41,7 +42,7 @@ export function CampusCensusDashboardPage() {
           </h1>
         </div>
         <p className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>
-          Three-stage residential census with HHSC staffing compliance
+          CTR-023 campus development capacity and readiness — fictional demonstration reference
         </p>
       </div>
 
@@ -139,12 +140,9 @@ export function CampusCensusDashboardPage() {
                   </div>
                 </div>
 
-                {/* LPHA flag */}
-                {stage.requiresLPHAAssessment && (
-                  <div className="flex items-center gap-1 text-[9px] px-2 py-1 rounded" style={{ backgroundColor: "#EFF6FF", color: "#1D4ED8" }}>
-                    <Clock size={9} /> LPHA assessment required · {stage.minAssessmentHours}h minimum
-                  </div>
-                )}
+                <div className="text-[9px] px-2 py-1 rounded" style={{ backgroundColor: "#FFFFFF66", color: colors.text }}>
+                  Prototype readiness: {stage.status.replace(/_/g, " ")}
+                </div>
               </div>
             </div>
           );
@@ -169,7 +167,7 @@ export function CampusCensusDashboardPage() {
                   <div className="text-[10px]" style={{ color: "#B91C1C" }}>{alert.message}</div>
                 </div>
                 <span className="text-[9px]" style={{ color: "#991B1B" }}>
-                  {new Date(alert.triggeredAt).toLocaleTimeString()}
+                  {alert.triggeredAt ? new Date(alert.triggeredAt).toLocaleTimeString() : "—"}
                 </span>
               </div>
             ))}
@@ -177,21 +175,19 @@ export function CampusCensusDashboardPage() {
         </div>
       )}
 
-      {/* Progression Criteria Summary */}
+      {/* Canonical campus development pathway */}
       <div className="rounded-lg border p-4" style={{ backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)" }}>
         <h3 className="text-[13px] font-semibold mb-3 flex items-center gap-2" style={{ color: "var(--topbar-title)" }}>
-          <ArrowUpRight size={14} style={{ color: "#245C5A" }} /> Stage Progression Criteria
+          <ArrowUpRight size={14} style={{ color: "#245C5A" }} /> Three-Stage Campus Development Pathway
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {[
-            { stage: 1, name: "Assessment & Stabilization", criteria: 6, color: "#DC2626" },
-            { stage: 2, name: "Active Treatment", criteria: 5, color: "#B45309" },
-            { stage: 3, name: "Transition & Discharge", criteria: 4, color: "#059669" },
-          ].map((s) => (
-            <div key={s.stage} className="p-3 rounded border" style={{ borderColor: `${s.color}33`, backgroundColor: `${s.color}06` }}>
-              <div className="text-[11px] font-semibold" style={{ color: s.color }}>Stage {s.stage}: {s.name}</div>
-              <div className="text-[10px] mt-1" style={{ color: "var(--topbar-subtitle)" }}>{s.criteria} progression criteria</div>
-              <div className="text-[9px] mt-0.5" style={{ color: s.color, opacity: 0.7 }}>All required for stage progression</div>
+          {CAMPUS_STAGES.map((stage) => (
+            <div key={stage.id} className="p-3 rounded border" style={{ borderColor: `${stage.color}33`, backgroundColor: `${stage.color}06` }}>
+              <div className="text-[11px] font-semibold" style={{ color: stage.color }}>{stage.name}</div>
+              <div className="text-[10px] mt-1" style={{ color: "var(--topbar-subtitle)" }}>{stage.controlledCapacity}</div>
+              <div className="text-[9px] mt-1 capitalize" style={{ color: stage.color }}>
+                Prototype readiness: {stage.readinessStatus.replace(/-/g, " ")}
+              </div>
             </div>
           ))}
         </div>

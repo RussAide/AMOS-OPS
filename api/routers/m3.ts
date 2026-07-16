@@ -5,18 +5,51 @@ import {
   audits as auditsTable, incidents as incidentsTable, correctiveActions as correctiveActionsTable,
   evidenceMatrix as evidenceMatrixTable, complianceMemos as complianceMemosTable, deficiencyTracking as deficiencyTrackingTable,
 } from "@db/schema";
-import { eq, like, and, or, desc, sql } from "drizzle-orm";
+import { eq, like, and, or, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 // ─── M3: QA & Compliance — AMOS-Sentinel ───────────────────
 
+async function getSentinelMetrics() {
+  const db = getDb();
+  const [audits, correctiveActions, deficiencies, incidents] = await Promise.all([
+    db.select().from(auditsTable).all(),
+    db.select().from(correctiveActionsTable).all(),
+    db.select().from(deficiencyTrackingTable).all(),
+    db.select().from(incidentsTable).all(),
+  ]);
+  const now = Date.now();
+  const scoredAudits = audits.filter((audit) => audit.score !== null);
+  const complianceScore = scoredAudits.length > 0
+    ? Math.round(scoredAudits.reduce((sum, audit) => sum + (audit.score ?? 0), 0) / scoredAudits.length)
+    : 0;
+  const overdueCAPs = correctiveActions.filter((action) => {
+    if (action.status === "completed") return false;
+    if (action.status === "overdue") return true;
+    return new Date(action.dueDate).getTime() < now;
+  }).length;
+  const openFindings = deficiencies.filter((deficiency) => (
+    deficiency.status !== "verified" && deficiency.status !== "closed"
+  )).length;
+  const unresolvedRisks = incidents.filter((incident) => (
+    (incident.status === "open" || incident.status === "under_investigation")
+    && (incident.severity === "high" || incident.severity === "critical")
+  )).length;
+
+  return { score: complianceScore, overdueCAPs, openFindings, unresolvedRisks };
+}
+
 export const m3Router = createRouter({
   // ─── Audits ────────────────────────────────────────────────
   listAudits: authedQuery
-    .input(z.object({ status: z.string().optional(), type: z.string().optional(), search: z.string().optional() }).optional())
-    .query(async ({ ctx, input }) => {
+    .input(z.object({
+      status: z.enum(["planned", "in_progress", "pending_review", "completed", "closed"]).optional(),
+      type: z.enum(["internal", "external", "regulatory", "peer_review", "random"]).optional(),
+      search: z.string().optional(),
+    }).optional())
+    .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.status) conditions.push(eq(auditsTable.status, input.status));
       if (input?.type) conditions.push(eq(auditsTable.auditType, input.type));
       if (input?.search) {
@@ -82,7 +115,7 @@ export const m3Router = createRouter({
       const db = getDb();
       const actor = ctx.user?.email ?? "unknown";
       const { id, ...updates } = input;
-      const updateData: Record<string, any> = { updatedAt: new Date().toISOString() };
+      const updateData: Partial<typeof auditsTable.$inferInsert> = { updatedAt: new Date().toISOString() };
 
       if (updates.title !== undefined) updateData.title = updates.title;
       if (updates.scope !== undefined) updateData.scope = updates.scope;
@@ -113,10 +146,15 @@ export const m3Router = createRouter({
 
   // ─── Incidents ─────────────────────────────────────────────
   listIncidents: authedQuery
-    .input(z.object({ status: z.string().optional(), severity: z.string().optional(), type: z.string().optional(), search: z.string().optional() }).optional())
+    .input(z.object({
+      status: z.enum(["open", "under_investigation", "resolved", "closed"]).optional(),
+      severity: z.enum(["low", "moderate", "high", "critical"]).optional(),
+      type: z.enum(["medication_error", "fall", "behavioral", "clinical_error", "equipment", "environmental", "other"]).optional(),
+      search: z.string().optional(),
+    }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.status) conditions.push(eq(incidentsTable.status, input.status));
       if (input?.severity) conditions.push(eq(incidentsTable.severity, input.severity));
       if (input?.type) conditions.push(eq(incidentsTable.incidentType, input.type));
@@ -162,7 +200,7 @@ export const m3Router = createRouter({
         patientId: input.patientId ?? null,
         reportedBy: actor, assignedTo: input.assignedTo ?? null,
         occurredAt: input.occurredAt, resolvedAt: null,
-        resolutionNotes: null, followUpRequired: input.followUpRequired ? 1 : 0,
+        resolutionNotes: null, followUpRequired: input.followUpRequired,
         followUpDate: input.followUpDate ?? null, createdAt: now, updatedAt: now,
       });
 
@@ -186,7 +224,7 @@ export const m3Router = createRouter({
       const db = getDb();
       const actor = ctx.user?.email ?? "unknown";
       const { id, ...updates } = input;
-      const updateData: Record<string, any> = { updatedAt: new Date().toISOString() };
+      const updateData: Partial<typeof incidentsTable.$inferInsert> = { updatedAt: new Date().toISOString() };
 
       if (updates.title !== undefined) updateData.title = updates.title;
       if (updates.description !== undefined) updateData.description = updates.description;
@@ -197,7 +235,7 @@ export const m3Router = createRouter({
       if (updates.severity !== undefined) updateData.severity = updates.severity;
       if (updates.resolutionNotes !== undefined) updateData.resolutionNotes = updates.resolutionNotes;
       if (updates.assignedTo !== undefined) updateData.assignedTo = updates.assignedTo;
-      if (updates.followUpRequired !== undefined) updateData.followUpRequired = updates.followUpRequired ? 1 : 0;
+      if (updates.followUpRequired !== undefined) updateData.followUpRequired = updates.followUpRequired;
       if (updates.followUpDate !== undefined) updateData.followUpDate = updates.followUpDate;
 
       await db.update(incidentsTable).set(updateData).where(eq(incidentsTable.id, id));
@@ -207,10 +245,14 @@ export const m3Router = createRouter({
 
   // ─── Corrective Actions ────────────────────────────────────
   listCorrectiveActions: authedQuery
-    .input(z.object({ status: z.string().optional(), priority: z.string().optional(), search: z.string().optional() }).optional())
+    .input(z.object({
+      status: z.enum(["open", "in_progress", "pending_verification", "completed", "overdue"]).optional(),
+      priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+      search: z.string().optional(),
+    }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.status) conditions.push(eq(correctiveActionsTable.status, input.status));
       if (input?.priority) conditions.push(eq(correctiveActionsTable.priority, input.priority));
       if (input?.search) conditions.push(or(like(correctiveActionsTable.title, `%${input.search}%`), like(correctiveActionsTable.actionNumber, `%${input.search}%`)));
@@ -275,7 +317,7 @@ export const m3Router = createRouter({
       const db = getDb();
       const actor = ctx.user?.email ?? "unknown";
       const { id, ...updates } = input;
-      const updateData: Record<string, any> = { updatedAt: new Date().toISOString() };
+      const updateData: Partial<typeof correctiveActionsTable.$inferInsert> = { updatedAt: new Date().toISOString() };
 
       if (updates.title !== undefined) updateData.title = updates.title;
       if (updates.description !== undefined) updateData.description = updates.description;
@@ -327,6 +369,13 @@ export const m3Router = createRouter({
     };
   }),
 
+  sentinel: authedQuery.query(async () => getSentinelMetrics()),
+
+  complianceScore: authedQuery.query(async () => {
+    const metrics = await getSentinelMetrics();
+    return metrics.score;
+  }),
+
   // ─── Compliance Scores ─────────────────────────────────────
   complianceScores: publicQuery.query(async () => {
     // In a real system, these would be calculated from audit findings
@@ -348,10 +397,14 @@ export const m3Router = createRouter({
   // ════════════════════════════════════════════════════════════
 
   capList: authedQuery
-    .input(z.object({ status: z.string().optional(), priority: z.string().optional(), search: z.string().optional() }).optional())
+    .input(z.object({
+      status: z.enum(["open", "in_progress", "pending_verification", "completed", "overdue"]).optional(),
+      priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+      search: z.string().optional(),
+    }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.status) conditions.push(eq(correctiveActionsTable.status, input.status));
       if (input?.priority) conditions.push(eq(correctiveActionsTable.priority, input.priority));
       if (input?.search) {
@@ -415,7 +468,7 @@ export const m3Router = createRouter({
       const db = getDb();
       const actor = ctx.user?.email ?? "unknown";
       const { id, ...fields } = input;
-      const updateData: Record<string, any> = { updatedAt: new Date().toISOString() };
+      const updateData: Partial<typeof correctiveActionsTable.$inferInsert> = { updatedAt: new Date().toISOString() };
       if (fields.status) {
         updateData.status = fields.status;
         if (fields.status === "completed") updateData.completedAt = new Date().toISOString();
@@ -451,10 +504,14 @@ export const m3Router = createRouter({
   // ════════════════════════════════════════════════════════════
 
   auditBinderList: authedQuery
-    .input(z.object({ status: z.string().optional(), type: z.string().optional(), search: z.string().optional() }).optional())
+    .input(z.object({
+      status: z.enum(["planned", "in_progress", "pending_review", "completed", "closed"]).optional(),
+      type: z.enum(["internal", "external", "regulatory", "peer_review", "random"]).optional(),
+      search: z.string().optional(),
+    }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.status) conditions.push(eq(auditsTable.status, input.status));
       if (input?.type) conditions.push(eq(auditsTable.auditType, input.type));
       if (input?.search) {
@@ -524,7 +581,7 @@ export const m3Router = createRouter({
       const db = getDb();
       const actor = ctx.user?.email ?? "unknown";
       const { id, ...fields } = input;
-      const updateData: Record<string, any> = { updatedAt: new Date().toISOString() };
+      const updateData: Partial<typeof auditsTable.$inferInsert> = { updatedAt: new Date().toISOString() };
       if (fields.title !== undefined) updateData.title = fields.title;
       if (fields.status !== undefined) {
         updateData.status = fields.status;
@@ -559,14 +616,14 @@ export const m3Router = createRouter({
 
   evidenceList: authedQuery
     .input(z.object({
-      status: z.string().optional(),
-      category: z.string().optional(),
-      complianceArea: z.string().optional(),
+      status: z.enum(["active", "under_review", "expired", "superseded", "archived"]).optional(),
+      category: z.enum(["policy", "procedure", "training_record", "audit_report", "incident_report", "credential", "risk_assessment", "other"]).optional(),
+      complianceArea: z.enum(["hipaa_privacy", "hipaa_security", "cfr42_part2", "state_licensure", "staff_credentials", "incident_reporting", "medication_management", "youth_rights", "other"]).optional(),
       search: z.string().optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.status) conditions.push(eq(evidenceMatrixTable.status, input.status));
       if (input?.category) conditions.push(eq(evidenceMatrixTable.category, input.category));
       if (input?.complianceArea) conditions.push(eq(evidenceMatrixTable.complianceArea, input.complianceArea));
@@ -649,7 +706,7 @@ export const m3Router = createRouter({
       const db = getDb();
       const actor = ctx.user?.email ?? "unknown";
       const { id, ...fields } = input;
-      const updateData: Record<string, any> = { updatedAt: new Date().toISOString() };
+      const updateData: Partial<typeof evidenceMatrixTable.$inferInsert> = { updatedAt: new Date().toISOString() };
       if (fields.title !== undefined) updateData.title = fields.title;
       if (fields.status !== undefined) updateData.status = fields.status;
       if (fields.reviewNotes !== undefined) updateData.reviewNotes = fields.reviewNotes;
@@ -679,13 +736,13 @@ export const m3Router = createRouter({
 
   memoList: authedQuery
     .input(z.object({
-      status: z.string().optional(),
-      priority: z.string().optional(),
+      status: z.enum(["draft", "pending_review", "approved", "issued", "acknowledged", "superseded"]).optional(),
+      priority: z.enum(["routine", "urgent", "emergency"]).optional(),
       search: z.string().optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.status) conditions.push(eq(complianceMemosTable.status, input.status));
       if (input?.priority) conditions.push(eq(complianceMemosTable.priority, input.priority));
       if (input?.search) {
@@ -779,7 +836,7 @@ export const m3Router = createRouter({
       const db = getDb();
       const actor = ctx.user?.email ?? "unknown";
       const { id, ...fields } = input;
-      const updateData: Record<string, any> = { updatedAt: new Date().toISOString() };
+      const updateData: Partial<typeof complianceMemosTable.$inferInsert> = { updatedAt: new Date().toISOString() };
       if (fields.title !== undefined) updateData.title = fields.title;
       if (fields.body !== undefined) updateData.body = fields.body;
       if (fields.status !== undefined) {
@@ -820,14 +877,14 @@ export const m3Router = createRouter({
 
   deficiencyList: authedQuery
     .input(z.object({
-      status: z.string().optional(),
-      category: z.string().optional(),
-      severity: z.string().optional(),
+      status: z.enum(["open", "poc_pending", "poc_approved", "in_progress", "corrected", "verified", "closed"]).optional(),
+      category: z.enum(["clinical_documentation", "safety", "staffing", "training", "facilities", "medication", "resident_rights", "infection_control", "administrative", "other"]).optional(),
+      severity: z.enum(["citation", "standard", "element", "risk_only", "other"]).optional(),
       search: z.string().optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.status) conditions.push(eq(deficiencyTrackingTable.status, input.status));
       if (input?.category) conditions.push(eq(deficiencyTrackingTable.category, input.category));
       if (input?.severity) conditions.push(eq(deficiencyTrackingTable.severity, input.severity));
@@ -922,7 +979,7 @@ export const m3Router = createRouter({
       const db = getDb();
       const actor = ctx.user?.email ?? "unknown";
       const { id, ...fields } = input;
-      const updateData: Record<string, any> = { updatedAt: new Date().toISOString() };
+      const updateData: Partial<typeof deficiencyTrackingTable.$inferInsert> = { updatedAt: new Date().toISOString() };
       if (fields.title !== undefined) updateData.title = fields.title;
       if (fields.status !== undefined) updateData.status = fields.status;
       if (fields.pocDescription !== undefined) {

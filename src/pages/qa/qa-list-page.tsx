@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck, ArrowLeft, ClipboardCheck, AlertTriangle, FileWarning, ChevronRight } from "lucide-react";
+import { ShieldCheck, ArrowLeft, ClipboardCheck, AlertTriangle, FileWarning } from "lucide-react";
 
 const SEVERITY_COLORS: Record<string, string> = {
   low: "#2563EB", moderate: "#D97706", high: "#DC2626", critical: "#7F1D1D",

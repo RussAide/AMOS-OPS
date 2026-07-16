@@ -22,7 +22,7 @@ export interface HRDocument {
 // ─── Sample Documents (pre-populated for demo) ──────────────
 
 export const SAMPLE_DOCUMENTS: HRDocument[] = [
-  // Sarah Martinez (p-001) - fully cleared employee
+  // Synthetic Staff 08 (p-001) - fully cleared employee
   { id: "doc-001", personId: "p-001", moduleId: "offers", recordName: "Conditional Offer Letter", fileName: "Offer_Letter_Sarah_Martinez_2025.pdf", fileType: "application/pdf", fileSize: 245760, uploadedAt: "2025-01-10T09:00:00Z", uploadedBy: "HR Admin", status: "verified", verifiedAt: "2025-01-10T10:00:00Z", verifiedBy: "HR Director" },
   { id: "doc-002", personId: "p-001", moduleId: "offers", recordName: "Offer Acceptance", fileName: "Signed_Acceptance_Sarah_Martinez.pdf", fileType: "application/pdf", fileSize: 180224, uploadedAt: "2025-01-12T11:00:00Z", uploadedBy: "HR Admin", status: "verified" },
   { id: "doc-003", personId: "p-001", moduleId: "offers", recordName: "I-9 Form", fileName: "I-9_Sarah_Martinez.pdf", fileType: "application/pdf", fileSize: 315392, uploadedAt: "2025-01-13T14:00:00Z", uploadedBy: "HR Admin", status: "verified" },
@@ -56,10 +56,10 @@ export const SAMPLE_DOCUMENTS: HRDocument[] = [
   { id: "doc-019", personId: "p-012", moduleId: "recruitment", recordName: "Applicant File", fileName: "Application_Michelle_Brown.pdf", fileType: "application/pdf", fileSize: 524288, uploadedAt: "2025-06-15T14:30:00Z", uploadedBy: "System", status: "uploaded" },
   { id: "doc-020", personId: "p-012", moduleId: "recruitment", recordName: "Minimum Qualification Review", fileName: "QualReview_Michelle_Brown.pdf", fileType: "application/pdf", fileSize: 114688, uploadedAt: "2025-06-15T14:30:00Z", uploadedBy: "System", status: "uploaded" },
 
-  // Emily Foster (p-006) - incomplete personnel file
+  // Synthetic-Person-037 Foster (p-006) - incomplete personnel file
   { id: "doc-021", personId: "p-006", moduleId: "offers", recordName: "Conditional Offer Letter", fileName: "Offer_Emily_Foster.pdf", fileType: "application/pdf", fileSize: 237568, uploadedAt: "2025-02-20T09:00:00Z", uploadedBy: "HR Admin", status: "verified" },
   { id: "doc-022", personId: "p-006", moduleId: "personnel-files", recordName: "Personnel File Cover Sheet", fileName: "PF_Cover_Emily_Foster.pdf", fileType: "application/pdf", fileSize: 94208, uploadedAt: "2025-02-25T08:00:00Z", uploadedBy: "HR Admin", status: "verified" },
-  // Missing: Emergency Contact Form, Direct Deposit Form for Emily
+  // Missing: Emergency Contact Form, Direct Deposit Form for Synthetic-Person-037
 
   // Christopher Lee (p-013) - offer accepted, packet incomplete
   { id: "doc-023", personId: "p-013", moduleId: "offers", recordName: "Offer Acceptance", fileName: "Signed_Acceptance_Chris_Lee.pdf", fileType: "application/pdf", fileSize: 172032, uploadedAt: "2025-06-01T10:00:00Z", uploadedBy: "System", status: "verified" },

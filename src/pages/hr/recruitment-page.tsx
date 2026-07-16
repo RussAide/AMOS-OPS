@@ -29,7 +29,7 @@ const demoRequisitions: Requisition[] = [
     postedDate: "2026-06-15",
     applicants: 5,
     status: "Active",
-    hiringManager: "Sarah Martinez",
+    hiringManager: "Synthetic Staff 08",
   },
   {
     id: 2,
@@ -56,7 +56,7 @@ const demoRequisitions: Requisition[] = [
     postedDate: "2026-06-25",
     applicants: 1,
     status: "Active",
-    hiringManager: "James Wilson",
+    hiringManager: "Synthetic Staff 09",
   },
   {
     id: 5,
