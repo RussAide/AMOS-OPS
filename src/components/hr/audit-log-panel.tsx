@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollText } from "lucide-react";
@@ -12,11 +11,27 @@ interface AuditEntry {
   entityId: string;
 }
 
+const DEMO_AUDIT_ENTRIES: AuditEntry[] = [
+  {
+    id: "1",
+    action: "LOGIN",
+    actor: "admin",
+    timestamp: "2026-07-13T14:00:00.000Z",
+    entityType: "auth",
+    entityId: "session_1",
+  },
+  {
+    id: "2",
+    action: "PERSON_CREATED",
+    actor: "hr-director",
+    timestamp: "2026-07-13T13:00:00.000Z",
+    entityType: "person",
+    entityId: "person_1",
+  },
+];
+
 export function AuditLogPanel() {
-  const [entries] = useState<AuditEntry[]>([
-    { id: "1", action: "LOGIN", actor: "admin", timestamp: new Date().toISOString(), entityType: "auth", entityId: "session_1" },
-    { id: "2", action: "PERSON_CREATED", actor: "hr-director", timestamp: new Date(Date.now() - 3600000).toISOString(), entityType: "person", entityId: "person_1" },
-  ]);
+  const entries = DEMO_AUDIT_ENTRIES;
 
   return (
     <Card>

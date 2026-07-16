@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
-import { DollarSign, Search, Filter, ChevronLeft, ChevronRight, FileText, ArrowLeft, X, RefreshCw, Send } from "lucide-react";
+import {  Search, Filter, ChevronLeft, ChevronRight, FileText, ArrowLeft, X, RefreshCw, Send } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "#6B7280", pending: "#D97706", submitted: "#2563EB", acknowledged: "#2563EB",
@@ -14,11 +14,12 @@ const STATUS_LABELS: Record<string, string> = {
   pending_review: "Review", approved: "Approved", denied: "Denied", appealed: "Appealed",
   paid: "Paid", write_off: "Write Off",
 };
+type ClaimStatus = "pending" | "draft" | "submitted" | "approved" | "acknowledged" | "pending_review" | "denied" | "appealed" | "paid" | "write_off";
 
 export function ClaimsListPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | ClaimStatus>("all");
   const [page, setPage] = useState(1);
   const [detailClaim, setDetailClaim] = useState<string | null>(null);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
@@ -50,7 +51,7 @@ export function ClaimsListPage() {
     },
   });
 
-  const statuses = ["all", "draft", "pending", "submitted", "acknowledged", "pending_review", "approved", "denied", "appealed", "paid"];
+  const statuses: readonly ("all" | ClaimStatus)[] = ["all", "draft", "pending", "submitted", "acknowledged", "pending_review", "approved", "denied", "appealed", "paid"];
   const totalPages = Math.ceil((data?.total ?? 0) / pageSize);
 
   return (
@@ -222,7 +223,7 @@ export function ClaimsListPage() {
             <div className="space-y-4">
               <div>
                 <label className="text-[12px] font-medium mb-1 block" style={{ color: "var(--topbar-subtitle)" }}>Submission Method</label>
-                <select value={submissionMethod} onChange={(e) => setSubmissionMethod(e.target.value as any)} className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}>
+                <select value={submissionMethod} onChange={(e) => setSubmissionMethod(e.target.value as typeof submissionMethod)} className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}>
                   <option value="portal">Provider Portal</option>
                   <option value="fax">Fax</option>
                   <option value="email">Email</option>

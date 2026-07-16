@@ -1,16 +1,23 @@
 import { trpc } from "@/providers/trpc";
 import {
-  LayoutDashboard, Users, BookOpen, ShieldCheck, ArrowRight, Activity, AlertTriangle,
-  DollarSign, ClipboardCheck, TrendingUp, Stethoscope, Home, FileText, Brain,
+   Users, BookOpen, ShieldCheck, ArrowRight, Activity, AlertTriangle,
+  DollarSign, ClipboardCheck, TrendingUp, Stethoscope, FileText, Brain,
   Bell, ChevronRight, Building, Target, Lock, BarChart3, HeartPulse, Briefcase,
   Crown, Clock, CheckCircle, XCircle, AlertCircle, Percent, Calendar
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, PieChart, Pie, Cell
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar
 } from "recharts";
+import { useEffect } from "react";
+
+interface DashboardWorkOrder {
+  status?: string;
+  dueDate?: string | null;
+  due_date?: string | null;
+}
 
 /* ─── Single KPI Card ─── */
 function KPICard({
@@ -98,50 +105,23 @@ function KPISection({
   );
 }
 
-/* ─── Sparkline Chart ─── */
-function Sparkline({ data, dataKey, color }: { data: any[]; dataKey: string; color: string }) {
-  if (!data || data.length === 0) return null;
-  return (
-    <div className="h-10 mt-2">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data}>
-          <Line
-            type="monotone"
-            dataKey={dataKey}
-            stroke={color}
-            strokeWidth={2}
-            dot={false}
-          />
-          <XAxis dataKey="name" hide />
-          <YAxis hide />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
+export type HomeDashboardFocus = "overview" | "alerts" | "divisions" | "actions";
 
-/* ─── Mini Bar Chart ─── */
-function MiniBarChart({ data, dataKey, color }: { data: any[]; dataKey: string; color: string }) {
-  if (!data || data.length === 0) return null;
-  return (
-    <div className="h-10 mt-2">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data}>
-          <Bar dataKey={dataKey} fill={color} radius={[2, 2, 0, 0]} />
-          <XAxis dataKey="name" hide />
-          <YAxis hide />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
+interface DashboardPageProps {
+  focus?: HomeDashboardFocus;
 }
 
 /* ─── Main Dashboard Page ─── */
-export function DashboardPage() {
+export function DashboardPage({ focus = "overview" }: DashboardPageProps) {
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const target = document.getElementById(`home-${focus}`);
+    target?.scrollIntoView({ block: "start" });
+  }, [focus]);
+
   // ── Core Data Queries ──
-  const { data: overview, isLoading: overviewLoading } = trpc.dashboard.overview.useQuery();
+  const { data: overview } = trpc.dashboard.overview.useQuery();
   const { data: operational, isLoading: operationalLoading } = trpc.dashboard.operationalKPIs.useQuery();
   const { data: compliance, isLoading: complianceLoading } = trpc.dashboard.complianceKPIs.useQuery();
   const { data: clinical, isLoading: clinicalLoading } = trpc.dashboard.clinicalKPIs.useQuery();
@@ -152,6 +132,7 @@ export function DashboardPage() {
   // ── Module Deep Dives ──
   const { data: ccmg } = trpc.ccmg.bhcDashboard.useQuery();
   const { data: m19 } = trpc.m19.getCampusSummary.useQuery();
+  const { data: rawWorkOrders = [] } = trpc.gad.listWorkOrders.useQuery();
 
   const d = overview;
   const o = operational;
@@ -160,26 +141,33 @@ export function DashboardPage() {
   const r = revenue;
   const w = workforce;
   const e = executive;
+  const workOrders = rawWorkOrders as DashboardWorkOrder[];
+  const overdueWorkOrders = d?.date
+    ? workOrders.filter((workOrder) => {
+        const dueDate = workOrder.dueDate ?? workOrder.due_date;
+        return Boolean(dueDate && dueDate < d.date && !["completed", "cancelled"].includes(workOrder.status ?? ""));
+      }).length
+    : 0;
 
-  // ── Derived trend data (mock 7-day history for sparklines when real time-series unavailable) ──
+  // ── Derived trend data (deterministic demo history when real time-series is unavailable) ──
   const trend7 = Array.from({ length: 7 }, (_, i) => ({
     name: `D${i + 1}`,
-    value: Math.max(0, (r?.claimsSubmitted30d ?? 0) / 7 + Math.floor(Math.random() * 5 - 2)),
+    value: Math.max(0, (r?.claimsSubmitted30d ?? 0) / 7 + ((i * 3) % 5) - 2),
   }));
 
   // ── Alerts ──
   const alerts: { level: "critical" | "warning" | "info"; message: string; route?: string }[] = [];
   if ((d?.revenue?.deniedClaims ?? 0) > 0) alerts.push({ level: "warning", message: `${d?.revenue?.deniedClaims ?? 0} denied claim(s) requiring follow-up`, route: "/revenue/claims" });
   if ((d?.part2?.expiredConsents ?? 0) > 0) alerts.push({ level: "critical", message: `${d?.part2?.expiredConsents ?? 0} expired Part 2 consent(s)`, route: "/compliance/part2" });
-  if ((d?.gad?.overdueWorkOrders ?? 0) > 0) alerts.push({ level: "warning", message: `${d?.gad?.overdueWorkOrders ?? 0} overdue work order(s)`, route: "/gad" });
+  if (overdueWorkOrders > 0) alerts.push({ level: "warning", message: `${overdueWorkOrders} overdue work order(s)`, route: "/gad" });
   if ((d?.bhc?.highRiskCount ?? 0) > 0) alerts.push({ level: "critical", message: `${d?.bhc?.highRiskCount ?? 0} high-risk flag(s) active`, route: "/clinical/bhc" });
   if ((c?.overdueItems ?? 0) > 0) alerts.push({ level: "warning", message: `${c?.overdueItems ?? 0} overdue compliance item(s)`, route: "/qa" });
-  if ((w?.expiringCredentials ?? 0) > 0) alerts.push({ level: "info", message: `${w?.expiringCredentials ?? 0} credential(s) expiring soon`, route: "/hr/credentials" });
+  if ((c?.expiringCredentials ?? 0) > 0) alerts.push({ level: "info", message: `${c?.expiringCredentials ?? 0} credential(s) expiring soon`, route: "/hr/credentials" });
 
   // ── Module Cards ──
   const modules = [
     { label: "BHC Clinical", route: "/clinical/bhc", icon: Stethoscope, color: "#059669", bg: "#ecfdf5",
-      kpi: `${ccmg?.departments?.mhtcm?.activePlans ?? 0} MHTCM \u00b7 ${ccmg?.departments?.mhrs?.activePrograms ?? 0} MHRS`,
+      kpi: `${ccmg?.mhtcm?.activePlans ?? 0} MHTCM \u00b7 ${ccmg?.mhrs?.activePrograms ?? 0} MHRS`,
       detail: `${d?.bhc?.activePatients ?? 0} patients \u00b7 ${d?.bhc?.sessionsThisWeek ?? 0} sessions/wk` },
     { label: "Revenue Cycle", route: "/revenue", icon: DollarSign, color: "#2563EB", bg: "#eff6ff",
       kpi: `${d?.revenue?.totalClaims ?? 0} claims \u00b7 ${d?.revenue?.collectionRate ?? 0}% collected`,
@@ -201,13 +189,13 @@ export function DashboardPage() {
       detail: "Cross-module intelligence" },
     { label: "Campus Census", route: "/campus", icon: Building, color: "#0891B2", bg: "#ecfeff",
       kpi: `${d?.campus?.occupiedBeds ?? 0} of ${d?.campus?.totalBeds ?? 0} beds filled`,
-      detail: `${d?.campus?.facilityCount ?? 0} buildings \u00b7 ${m19?.avgLOS ?? 0}d avg LOS` },
+      detail: `${d?.campus?.facilityCount ?? 0} buildings \u00b7 ${cl?.avgLOS ?? 0}d avg LOS` },
   ];
 
   return (
     <div className="px-4 md:px-6 pt-4 pb-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div id="home-overview" className="flex items-center justify-between mb-6 scroll-mt-6">
         <div>
           <h1 className="text-[24px] font-bold" style={{ color: "var(--topbar-title)" }}>Dashboard</h1>
           <p className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>
@@ -223,8 +211,12 @@ export function DashboardPage() {
       </div>
 
       {/* Alerts Banner */}
-      {alerts.length > 0 && (
-        <div className="mb-6 space-y-2">
+      <section id="home-alerts" className="mb-6 scroll-mt-6" aria-labelledby="home-alerts-title">
+        <h2 id="home-alerts-title" className="text-[14px] font-semibold uppercase tracking-[0.5px] mb-3" style={{ color: "var(--topbar-subtitle)" }}>
+          Alerts and priorities
+        </h2>
+        {alerts.length > 0 ? (
+          <div className="space-y-2">
           {alerts.map((a, i) => (
             <button
               key={i}
@@ -240,31 +232,55 @@ export function DashboardPage() {
               <ChevronRight size={14} style={{ color: "var(--topbar-subtitle)" }} />
             </button>
           ))}
-        </div>
-      )}
+          </div>
+        ) : (
+          <div className="rounded-lg border px-4 py-3 text-[12px]" style={{ backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)", color: "var(--topbar-subtitle)" }}>
+            No active enterprise priorities require attention.
+          </div>
+        )}
+      </section>
 
       {/* Module Cards */}
-      <h2 className="text-[14px] font-semibold uppercase tracking-[0.5px] mb-3" style={{ color: "var(--topbar-subtitle)" }}>Modules</h2>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-8">
-        {modules.map((m) => (
-          <button
-            key={m.label}
-            onClick={() => navigate(m.route)}
-            className="rounded-lg border p-4 text-left transition-all hover:shadow-md hover:translate-y-[-1px] cursor-pointer group"
-            style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)" }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: m.bg }}>
-                <m.icon size={18} style={{ color: m.color }} />
+      <section id="home-divisions" className="scroll-mt-6" aria-labelledby="home-divisions-title">
+        <h2 id="home-divisions-title" className="text-[14px] font-semibold uppercase tracking-[0.5px] mb-3" style={{ color: "var(--topbar-subtitle)" }}>Division status</h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-8">
+          {modules.map((m) => (
+            <button
+              key={m.label}
+              onClick={() => navigate(m.route)}
+              className="rounded-lg border p-4 text-left transition-all hover:shadow-md hover:translate-y-[-1px] cursor-pointer group"
+              style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)" }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: m.bg }}>
+                  <m.icon size={18} style={{ color: m.color }} />
+                </div>
+                <ArrowRight size={14} style={{ color: "var(--topbar-subtitle)" }} className="opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
-              <ArrowRight size={14} style={{ color: "var(--topbar-subtitle)" }} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-            <p className="text-[13px] font-semibold mb-0.5" style={{ color: "var(--topbar-title)" }}>{m.label}</p>
-            <p className="text-[12px] font-medium mb-0.5" style={{ color: m.color }}>{m.kpi}</p>
-            <p className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>{m.detail}</p>
-          </button>
-        ))}
-      </div>
+              <p className="text-[13px] font-semibold mb-0.5" style={{ color: "var(--topbar-title)" }}>{m.label}</p>
+              <p className="text-[12px] font-medium mb-0.5" style={{ color: m.color }}>{m.kpi}</p>
+              <p className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>{m.detail}</p>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section id="home-actions" className="mb-8 scroll-mt-6" aria-labelledby="home-actions-title">
+        <h2 id="home-actions-title" className="text-[14px] font-semibold uppercase tracking-[0.5px] mb-3" style={{ color: "var(--topbar-subtitle)" }}>Quick actions</h2>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {[
+            { label: "Open my work", route: "/workflows/my-work-today", icon: ClipboardCheck },
+            { label: "Start clinical session", route: "/clinical/sessions", icon: Stethoscope },
+            { label: "Open work orders", route: "/gad/facilities-work-orders", icon: Briefcase },
+            { label: "Create a document", route: "/documents", icon: FileText },
+          ].map((action) => (
+            <button key={action.label} type="button" onClick={() => navigate(action.route)} className="flex items-center gap-3 rounded-lg border p-3 text-left transition-all hover:shadow-sm" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)" }}>
+              <action.icon size={16} style={{ color: "#245C5A" }} />
+              <span className="text-[12px] font-semibold" style={{ color: "var(--topbar-title)" }}>{action.label}</span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       {/* ════════════════════════════════════════════════════════════
           D010-01: OPERATIONAL KPIs (6)
@@ -451,7 +467,7 @@ export function DashboardPage() {
             </button>
           </div>
           <div className="space-y-3">
-            {(d?.mgma?.domains ?? []).map((dom: any) => (
+            {(d?.mgma?.domains ?? []).map((dom) => (
               <div key={dom.id} className="flex items-center gap-3">
                 <span className="text-[13px] w-44 truncate flex-shrink-0" style={{ color: "var(--topbar-title)" }}>{dom.name}</span>
                 <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
@@ -460,7 +476,7 @@ export function DashboardPage() {
                 <span className="text-[12px] w-10 text-right flex-shrink-0 font-medium" style={{ color: (dom.progress ?? 0) >= 80 ? "#059669" : (dom.progress ?? 0) >= 50 ? "#D97706" : "#DC2626" }}>{dom.progress ?? 0}%</span>
               </div>
             ))}
-            {(d?.mgma?.domains ?? []).filter((x: any) => x.name).length === 0 && (
+            {(d?.mgma?.domains ?? []).filter((x) => x.name).length === 0 && (
               <p className="text-[13px] text-center py-4" style={{ color: "var(--topbar-subtitle)" }}>No MGMA domain data available</p>
             )}
           </div>
@@ -475,7 +491,7 @@ export function DashboardPage() {
             </button>
           </div>
           <div className="space-y-3">
-            {(m19?.byFacility ?? []).map((f: any) => (
+            {(m19?.byFacility ?? []).map((f) => (
               <div key={f.facilityId} className="flex items-center justify-between py-2 border-b" style={{ borderColor: "var(--card-border)" }}>
                 <div>
                   <p className="text-[13px] font-medium" style={{ color: "var(--topbar-title)" }}>{f.facilityName}</p>

@@ -1,16 +1,8 @@
 import { trpc } from "@/providers/trpc";
 import {
-  Shield, AlertTriangle, CheckCircle, Clock, FileText,
-  Users, Archive, AlertOctagon, TrendingDown, Eye,
+  Shield, AlertTriangle, CheckCircle, Clock,
+  Users, Archive, AlertOctagon,
 } from "lucide-react";
-
-const STATUS_PILL = {
-  open: { bg: "#FEF2F2", color: "#DC2626", label: "Open" },
-  documented: { bg: "#FFFBEB", color: "#B45309", label: "Doc Pending" },
-  medical_pending: { bg: "#FEF3C7", color: "#D97706", label: "Medical Pending" },
-  under_review: { bg: "#EFF6FF", color: "#1D4ED8", label: "Under Review" },
-  closed: { bg: "#ECFDF5", color: "#059669", label: "Closed" },
-};
 
 export function GROComplianceDashboardPage() {
   const { data: dashboard } = trpc.groCompliance.groComplianceDashboard.useQuery();

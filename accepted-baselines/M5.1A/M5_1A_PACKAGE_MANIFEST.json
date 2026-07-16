@@ -1,0 +1,252 @@
+{
+  "schemaVersion": "1.0",
+  "packageId": "AMOS-OPS_M5_1A_Operations_Hub_and_Microsoft_DMS_Connector_Architecture_Package_v1_0",
+  "milestone": "M5.1A",
+  "status": "complete",
+  "evidenceClass": "synthetic_operations_hub_connector_architecture_demo",
+  "criteriaPassed": 8,
+  "criteriaExpected": 8,
+  "assertionCount": 235,
+  "integratedQa": "passed",
+  "schemaIntegrity": "passed_no_change_required",
+  "exactAcceptance": {
+    "connectorRegistryAndModesOperational": true,
+    "controlledContentAndHandlingOperational": true,
+    "integratedSecurityAndResiliencePassed": true,
+    "operationsHubTopologyOperational": true,
+    "permissionTrimmedIntranetPublishingOperational": true,
+    "pilotReconciledAndRollbackVerified": true,
+    "repositoryInventoryDispositionComplete": true,
+    "stableObjectIdentityResolvesCurrentItems": true
+  },
+  "exitGate": true,
+  "productionRows": 0,
+  "liveGraphCalls": 0,
+  "liveMicrosoftWrites": 0,
+  "liveWrites": 0,
+  "nonredundancy": {
+    "canonicalSourceSnapshots": 1,
+    "looseSourceCopies": 0,
+    "milestoneSourceCopies": 0,
+    "integratedScenarioResults": 1,
+    "milestoneEvidenceSubfolders": []
+  },
+  "sourceSnapshot": {
+    "path": "20_Canonical_Source/AMOS-OPS_M5_1A_Canonical_Source_Snapshot_v1_0.zip",
+    "bytes": 11253049,
+    "sha256": "801a2ce73e76553c05e926186f97eb5575cf045d528d3102b70f71923666ae70",
+    "restoredFiles": 844
+  },
+  "files": [
+    {
+      "path": "00_Controls/AGENT_FILE_OWNERSHIP.csv",
+      "bytes": 1597,
+      "sha256": "69107d913a9e3fc8579212f11513212e46a8686ef5c61058f3fa919f1729400c"
+    },
+    {
+      "path": "00_Controls/DEFERRED_SEQUENCE_BACKLOG.md",
+      "bytes": 1039,
+      "sha256": "ed6e79f18be962b4927643980e3603d9dcd66510cbc56c095417df0d8714d4ac"
+    },
+    {
+      "path": "00_Controls/M4_1A_ACCEPTANCE_MATRIX.csv",
+      "bytes": 1689,
+      "sha256": "0c5c8c4f8a3e3f460d2142b0fe77dd0c9fa819d8c8d372ba77e3d6fb518074f9"
+    },
+    {
+      "path": "00_Controls/M4_1A_REQUIREMENT_BASELINE.md",
+      "bytes": 8976,
+      "sha256": "e6a45259c5f585972675da9fbd2ff867d74b7b42486c7dd56d02868dbc4ba1e2"
+    },
+    {
+      "path": "00_Controls/M4_1A_SCOPE_BOUNDARY.md",
+      "bytes": 4566,
+      "sha256": "56bee14c9e66afaa8131b6e4a010e720ad4716471f606dac85e56e26868a2e92"
+    },
+    {
+      "path": "00_Controls/M5_1A_ACCEPTANCE_MATRIX.csv",
+      "bytes": 1259,
+      "sha256": "d085af054447ba299f18ee552285af174ac06a1b979a3cab48e88c416c4ad4be"
+    },
+    {
+      "path": "00_Controls/M5_1A_ACCEPTANCE_RECORD.md",
+      "bytes": 2752,
+      "sha256": "34a61c4ddb3640d722db0c7340cb0e7e6782e6e6e47d668c1076c89ae0288b63"
+    },
+    {
+      "path": "00_Controls/M5_1A_BASELINE_GAP_ASSESSMENT.md",
+      "bytes": 2942,
+      "sha256": "65f80bf6428c8fbf3fdb5201b12168d81104ea64286892296d449b00e0488fee"
+    },
+    {
+      "path": "00_Controls/M5_1A_IMPLEMENTATION_REGISTER.md",
+      "bytes": 4138,
+      "sha256": "92677671c5850998c0e7047c89858af4f793c32dc69223e3e870226b43b64aef"
+    },
+    {
+      "path": "00_Controls/M5_1A_INDEPENDENT_REVIEW.md",
+      "bytes": 2703,
+      "sha256": "da9703be0e1b4c471ad8e3664bef22c197361f11782eeae9257de42e2b857a2d"
+    },
+    {
+      "path": "00_Controls/M5_1A_INHERITED_BASELINE_VERIFICATION.md",
+      "bytes": 1054,
+      "sha256": "15f61cefd28c349e50e707616746087224cc1a44708d21c0ec5a1ee392415c8d"
+    },
+    {
+      "path": "00_Controls/M5_1A_INTEGRATED_QA_RECORD.md",
+      "bytes": 1538,
+      "sha256": "4b83d94ff05986cfa0a3a7aa7037b664e4fb2227c9d3724205cf8ef1e6a635db"
+    },
+    {
+      "path": "00_Controls/M5_1A_RELEASE_READINESS.md",
+      "bytes": 1339,
+      "sha256": "b8b963205e03620d63b89bd5c6e0db494d872cb686d275f46935c82cba636fe1"
+    },
+    {
+      "path": "00_Controls/M5_1A_REQUIREMENT_BASELINE.md",
+      "bytes": 9032,
+      "sha256": "689159cd8f6f0739d3e2ce082e1019fdc6f55cfc03434f8f1927accb859b7255"
+    },
+    {
+      "path": "00_Controls/M5_1A_SCOPE_BOUNDARY.md",
+      "bytes": 3269,
+      "sha256": "58a5cf95cc444821cc043c5fdde9a7d8a4345a31620d40c6fbba7b6e63ce9ad0"
+    },
+    {
+      "path": "00_Controls/M5_1A_SPRINT_CHARTER.md",
+      "bytes": 1829,
+      "sha256": "bd9ae7b1408654e4183856feffcd7d28d8c93765eae3d425aa0c27efe4fc8b41"
+    },
+    {
+      "path": "00_Controls/M5_1A_TRACEABILITY_MATRIX.csv",
+      "bytes": 3857,
+      "sha256": "aad08aa98e60750ba5568b672b07c996a80fadf349fcb4a13c805df992fdea9f"
+    },
+    {
+      "path": "10_Evidence/M5_1A_ACCEPTANCE_MANIFEST.json",
+      "bytes": 7172,
+      "sha256": "e95754c5367297f13eea5be82b774cfaa4f5c48fc75ad579f7f96336f1de879d"
+    },
+    {
+      "path": "10_Evidence/M5_1A_ACCEPTANCE_SUMMARY.md",
+      "bytes": 2756,
+      "sha256": "b3bd8bd807a46c3f215acac24b428c006c1710947c6d2e5b2055e1372c8ee2a1"
+    },
+    {
+      "path": "10_Evidence/M5_1A_CONNECTOR_REGISTRY_MODES_RESULT.json",
+      "bytes": 85816,
+      "sha256": "b32945120445c070760e2abc6ad786b5a032f4b3b610830da1e745adf148859c"
+    },
+    {
+      "path": "10_Evidence/M5_1A_CONTENT_MODEL_HANDLING_LIFECYCLE_RESULT.json",
+      "bytes": 40226,
+      "sha256": "96696ebea68c425c40a3632b74ba55d8fcee1b206dc8135f701b2753d208f13e"
+    },
+    {
+      "path": "10_Evidence/M5_1A_INTEGRATED_QA.json",
+      "bytes": 7773,
+      "sha256": "8e49c5482b1893e6c5f70d75540841a08190f6712ff442c38be4306d295f203c"
+    },
+    {
+      "path": "10_Evidence/M5_1A_INTEGRATED_SCENARIO_RESULT.json",
+      "bytes": 1203498,
+      "sha256": "073f241431cb4b6d58ac3f233864e67e6e2db6208de88a832f439be053374744"
+    },
+    {
+      "path": "10_Evidence/M5_1A_INTRANET_PUBLISHING_RESULT.json",
+      "bytes": 162583,
+      "sha256": "7a4abb406d776e63cb92d22bb77c850423f9aa121dc61449b300100252616828"
+    },
+    {
+      "path": "10_Evidence/M5_1A_NON_SENSITIVE_PILOT_RESULT.json",
+      "bytes": 93185,
+      "sha256": "4e7bbda91bb4d2c5bba38d05a06d1495cd32eccad740c4e346b1ca149df2de46"
+    },
+    {
+      "path": "10_Evidence/M5_1A_OPERATIONS_HUB_TOPOLOGY_RESULT.json",
+      "bytes": 60138,
+      "sha256": "112ee48b22ed121059e74445d2314a08e53d227492922d64e70c778974d4a8f2"
+    },
+    {
+      "path": "10_Evidence/M5_1A_REPOSITORY_INVENTORY_DISPOSITION_RESULT.json",
+      "bytes": 24431,
+      "sha256": "535f4a6f80fc8c82ad4876c694a9f41df3b97cccfced08044a66d38ad4f5931b"
+    },
+    {
+      "path": "10_Evidence/M5_1A_SCHEMA_INTEGRITY.json",
+      "bytes": 557,
+      "sha256": "086a3a0b44dc04e2d2c72211a197fe4f3174f3e9dc8547d017e7e2e95d332d6c"
+    },
+    {
+      "path": "10_Evidence/M5_1A_SHA256SUMS.txt",
+      "bytes": 1061,
+      "sha256": "1632120feb7d91ccd62bffc3867182631f0410c8fba5ee63baa81c7e9c12896c"
+    },
+    {
+      "path": "10_Evidence/M5_1A_STABLE_OBJECT_IDENTITY_RESULT.json",
+      "bytes": 8507,
+      "sha256": "04eef0e01114d40cdc635894f62a6393e03fd7c58a4a034fad69f7e42c443e6d"
+    },
+    {
+      "path": "10_Evidence/Verification_Logs/client_build.log",
+      "bytes": 1321,
+      "sha256": "71d769d51a942487e559a1c0503d729a7e34aeb3a52f8cf0ec4d57b3a011927f"
+    },
+    {
+      "path": "10_Evidence/Verification_Logs/evidence_export.log",
+      "bytes": 994,
+      "sha256": "efc3baf2e1c46c7578ed2637114755da71b1ba467b37c293c1e55e47f5992822"
+    },
+    {
+      "path": "10_Evidence/Verification_Logs/evidence_verification.log",
+      "bytes": 935,
+      "sha256": "6501e5ec5c73c8ef34f5ded19125ea77221aee6d048eea3593ff98d836621a7a"
+    },
+    {
+      "path": "10_Evidence/Verification_Logs/focused_m51a_tests.log",
+      "bytes": 23641,
+      "sha256": "7d1a83e07cf93aa8d38b1c3262a734a1b070de41e33b9061a0df4778fe099107"
+    },
+    {
+      "path": "10_Evidence/Verification_Logs/full_regression.log",
+      "bytes": 11931,
+      "sha256": "a587ce31050ffc2e67483d9d4aeb77e78669cd35755fc780a88204b3ddea690b"
+    },
+    {
+      "path": "10_Evidence/Verification_Logs/inherited_m42_baseline.log",
+      "bytes": 14714,
+      "sha256": "3b9599271803de07934053555d934726532a67b2560e88c713421c33b98814ff"
+    },
+    {
+      "path": "10_Evidence/Verification_Logs/schema_integrity.log",
+      "bytes": 1099,
+      "sha256": "c5e94b1f879f4e82dee46944ab0c406e2e049ddcfc0b5b500e23664b12bfc87e"
+    },
+    {
+      "path": "10_Evidence/Verification_Logs/server_build.log",
+      "bytes": 745,
+      "sha256": "78e58ebbe1fcff6eefb7aa2aa662f88845af63b75b7d2c0c5629d4c6e2e3e1ce"
+    },
+    {
+      "path": "10_Evidence/Verification_Logs/strict_lint.log",
+      "bytes": 325,
+      "sha256": "ebf2edd35a3e3daa5d6981842f42d95042a78ea4b86ceef491ab5381575afb4a"
+    },
+    {
+      "path": "10_Evidence/Verification_Logs/typecheck.log",
+      "bytes": 315,
+      "sha256": "463f543e90e43a389debf5f570c8098436d863a10368835bb357f61f43de2698"
+    },
+    {
+      "path": "20_Canonical_Source/AMOS-OPS_M5_1A_Canonical_Source_Snapshot_v1_0.zip",
+      "bytes": 11253049,
+      "sha256": "801a2ce73e76553c05e926186f97eb5575cf045d528d3102b70f71923666ae70"
+    },
+    {
+      "path": "README.md",
+      "bytes": 850,
+      "sha256": "adc8de31715e9b903f1d4938cd2a00a563f18f3ec3f9daab3cdfa9a28472c8db"
+    }
+  ]
+}

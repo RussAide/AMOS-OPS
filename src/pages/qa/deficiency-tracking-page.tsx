@@ -2,8 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, AlertOctagon, Search, CheckCircle, Clock,
-  AlertTriangle, ShieldAlert, XCircle, FileWarning,
+  ArrowLeft, AlertOctagon, Search,
 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -40,8 +39,8 @@ const CATEGORY_LABELS: Record<string, string> = {
 export function DeficiencyTrackingPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"" | "closed" | "open" | "verified" | "in_progress" | "poc_pending" | "poc_approved" | "corrected">("");
+  const [categoryFilter, setCategoryFilter] = useState<"" | "training" | "other" | "facilities" | "administrative" | "safety" | "medication" | "clinical_documentation" | "staffing" | "resident_rights" | "infection_control">("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { data: deficiencies, refetch } = trpc.m3.deficiencyList.useQuery({
@@ -64,7 +63,10 @@ export function DeficiencyTrackingPage() {
     };
     const next = flow[currentStatus];
     if (next) {
-      const update: any = { id, status: next };
+      const update: Parameters<typeof updateDef.mutate>[0] = {
+        id,
+        status: next as Parameters<typeof updateDef.mutate>[0]["status"],
+      };
       if (next === "poc_pending" && pocText) {
         update.pocDescription = pocText;
       }
@@ -125,7 +127,7 @@ export function DeficiencyTrackingPage() {
         </div>
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
           className="rounded-lg border px-3 py-2 text-[13px] outline-none"
           style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}
         >
@@ -140,7 +142,7 @@ export function DeficiencyTrackingPage() {
         </select>
         <select
           value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
+          onChange={(e) => setCategoryFilter(e.target.value as typeof categoryFilter)}
           className="rounded-lg border px-3 py-2 text-[13px] outline-none"
           style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}
         >

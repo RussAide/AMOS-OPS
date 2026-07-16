@@ -1,10 +1,16 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import {
-  Target, Plus, Search, Filter, ChevronRight, Clock, CheckCircle2,
-  AlertTriangle, PauseCircle, XCircle, TrendingUp, Users, DollarSign,
-  Calendar, ArrowUpRight, BarChart3, Flag, Briefcase,
+  Target, Plus, Search, ChevronRight, Clock, CheckCircle2, PauseCircle, XCircle, TrendingUp, Users, DollarSign,
+  Calendar, Flag, Briefcase,
 } from "lucide-react";
+import {
+  isRecord,
+  readBoolean,
+  readNumber,
+  readString,
+  toRecords,
+} from "@/components/data/record-utils";
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   critical: { label: "Critical", color: "#DC2626", bg: "#FEF2F2" },
@@ -29,6 +35,52 @@ const DIVISION_LABELS: Record<string, string> = {
   EO: "Executive Office", GAD: "General Admin", GRO: "GRO Residential", BHC: "Behavioral Health",
 };
 
+type ProjectDivision = "EO" | "GAD" | "GRO" | "BHC";
+type ProjectPriority = "critical" | "high" | "medium" | "low";
+
+interface ProjectMilestone {
+  label: string;
+  done: boolean;
+}
+
+interface StrategicProject {
+  id: string;
+  name: string;
+  description: string;
+  owner: string;
+  division: string;
+  priority: string;
+  status: string;
+  startDate: string;
+  targetDate: string;
+  budget: number;
+  progress: number;
+  milestones: ProjectMilestone[];
+}
+
+function normalizeProject(value: Record<string, unknown>): StrategicProject | null {
+  const id = readString(value, "id");
+  if (!id) return null;
+  const milestones = toRecords(value.milestones).flatMap((milestone) => {
+    const label = readString(milestone, "label");
+    return label ? [{ label, done: readBoolean(milestone, "done") }] : [];
+  });
+  return {
+    id,
+    name: readString(value, "name", "Untitled project"),
+    description: readString(value, "description"),
+    owner: readString(value, "owner", "Unassigned"),
+    division: readString(value, "division", "EO"),
+    priority: readString(value, "priority", "medium"),
+    status: readString(value, "status", "planning"),
+    startDate: readString(value, "startDate", readString(value, "start_date")),
+    targetDate: readString(value, "targetDate", readString(value, "target_date")),
+    budget: readNumber(value, "budget"),
+    progress: readNumber(value, "progress"),
+    milestones,
+  };
+}
+
 export function StrategicProjectsHubPage() {
   const [search, setSearch] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
@@ -37,7 +89,7 @@ export function StrategicProjectsHubPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   const { data: projectsData, refetch } = trpc.analytics.listStrategicProjects.useQuery();
-  const { data: projectDetail } = trpc.analytics.getStrategicProject.useQuery(
+  const { data: rawProjectDetail } = trpc.analytics.getStrategicProject.useQuery(
     { id: selectedProject ?? "" },
     { enabled: !!selectedProject }
   );
@@ -48,20 +100,27 @@ export function StrategicProjectsHubPage() {
     onSuccess: () => refetch(),
   });
 
-  const projects = (projectsData ?? []).filter((p: any) => {
+  const allProjects = toRecords(projectsData).flatMap((project) => {
+    const normalized = normalizeProject(project);
+    return normalized ? [normalized] : [];
+  });
+  const projectDetail = isRecord(rawProjectDetail)
+    ? normalizeProject(rawProjectDetail)
+    : null;
+  const projects = allProjects.filter((p) => {
     if (search && !p.name?.toLowerCase().includes(search.toLowerCase()) && !p.description?.toLowerCase().includes(search.toLowerCase())) return false;
     if (divisionFilter && p.division !== divisionFilter) return false;
     if (statusFilter && p.status !== statusFilter) return false;
     return true;
   });
 
-  const activeProjects = projects.filter((p: any) => p.status === "active");
-  const completedProjects = projects.filter((p: any) => p.status === "completed");
-  const totalBudget = projects.reduce((sum: number, p: any) => sum + (p.budget ?? 0), 0);
+  const activeProjects = projects.filter((p) => p.status === "active");
+  const completedProjects = projects.filter((p) => p.status === "completed");
+  const totalBudget = projects.reduce((sum: number, p) => sum + (p.budget ?? 0), 0);
 
   const [formData, setFormData] = useState({
-    name: "", description: "", owner: "", division: "EO" as "EO" | "GAD" | "GRO" | "BHC",
-    priority: "medium" as "critical" | "high" | "medium" | "low",
+    name: "", description: "", owner: "", division: "EO" as ProjectDivision,
+    priority: "medium" as ProjectPriority,
     status: "planning" as "planning" | "active" | "on_hold" | "completed" | "cancelled",
     startDate: "", targetDate: "", budget: 0,
   });
@@ -116,9 +175,9 @@ export function StrategicProjectsHubPage() {
       {/* Division Breakdown */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {["EO", "GAD", "GRO", "BHC"].map(div => {
-          const divProjects = projects.filter((p: any) => p.division === div);
-          const divActive = divProjects.filter((p: any) => p.status === "active");
-          const divBudget = divProjects.reduce((sum: number, p: any) => sum + (p.budget ?? 0), 0);
+          const divProjects = projects.filter((p) => p.division === div);
+          const divActive = divProjects.filter((p) => p.status === "active");
+          const divBudget = divProjects.reduce((sum: number, p) => sum + (p.budget ?? 0), 0);
           return (
             <div key={div} className="rounded-lg border p-3" style={{ backgroundColor: "var(--card-bg)", borderColor: `${DIVISION_COLORS[div]}33` }}>
               <div className="flex items-center gap-2 mb-1">
@@ -153,7 +212,7 @@ export function StrategicProjectsHubPage() {
                 </div>
                 <div>
                   <label className="text-[11px] font-medium mb-1 block" style={{ color: "var(--topbar-subtitle)" }}>Division</label>
-                  <select value={formData.division} onChange={e => setFormData({ ...formData, division: e.target.value as any })} className="w-full px-3 py-2 rounded-lg border text-[12px]" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}>
+                  <select value={formData.division} onChange={e => setFormData({ ...formData, division: e.target.value as ProjectDivision })} className="w-full px-3 py-2 rounded-lg border text-[12px]" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}>
                     {["EO", "GAD", "GRO", "BHC"].map(d => <option key={d} value={d}>{DIVISION_LABELS[d]}</option>)}
                   </select>
                 </div>
@@ -161,7 +220,7 @@ export function StrategicProjectsHubPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-medium mb-1 block" style={{ color: "var(--topbar-subtitle)" }}>Priority</label>
-                  <select value={formData.priority} onChange={e => setFormData({ ...formData, priority: e.target.value as any })} className="w-full px-3 py-2 rounded-lg border text-[12px]" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}>
+                  <select value={formData.priority} onChange={e => setFormData({ ...formData, priority: e.target.value as ProjectPriority })} className="w-full px-3 py-2 rounded-lg border text-[12px]" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}>
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
@@ -220,7 +279,7 @@ export function StrategicProjectsHubPage() {
               <p className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>No projects found</p>
             </div>
           ) : (
-            projects.map((project: any) => {
+            projects.map((project) => {
               const st = STATUS_CONFIG[project.status] ?? STATUS_CONFIG.planning;
               const StatusIcon = st.icon;
               const pr = PRIORITY_CONFIG[project.priority] ?? PRIORITY_CONFIG.medium;
@@ -340,7 +399,7 @@ export function StrategicProjectsHubPage() {
                 <div className="p-4 border-b" style={{ borderColor: "var(--card-border)" }}>
                   <h3 className="text-[11px] font-semibold uppercase tracking-[1px] mb-3" style={{ color: "var(--topbar-subtitle)" }}>Milestones</h3>
                   <div className="space-y-2">
-                    {projectDetail.milestones.map((m: any, idx: number) => (
+                    {projectDetail.milestones.map((m, idx: number) => (
                       <div key={idx} className="flex items-center gap-2">
                         {m.done ? (
                           <CheckCircle2 size={14} style={{ color: "#059669" }} />

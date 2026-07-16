@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Generated build and test output
+dist/
+dist-server/
+coverage/
+.vite/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+# Runtime data
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Local environment files
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Environment-scoped runtime stores are generated locally only.
+/data/
+
+# Logs and local tooling
+*.log
+npm-debug.log*
+.DS_Store
+.idea/
+.vscode/

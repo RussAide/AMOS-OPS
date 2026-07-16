@@ -1,4 +1,14 @@
 # AMOS-OPS Sprint Changelog
+
+## v1.3.0 — Account-Level Training and Operational Access
+
+- Added account-level Training and Operational access within one application deployment.
+- Isolated Training records and files from Operational data and blocked Training access to Microsoft 365 and email connectors.
+- Added sponsored invitations, expiry, clearance evidence, session revocation, and access-profile audit events.
+- Added separate Training database and upload paths within the existing Railway service architecture.
+- Reconciled public-release metadata and removed owner-specific test/example identifiers.
+- Verified strict lint, TypeScript, 1,409 automated tests, and production client/server builds.
+
 ## From Previous State → Current State
 ## Date: 2026-07-05
 ## Tasks Completed: 143 (all 16 documents D-001 through D-016)

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,6 +58,19 @@ interface Props {
   personName: string;
 }
 
+function createInitialReview(): ReviewData {
+  return {
+    reviewType: "90-day",
+    reviewDate: new Date().toISOString().slice(0, 10),
+    competencies: Object.fromEntries(COMPETENCIES.map((competency) => [competency, 3])),
+    goals: [{ description: "", status: "achieved" }],
+    supervisorComments: "",
+    actionItems: [],
+    overallRating: "",
+    reviewedBy: "",
+  };
+}
+
 export function PerformanceReviewForm({ personId: _personId, personName }: Props) {
   const personId = _personId;
   const [open, setOpen] = useState(false);
@@ -72,35 +85,17 @@ export function PerformanceReviewForm({ personId: _personId, personName }: Props
   const createReviewMutation = trpc.performance.create.useMutation();
   const utils = trpc.useUtils();
 
-  const [review, setReview] = useState<ReviewData>({
-    reviewType: "90-day",
-    reviewDate: new Date().toISOString().slice(0, 10),
-    competencies: Object.fromEntries(COMPETENCIES.map((c) => [c, 3])),
-    goals: [{ description: "", status: "achieved" }],
-    supervisorComments: "",
-    actionItems: [],
-    overallRating: "",
-    reviewedBy: "",
-  });
+  const [review, setReview] = useState<ReviewData>(createInitialReview);
 
-  // Reset form when dialog opens
-  useEffect(() => {
-    if (open) {
-      setReview({
-        reviewType: "90-day",
-        reviewDate: new Date().toISOString().slice(0, 10),
-        competencies: Object.fromEntries(COMPETENCIES.map((c) => [c, 3])),
-        goals: [{ description: "", status: "achieved" }],
-        supervisorComments: "",
-        actionItems: [],
-        overallRating: "",
-        reviewedBy: "",
-      });
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setReview(createInitialReview());
       setStep(0);
       setSaved(false);
       setShowHistory(false);
     }
-  }, [open]);
+    setOpen(nextOpen);
+  };
 
   const avgScore = Object.values(review.competencies).reduce((a, b) => a + b, 0) / COMPETENCIES.length;
 
@@ -113,7 +108,14 @@ export function PerformanceReviewForm({ personId: _personId, personName }: Props
   const updateGoal = (i: number, field: "description" | "status", value: string) => {
     setReview((prev) => ({
       ...prev,
-      goals: prev.goals.map((g, idx) => (idx === i ? { ...g, [field]: value as any } : g)),
+      goals: prev.goals.map((goal, index) => {
+        if (index !== i) return goal;
+        if (field === "description") return { ...goal, description: value };
+        return {
+          ...goal,
+          status: value as ReviewData["goals"][number]["status"],
+        };
+      }),
     }));
   };
 
@@ -154,7 +156,7 @@ export function PerformanceReviewForm({ personId: _personId, personName }: Props
   const canSubmit = review.overallRating && review.reviewedBy && review.supervisorComments.length >= 20;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button size="sm" variant="outline" className="gap-1 text-xs">
           <ClipboardCheck size={13} />

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
-import { Shield, ArrowLeft, Search, Plus, X, CheckCircle, AlertTriangle, Clock, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import { Shield, ArrowLeft, Search, Plus, X, CheckCircle, AlertTriangle, Clock, Trash2 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "#6B7280", in_progress: "#D97706", submitted: "#2563EB",
@@ -36,20 +36,33 @@ const READINESS_FIELDS = [
   { key: "readinessGuardianConsent", label: "Guardian Consent Obtained" },
   { key: "readinessUB04Clean", label: "UB-04 Data Clean" },
   { key: "readinessExcludedServices", label: "Excluded Services Identified" },
-];
+] as const;
+type AuthorizationStatus = "closed" | "pending" | "expired" | "submitted" | "approved" | "in_progress" | "denied" | "appealed";
+type AuthorizationStage = "readiness" | "submission" | "tracking" | "reauthorization" | "retrospective";
+
+interface AuthorizationFormData {
+  youthId: string;
+  youthName: string;
+  mrn: string;
+  payerName: string;
+  policyNumber: string;
+  stage: AuthorizationStage;
+  status: AuthorizationStatus;
+  approvedLevelOfCare: string;
+}
 
 export function AuthorizationManagementPage() {
   const navigate = useNavigate();
   const utils = trpc.useUtils();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [stageFilter, setStageFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | AuthorizationStatus>("all");
+  const [stageFilter, setStageFilter] = useState<"all" | AuthorizationStage>("all");
   const [page, setPage] = useState(1);
   const [detailAuth, setDetailAuth] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
   // Create form state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<AuthorizationFormData>({
     youthId: "", youthName: "", mrn: "", payerName: "", policyNumber: "",
     stage: "readiness" as const, status: "pending" as const, approvedLevelOfCare: "",
   });
@@ -89,12 +102,12 @@ export function AuthorizationManagementPage() {
     },
   });
 
-  const statuses = ["all", "pending", "in_progress", "submitted", "approved", "denied", "expired"];
-  const stages = ["all", "readiness", "submission", "tracking", "reauthorization", "retrospective"];
+  const statuses: readonly ("all" | AuthorizationStatus)[] = ["all", "pending", "in_progress", "submitted", "approved", "denied", "expired"];
+  const stages: readonly ("all" | AuthorizationStage)[] = ["all", "readiness", "submission", "tracking", "reauthorization", "retrospective"];
 
-  const toggleReadiness = (field: string) => {
+  const toggleReadiness = (field: (typeof READINESS_FIELDS)[number]["key"]) => {
     if (!detailData) return;
-    const current = (detailData as any)[field] as boolean;
+    const current = detailData[field];
     updateMutation.mutate({ id: detailData.id, [field]: !current });
   };
 
@@ -204,19 +217,19 @@ export function AuthorizationManagementPage() {
               ].map((field) => (
                 <div key={field.key}>
                   <label className="text-[12px] font-medium mb-1 block" style={{ color: "var(--topbar-subtitle)" }}>{field.label}</label>
-                  <input type="text" placeholder={field.placeholder} value={(formData as any)[field.key]} onChange={(e) => setFormData({ ...formData, [field.key]: e.target.value })} className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }} />
+                  <input type="text" placeholder={field.placeholder} value={formData[field.key as keyof typeof formData]} onChange={(e) => setFormData({ ...formData, [field.key]: e.target.value })} className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }} />
                 </div>
               ))}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[12px] font-medium mb-1 block" style={{ color: "var(--topbar-subtitle)" }}>Stage</label>
-                  <select value={formData.stage} onChange={(e) => setFormData({ ...formData, stage: e.target.value as any })} className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}>
+                  <select value={formData.stage} onChange={(e) => setFormData({ ...formData, stage: e.target.value as AuthorizationStage })} className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}>
                     {Object.entries(STAGE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="text-[12px] font-medium mb-1 block" style={{ color: "var(--topbar-subtitle)" }}>Status</label>
-                  <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value as any })} className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}>
+                  <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value as AuthorizationStatus })} className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}>
                     {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </div>
@@ -312,7 +325,7 @@ export function AuthorizationManagementPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--topbar-subtitle)" }}>Readiness Checklist</p>
                 <div className="space-y-2">
                   {READINESS_FIELDS.map((field) => {
-                    const checked = !!(detailData as any)[field.key];
+                    const checked = !!detailData[field.key];
                     return (
                       <button key={field.key} onClick={() => toggleReadiness(field.key)} className="w-full flex items-center gap-2 text-left text-[12px] p-2 rounded-lg transition-all hover:bg-gray-50">
                         {checked ? <CheckCircle size={14} style={{ color: "#059669" }} /> : <div className="w-3.5 h-3.5 rounded-full border-2" style={{ borderColor: "#D1D5DB" }} />}
@@ -330,10 +343,10 @@ export function AuthorizationManagementPage() {
 
               {/* Actions */}
               <div className="flex items-center gap-2 pt-2">
-                <select value={detailData.status} onChange={(e) => updateMutation.mutate({ id: detailData.id, status: e.target.value as any })} className="flex-1 rounded-lg border px-3 py-2 text-[12px] outline-none" style={{ borderColor: "var(--card-border)" }}>
+                <select value={detailData.status} onChange={(e) => updateMutation.mutate({ id: detailData.id, status: e.target.value as Parameters<typeof updateMutation.mutate>[0]["status"] })} className="flex-1 rounded-lg border px-3 py-2 text-[12px] outline-none" style={{ borderColor: "var(--card-border)" }}>
                   {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
-                <select value={detailData.stage} onChange={(e) => updateMutation.mutate({ id: detailData.id, stage: e.target.value as any })} className="flex-1 rounded-lg border px-3 py-2 text-[12px] outline-none" style={{ borderColor: "var(--card-border)" }}>
+                <select value={detailData.stage} onChange={(e) => updateMutation.mutate({ id: detailData.id, stage: e.target.value as Parameters<typeof updateMutation.mutate>[0]["stage"] })} className="flex-1 rounded-lg border px-3 py-2 text-[12px] outline-none" style={{ borderColor: "var(--card-border)" }}>
                   {Object.entries(STAGE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
                 <button onClick={() => { if (confirm("Delete this authorization?")) deleteMutation.mutate({ id: detailData.id }); }} className="p-2 rounded-lg border hover:bg-red-50 transition-colors" style={{ borderColor: "#DC262640", color: "#DC2626" }}>

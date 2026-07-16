@@ -1,3 +1,6 @@
+-- SYNTHETIC EVALUATION FIXTURE ONLY.
+-- Execute only through a guarded workflow using an isolated demo/evaluation
+-- database. This SQL file is intentionally not exposed as a package script.
 -- ═══════════════════════════════════════════════════════════════
 -- Pilot Case 2: "Incomplete Referral" — 14yo Female, Behavioral
 -- Task: D012-02 — Gap Detection Workflow
@@ -6,14 +9,14 @@
 
 -- ─── Idempotent Cleanup ────────────────────────────────────────
 
-DELETE FROM youth_profiles WHERE mrn = 'MRN-C2-20250705-001';
+DELETE FROM youth_profiles WHERE mrn = 'SYNTH-CASE2-RECORD-001';
 DELETE FROM workflow_instances_v2 WHERE entity_id = 'PATIENT-B-UUID';
-DELETE FROM intake_pipeline WHERE mrn = 'MRN-C2-20250705-001';
+DELETE FROM intake_pipeline WHERE mrn = 'SYNTH-CASE2-RECORD-001';
 DELETE FROM referral_checklists WHERE youth_id = 'PATIENT-B-UUID';
-DELETE FROM notifications WHERE person_name = 'Maya Thompson';
+DELETE FROM notifications WHERE person_name = 'Synthetic Youth Case-002';
 DELETE FROM audit_logs WHERE entity_type = 'intake_pipeline' AND entity_id = 'INTAKE-B-UUID';
-DELETE FROM status_transitions WHERE person_name = 'Maya Thompson';
-DELETE FROM authorizations WHERE mrn = 'MRN-C2-20250705-001';
+DELETE FROM status_transitions WHERE person_name = 'Synthetic Youth Case-002';
+DELETE FROM authorizations WHERE mrn = 'SYNTH-CASE2-RECORD-001';
 
 -- ─── Ensure Tables Exist ───────────────────────────────────────
 
@@ -282,30 +285,30 @@ INSERT INTO youth_profiles (
   created_at, updated_at, created_by
 ) VALUES (
   'PATIENT-B-001',
-  'MRN-C2-20250705-001',
-  'Maya',
-  'Thompson',
-  '2011-07-05',
+  'SYNTH-CASE2-RECORD-001',
+  'Synthetic',
+  'Case-002',
+  '2011-01-01',
   14,
   'female',
-  'Angela Thompson',
+  'Synthetic Guardian 15',
   'Mother',
-  '(512) 555-0142',
-  'angela.thompson@email.com',
-  'Marcus Thompson',
+  '+1-555-0101',
+  'guardian.case2@example.invalid',
+  'Synthetic Guardian 14',
   'Father',
-  '(512) 555-0143',
+  '+1-555-0102',
   'school',
-  'Austin Independent School District - Counseling Department',
-  '(512) 555-0200',
-  'Ms. Jennifer Walsh, School Counselor',
+  'Synthetic School Referral Office',
+  '+1-555-0103',
+  'Synthetic School Counselor',
   '2025-06-25T00:00:00.000Z',
   'referral_pending',
   'not_yet_determined',
   '[PILOT CASE 2] 14yo female presenting with behavioral challenges including: defiance at school, verbal aggression toward peers, declining academic performance over past semester, two disciplinary referrals in past 60 days. School counselor referred for behavioral health evaluation. Presenting concerns: Oppositional behavior, emotional dysregulation, peer conflict. No prior psychiatric hospitalizations. No current medications. Family history: Parents divorced, joint custody, primarily resides with mother.',
   '2025-06-25T00:00:00.000Z',
   '2025-06-25T00:00:00.000Z',
-  'pilot-intake-coordinator@adolbi.com'
+  'pilot-intake-coordinator@amos-ops.invalid'
 );
 
 -- ═══════════════════════════════════════════════════════════════
@@ -337,8 +340,8 @@ INSERT INTO workflow_instances_v2 (
   'patient',
   'RECEIVED',
   '',
-  'pilot-intake-coordinator@adolbi.com',
-  'pilot-intake-coordinator@adolbi.com',
+  'pilot-intake-coordinator@amos-ops.invalid',
+  'pilot-intake-coordinator@amos-ops.invalid',
   '2025-06-25T00:00:00.000Z',
   '2025-06-30T00:00:00.000Z',
   '2025-07-12T00:00:00.000Z',
@@ -373,19 +376,19 @@ INSERT INTO intake_pipeline (
 ) VALUES (
   'INTAKE-B-001',
   'PATIENT-B-001',
-  'MRN-C2-20250705-001',
-  'Maya Thompson',
+  'SYNTH-CASE2-RECORD-001',
+  'Synthetic Youth Case-002',
   '2025-06-25T00:00:00.000Z',
-  'pilot-intake-coordinator@adolbi.com',
+  'pilot-intake-coordinator@amos-ops.invalid',
   'Referral form received via fax from school counselor. Incomplete: missing guardian consent and school records.',
   1,
   '2025-06-27T00:00:00.000Z',
-  'pilot-intake-coordinator@adolbi.com',
+  'pilot-intake-coordinator@amos-ops.invalid',
   'pass',
   'Screening passed. Youth meets criteria for behavioral health evaluation. Behavioral concerns confirmed. No imminent safety risks. Referral accepted pending documentation.',
   1,
   '2025-06-30T00:00:00.000Z',
-  'pilot-intake-coordinator@adolbi.com',
+  'pilot-intake-coordinator@amos-ops.invalid',
   1,
   1,
   1,
@@ -393,7 +396,7 @@ INSERT INTO intake_pipeline (
   'All consent documents signed. Guardian consent received Day 5 after initial gap alert. Youth assent obtained in office.',
   1,
   '2025-07-02T00:00:00.000Z',
-  'pilot-intake-coordinator@adolbi.com',
+  'pilot-intake-coordinator@amos-ops.invalid',
   1,
   1,
   1,
@@ -401,7 +404,7 @@ INSERT INTO intake_pipeline (
   'Insurance initially EXPIRED (Day 7). Mother provided updated Medicaid card with renewed eligibility. Benefits re-verified successfully. Authorization submitted Day 10, awaiting approval.',
   1,
   '2025-07-02T00:00:00.000Z',
-  'pilot-intake-coordinator@adolbi.com',
+  'pilot-intake-coordinator@amos-ops.invalid',
   'admit',
   'Referral accepted. All gaps resolved. Authorization submitted.',
   'Bed-3A',
@@ -417,7 +420,7 @@ INSERT INTO intake_pipeline (
   48,
   '2025-06-25T00:00:00.000Z',
   '2025-07-02T00:00:00.000Z',
-  'pilot-intake-coordinator@adolbi.com'
+  'pilot-intake-coordinator@amos-ops.invalid'
 );
 
 -- ═══════════════════════════════════════════════════════════════
@@ -438,7 +441,7 @@ INSERT INTO referral_checklists (
   'INTAKE-B-001',
   1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
   10, 10, 1,
-  'pilot-intake-coordinator@adolbi.com',
+  'pilot-intake-coordinator@amos-ops.invalid',
   '2025-07-02T00:00:00.000Z',
   '2025-06-25T00:00:00.000Z',
   '2025-07-02T00:00:00.000Z'
@@ -450,17 +453,17 @@ INSERT INTO referral_checklists (
 
 INSERT INTO notifications (id, user_id, type, title, message, person_name, module_name, action_href, is_read, created_at) VALUES (
   'ALERT-B-001',
-  'pilot-intake-coordinator@adolbi.com',
+  'pilot-intake-coordinator@amos-ops.invalid',
   'alert',
   'GAP ALERT: Missing Guardian Consent Form',
-  'Patient B (Maya Thompson, MRN: MRN-C2-20250705-001) — Referral received WITHOUT signed guardian consent form. This document is REQUIRED to proceed past the consent step.
+  'Patient B (Synthetic Youth Case-002, MRN: SYNTH-CASE2-RECORD-001) — Referral received WITHOUT signed guardian consent form. This document is REQUIRED to proceed past the consent step.
 
 Gap Details:
 - Missing: Guardian Consent for Treatment (Form ICC-001)
 - Severity: BLOCKING
 - Step: consent
 - Auto-generated by gap detection system',
-  'Maya Thompson',
+  'Synthetic Youth Case-002',
   'intake_pipeline',
   '/patients/PATIENT-B-001/intake',
   1,
@@ -469,17 +472,17 @@ Gap Details:
 
 INSERT INTO notifications (id, user_id, type, title, message, person_name, module_name, action_href, is_read, created_at) VALUES (
   'ALERT-B-002',
-  'pilot-intake-coordinator@adolbi.com',
+  'pilot-intake-coordinator@amos-ops.invalid',
   'alert',
   'GAP ALERT: Missing School Records',
-  'Patient B (Maya Thompson, MRN: MRN-C2-20250705-001) — Referral received WITHOUT school records/academic history.
+  'Patient B (Synthetic Youth Case-002, MRN: SYNTH-CASE2-RECORD-001) — Referral received WITHOUT school records/academic history.
 
 Gap Details:
 - Missing: School records, IEP/504 evaluations, disciplinary history
 - Severity: BLOCKING
 - Step: referral
 - Auto-generated by gap detection system',
-  'Maya Thompson',
+  'Synthetic Youth Case-002',
   'intake_pipeline',
   '/patients/PATIENT-B-001/intake',
   1,
@@ -488,10 +491,10 @@ Gap Details:
 
 INSERT INTO notifications (id, user_id, type, title, message, person_name, module_name, action_href, is_read, created_at) VALUES (
   'ALERT-B-003',
-  'pilot-intake-coordinator@adolbi.com',
+  'pilot-intake-coordinator@amos-ops.invalid',
   'alert',
   'INSURANCE EXPIRED: Benefits Verification Failed',
-  'Patient B (Maya Thompson, MRN: MRN-C2-20250705-001) — Insurance verification FAILED. Medicaid eligibility shows EXPIRED as of 2025-06-28.
+  'Patient B (Synthetic Youth Case-002, MRN: SYNTH-CASE2-RECORD-001) — Insurance verification FAILED. Medicaid eligibility shows EXPIRED as of 2025-06-28.
 
 Issue Details:
 - Payer: Texas Medicaid (STAR Health)
@@ -500,7 +503,7 @@ Issue Details:
 - Action Required: Contact guardian for updated insurance card
 - Step: payer
 - Auto-generated by insurance verification system',
-  'Maya Thompson',
+  'Synthetic Youth Case-002',
   'intake_pipeline',
   '/patients/PATIENT-B-001/insurance',
   1,
@@ -512,27 +515,27 @@ Issue Details:
 -- ═══════════════════════════════════════════════════════════════
 
 INSERT INTO audit_logs (id, entity_type, entity_id, action, performed_by, performed_at, old_values, new_values) VALUES
-('AUDIT-B-001', 'intake_pipeline', 'INTAKE-B-001', 'gap_detected', 'system@adolbi.com', '2025-06-25T00:00:00.000Z',
+('AUDIT-B-001', 'intake_pipeline', 'INTAKE-B-001', 'gap_detected', 'system@amos-ops.invalid', '2025-06-25T00:00:00.000Z',
  '{"status":"referral_pending","guardian_consent":null,"school_records":null}',
  '{"status":"referral_pending","guardian_consent":"MISSING","school_records":"MISSING","alerts":2}'),
 
-('AUDIT-B-002', 'intake_pipeline', 'INTAKE-B-001', 'partial_documentation_received', 'angela.thompson@email.com', '2025-06-27T00:00:00.000Z',
+('AUDIT-B-002', 'intake_pipeline', 'INTAKE-B-001', 'partial_documentation_received', 'guardian.case2@example.invalid', '2025-06-27T00:00:00.000Z',
  '{"guardian_consent":"MISSING","school_records":"MISSING"}',
  '{"guardian_consent":"RECEIVED","school_records":"STILL_MISSING","alerts_resolved":1,"alerts_remaining":1}'),
 
-('AUDIT-B-003', 'intake_pipeline', 'INTAKE-B-001', 'all_documentation_complete', 'pilot-intake-coordinator@adolbi.com', '2025-06-30T00:00:00.000Z',
+('AUDIT-B-003', 'intake_pipeline', 'INTAKE-B-001', 'all_documentation_complete', 'pilot-intake-coordinator@amos-ops.invalid', '2025-06-30T00:00:00.000Z',
  '{"guardian_consent":"RECEIVED","school_records":"STILL_MISSING","overall":"INCOMPLETE"}',
  '{"guardian_consent":"RECEIVED","school_records":"RECEIVED","overall":"COMPLETE","status":"ACCEPTED"}'),
 
-('AUDIT-B-004', 'intake_pipeline', 'INTAKE-B-001', 'insurance_expired_detected', 'system@adolbi.com', '2025-06-28T00:00:00.000Z',
+('AUDIT-B-004', 'intake_pipeline', 'INTAKE-B-001', 'insurance_expired_detected', 'system@amos-ops.invalid', '2025-06-28T00:00:00.000Z',
  '{"insurance_status":"active","payer_verification":"passed"}',
  '{"insurance_status":"EXPIRED","payer_verification":"FAILED","action_required":"contact_guardian"}'),
 
-('AUDIT-B-005', 'intake_pipeline', 'INTAKE-B-001', 'insurance_updated_verified', 'pilot-intake-coordinator@adolbi.com', '2025-06-30T00:00:00.000Z',
+('AUDIT-B-005', 'intake_pipeline', 'INTAKE-B-001', 'insurance_updated_verified', 'pilot-intake-coordinator@amos-ops.invalid', '2025-06-30T00:00:00.000Z',
  '{"insurance_status":"EXPIRED","policy_number":"TMP-4455-7788","eligibility":"denied"}',
- '{"insurance_status":"ACTIVE","policy_number":"TMP-4455-7788-REN","eligibility":"approved","verified_by":"pilot-intake-coordinator@adolbi.com"}'),
+ '{"insurance_status":"ACTIVE","policy_number":"TMP-4455-7788-REN","eligibility":"approved","verified_by":"pilot-intake-coordinator@amos-ops.invalid"}'),
 
-('AUDIT-B-006', 'intake_pipeline', 'INTAKE-B-001', 'authorization_submitted', 'pilot-intake-coordinator@adolbi.com', '2025-07-02T00:00:00.000Z',
+('AUDIT-B-006', 'intake_pipeline', 'INTAKE-B-001', 'authorization_submitted', 'pilot-intake-coordinator@amos-ops.invalid', '2025-07-02T00:00:00.000Z',
  '{"authorization_submitted":false,"authorization_status":"not_submitted"}',
  '{"authorization_submitted":true,"authorization_status":"pending_approval","submitted_date":"2025-07-02T00:00:00.000Z"}');
 
@@ -541,11 +544,11 @@ INSERT INTO audit_logs (id, entity_type, entity_id, action, performed_by, perfor
 -- ═══════════════════════════════════════════════════════════════
 
 INSERT INTO status_transitions (id, person_id, person_name, module_id, module_name, from_status, to_status, changed_by, changed_at, note) VALUES
-('ST-B-001', 'PATIENT-B-001', 'Maya Thompson', 'intake_pipeline', 'Intake Pipeline', 'referral_pending', 'screening', 'pilot-intake-coordinator@adolbi.com', '2025-06-26T00:00:00.000Z', '[Day 1] Referral received. Gap alerts: missing guardian consent, school records.'),
-('ST-B-002', 'PATIENT-B-001', 'Maya Thompson', 'intake_pipeline', 'Intake Pipeline', 'screening', 'intake', 'pilot-intake-coordinator@adolbi.com', '2025-06-28T00:00:00.000Z', '[Day 3] Partial docs: Guardian consent received. School records still missing. Advancing to intake/consent step.'),
-('ST-B-003', 'PATIENT-B-001', 'Maya Thompson', 'intake_pipeline', 'Intake Pipeline', 'intake', 'assessment', 'pilot-intake-coordinator@adolbi.com', '2025-06-30T00:00:00.000Z', '[Day 5] All documents complete. School records received from AISD. Referral ACCEPTED. Moving to payer step.'),
-('ST-B-004', 'PATIENT-B-001', 'Maya Thompson', 'intake_pipeline', 'Intake Pipeline', 'assessment', 'assessment', 'pilot-intake-coordinator@adolbi.com', '2025-06-30T00:00:00.000Z', '[Day 7] Insurance EXPIRED detected. Updated Medicaid card provided by guardian. Benefits re-verified successfully.'),
-('ST-B-005', 'PATIENT-B-001', 'Maya Thompson', 'intake_pipeline', 'Intake Pipeline', 'assessment', 'active', 'pilot-intake-coordinator@adolbi.com', '2025-07-02T00:00:00.000Z', '[Day 10] Authorization submitted. Awaiting approval. Bed assigned: 3A. Admission scheduled.');
+('ST-B-001', 'PATIENT-B-001', 'Synthetic Youth Case-002', 'intake_pipeline', 'Intake Pipeline', 'referral_pending', 'screening', 'pilot-intake-coordinator@amos-ops.invalid', '2025-06-26T00:00:00.000Z', '[Day 1] Referral received. Gap alerts: missing guardian consent, school records.'),
+('ST-B-002', 'PATIENT-B-001', 'Synthetic Youth Case-002', 'intake_pipeline', 'Intake Pipeline', 'screening', 'intake', 'pilot-intake-coordinator@amos-ops.invalid', '2025-06-28T00:00:00.000Z', '[Day 3] Partial docs: Guardian consent received. School records still missing. Advancing to intake/consent step.'),
+('ST-B-003', 'PATIENT-B-001', 'Synthetic Youth Case-002', 'intake_pipeline', 'Intake Pipeline', 'intake', 'assessment', 'pilot-intake-coordinator@amos-ops.invalid', '2025-06-30T00:00:00.000Z', '[Day 5] All documents complete. School records received from AISD. Referral ACCEPTED. Moving to payer step.'),
+('ST-B-004', 'PATIENT-B-001', 'Synthetic Youth Case-002', 'intake_pipeline', 'Intake Pipeline', 'assessment', 'assessment', 'pilot-intake-coordinator@amos-ops.invalid', '2025-06-30T00:00:00.000Z', '[Day 7] Insurance EXPIRED detected. Updated Medicaid card provided by guardian. Benefits re-verified successfully.'),
+('ST-B-005', 'PATIENT-B-001', 'Synthetic Youth Case-002', 'intake_pipeline', 'Intake Pipeline', 'assessment', 'active', 'pilot-intake-coordinator@amos-ops.invalid', '2025-07-02T00:00:00.000Z', '[Day 10] Authorization submitted. Awaiting approval. Bed assigned: 3A. Admission scheduled.');
 
 -- ═══════════════════════════════════════════════════════════════
 -- STEP 9: Authorization Record
@@ -562,8 +565,8 @@ INSERT INTO authorizations (
 ) VALUES (
   'AUTH-B-001',
   'PATIENT-B-001',
-  'Maya Thompson',
-  'MRN-C2-20250705-001',
+  'Synthetic Youth Case-002',
+  'SYNTH-CASE2-RECORD-001',
   'Texas Medicaid (STAR Health)',
   'TMP-4455-7788-REN',
   'submission',
@@ -571,12 +574,12 @@ INSERT INTO authorizations (
   1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
   '2025-07-02T00:00:00.000Z',
   '2025-07-02T00:00:00.000Z',
-  'pilot-intake-coordinator@adolbi.com',
+  'pilot-intake-coordinator@amos-ops.invalid',
   'portal',
   'AUTH-REF-20250705-001',
   '2025-07-02T00:00:00.000Z',
   '2025-07-02T00:00:00.000Z',
-  'pilot-intake-coordinator@adolbi.com'
+  'pilot-intake-coordinator@amos-ops.invalid'
 );
 
 -- ═══════════════════════════════════════════════════════════════
@@ -584,11 +587,11 @@ INSERT INTO authorizations (
 -- ═══════════════════════════════════════════════════════════════
 
 -- Count gap alerts for Patient B:
--- SELECT COUNT(*) FROM notifications WHERE person_name = 'Maya Thompson' AND type = 'alert';
+-- SELECT COUNT(*) FROM notifications WHERE person_name = 'Synthetic Youth Case-002' AND type = 'alert';
 -- Expected: 3
 
 -- Count resolved gaps (is_read = 1):
--- SELECT COUNT(*) FROM notifications WHERE person_name = 'Maya Thompson' AND type = 'alert' AND is_read = 1;
+-- SELECT COUNT(*) FROM notifications WHERE person_name = 'Synthetic Youth Case-002' AND type = 'alert' AND is_read = 1;
 -- Expected: 3
 
 -- Check referral checklist completion:

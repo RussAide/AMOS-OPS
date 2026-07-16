@@ -1,0 +1,58 @@
+export const M22_SYNTHETIC_WORKSPACE = {
+  case: {
+    id: "SYNTH-M22-CASE-001",
+    youthLabel: "Synthetic Youth One",
+    ageYears: 16,
+    source: "M2.1 CCMG/CANS v2",
+    plan: "SYNTH-MHTCM-PLAN-001 v2",
+    status: "Aftercare complete",
+  },
+  functions: [
+    { id: "intake_screening", label: "Intake / Screening", date: "Jun 1", disposition: "Included in MHTCM rate" },
+    { id: "eligibility", label: "Eligibility", date: "Jun 2", disposition: "Included in MHTCM rate" },
+    { id: "care_coordination", label: "Care Coordination", date: "Jun 5", disposition: "T1017 when criteria pass" },
+    { id: "referral_management", label: "Referral Management", date: "Jun 7", disposition: "T1017 when criteria pass" },
+    { id: "discharge_planning", label: "Discharge Planning", date: "Jun 30", disposition: "T1017 when criteria pass" },
+    { id: "aftercare_follow_up", label: "Aftercare Follow-up", date: "Jul 25", disposition: "T1017 when criteria pass" },
+  ],
+  planComponents: [
+    ["Goals", "1 active CANS-linked goal"],
+    ["Providers", "1 credentialed QMHP-CS"],
+    ["Referrals", "1 connected specialty referral"],
+    ["Contacts", "Guardian follow-up scheduled"],
+    ["Barriers", "Transportation mitigation monitored"],
+    ["Outcomes", "Provider connection achieved"],
+  ],
+  gates: [
+    ["Function", "Care coordination", "Pass"],
+    ["Code and modifiers", "T1017 · HA · TF", "Pass"],
+    ["Duration and units", "30 minutes · 2 units", "Pass"],
+    ["Eligibility", "Youth CANS and SED evidence", "Pass"],
+    ["Provider", "Current QMHP-CS with supervision", "Pass"],
+    ["Authorization", "120 approved · 118 remaining", "Pass"],
+    ["Plan", "Exact approved immutable v2", "Pass"],
+    ["Documentation", "Signed amendment v4", "Pass"],
+  ],
+  controls: {
+    dischargeLead: "15 days",
+    aftercareDue: "Aug 14, 2026",
+    aftercareCompleted: "Jul 25, 2026",
+    renewalDue: "Jul 14, 2026",
+    alert: "Urgent · Supervisor",
+    billingDecision: "READY",
+    handoff: "Ready for revenue",
+    auditEvents: 27,
+  },
+  criteria: [
+    "Exact M2.1 CCMG/CANS handoff consumed",
+    "Six-function lifecycle enforced in sequence",
+    "Structured case-management record complete",
+    "Immutable plan versions and supervisory approval",
+    "14-day discharge and 30-day aftercare controls",
+    "T1017 authorization, amendment, and billing gates",
+    "180-day renewal alert and escalation",
+    "Permission, audit, and representative-run evidence",
+  ],
+} as const;
+
+export type M22SyntheticWorkspace = typeof M22_SYNTHETIC_WORKSPACE;

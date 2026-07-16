@@ -1,63 +1,65 @@
 import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
-import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import fs from "node:fs";
+import path from "node:path";
+import { AsyncLocalStorage } from "node:async_hooks";
 import * as schema from "@db/schema";
 import { env } from "../lib/env";
 
-// ─── SQLite (default / local dev) ──────────────────────────
+// ─── SQLite evaluation-build database ─────────────────────
 
-const sqlite = new Database(env.databasePath);
-sqlite.pragma("journal_mode = WAL");
+export type DataScope = "operational" | "training";
 
-let sqliteDb: ReturnType<typeof drizzleSqlite<typeof schema>>;
+function openDatabase(databasePath: string): Database.Database {
+  fs.mkdirSync(path.dirname(path.resolve(databasePath)), { recursive: true });
+  const database = new Database(databasePath);
+  database.pragma("foreign_keys = ON");
+  database.pragma("journal_mode = WAL");
+  return database;
+}
+
+export const operationalSqlite = openDatabase(env.databasePath);
+export const trainingSqlite = openDatabase(env.trainingDatabasePath);
+const dataScopeStorage = new AsyncLocalStorage<DataScope>();
+
+export function currentDataScope(): DataScope {
+  return dataScopeStorage.getStore() ?? "operational";
+}
+
+export function runWithDataScope<T>(scope: DataScope, callback: () => T): T {
+  return dataScopeStorage.run(scope, callback);
+}
+
+function scopedSqlite(): Database.Database {
+  return currentDataScope() === "training" ? trainingSqlite : operationalSqlite;
+}
+
+let operationalDb: ReturnType<typeof drizzleSqlite<typeof schema>>;
+let trainingDb: ReturnType<typeof drizzleSqlite<typeof schema>>;
 
 function getSqliteDb() {
-  if (!sqliteDb) {
-    sqliteDb = drizzleSqlite(sqlite, { schema });
+  if (currentDataScope() === "training") {
+    trainingDb ??= drizzleSqlite(trainingSqlite, { schema });
+    return trainingDb;
   }
-  return sqliteDb;
+  operationalDb ??= drizzleSqlite(operationalSqlite, { schema });
+  return operationalDb;
 }
 
-// ─── PostgreSQL (production / Railway) ─────────────────────
-
-let pgPool: Pool | null = null;
-let pgDb: ReturnType<typeof drizzlePg<typeof schema>> | null = null;
-
-function getPgDb() {
-  if (!env.databaseUrl) {
-    throw new Error("DATABASE_URL not set but PostgreSQL mode requested");
-  }
-  if (!pgDb) {
-    pgPool = new Pool({ connectionString: env.databaseUrl });
-    pgDb = drizzlePg(pgPool, { schema });
-  }
-  return pgDb;
-}
-
-// ─── Unified DB ────────────────────────────────────────────
-
-export function getDb() {
-  // When DATABASE_URL is set, use PostgreSQL
-  if (env.databaseUrl) {
-    return getPgDb();
-  }
-  // Otherwise use SQLite (default for local dev)
+export function getDb(): ReturnType<typeof drizzleSqlite<typeof schema>> {
   return getSqliteDb();
 }
 
 // ─── Raw SQLite for non-Drizzle queries ────────────────────
 
-export { sqlite };
-
-// ─── Raw PG pool for direct SQL if needed ──────────────────
-
-export function getPgPool(): Pool | null {
-  return pgPool;
-}
-
-// ─── Which DB is active? ───────────────────────────────────
-
-export function isUsingPostgres(): boolean {
-  return !!env.databaseUrl;
-}
+/**
+ * Compatibility proxy for legacy raw-SQL callers. Every operation is routed
+ * to the request's isolated data workspace.
+ */
+export const sqlite = new Proxy(operationalSqlite, {
+  get(_target, property) {
+    const database = scopedSqlite() as unknown as Record<PropertyKey, unknown>;
+    const value = database[property];
+    return typeof value === "function" ? value.bind(database) : value;
+  },
+}) as Database.Database;

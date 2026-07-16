@@ -1,8 +1,27 @@
-import { initTRPC } from "@trpc/server";
+import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { sqlite } from "./queries/connection";
+import { runWithDataScope } from "./queries/connection";
 import { randomUUID } from "crypto";
+import {
+  resolveIdentityUser,
+  resolveRequestedDataScope,
+  type IdentityUser,
+} from "./security/identity";
+import {
+  authorizeAccess,
+  procedureAccessResource,
+  type AccessResource,
+  type AccessSubject,
+} from "../src/constants/access-control";
+import {
+  getDivisionByCode,
+  isDivisionCategory,
+  isDivisionId,
+  normalizeBhcDepartment,
+} from "../src/constants/organization";
+import { isUserRole, type UserRole } from "../src/constants/roles";
 
 // ═══════════════════════════════════════════════════════════════
 //  Boundary Enforcement: Human-in-Command Middleware
@@ -11,74 +30,19 @@ import { randomUUID } from "crypto";
 //  routed through human-review queues.
 // ═══════════════════════════════════════════════════════════════
 
-// ─── JWT Secret Strength Validation (Task D013-01) ─────────
-
-/**
- * Validate that the JWT secret meets minimum security requirements.
- * In production, the application MUST refuse to start with a weak secret.
- */
-function validateJwtSecretOnStartup(): void {
-  const jwtSecret = process.env.JWT_SECRET ?? "";
-  const isProduction = process.env.NODE_ENV === "production";
-
-  // Known weak/default secrets that must never be used in production
-  const weakPatterns = [
-    /^change-in-production/,
-    /^your-jwt-secret/,
-    /^default/,
-    /^secret$/,
-    /^test/,
-    /^dev/,
-    /^amos-ops-dev/,
-  ];
-
-  const isWeakPattern = weakPatterns.some((p) => p.test(jwtSecret));
-  const isTooShort = jwtSecret.length < 32;
-
-  if (isProduction) {
-    if (!jwtSecret || isTooShort || isWeakPattern) {
-      throw new Error(
-        `SECURITY_VIOLATION: JWT_SECRET is not secure enough for production. ` +
-        `Current length: ${jwtSecret.length} chars (minimum 32 required). ` +
-        `Generate a strong secret with: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))" ` +
-        `and set it as the JWT_SECRET environment variable.`
-      );
-    }
-
-    // Check for high entropy (not a simple human-readable phrase)
-    const hasMixedCase = /[a-z]/.test(jwtSecret) && /[A-Z]/.test(jwtSecret);
-    const hasNumbers = /\d/.test(jwtSecret);
-    const hasSpecial = /[^a-zA-Z0-9]/.test(jwtSecret);
-    const entropyOk = hasMixedCase && hasNumbers && hasSpecial;
-
-    if (!entropyOk && jwtSecret.length < 64) {
-      console.warn(
-        `[SECURITY WARNING] JWT_SECRET should have higher entropy (mix of upper, lower, numbers, and special characters) ` +
-        `or be at least 64 characters long. Current length: ${jwtSecret.length}`
-      );
-    }
-  } else {
-    // Development mode warnings
-    if (!jwtSecret || isTooShort || isWeakPattern) {
-      console.warn(
-        `[SECURITY WARNING] JWT_SECRET is using a weak/default value. ` +
-        `This is acceptable for development ONLY. ` +
-        `For production, generate a strong secret with: ` +
-        `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`
-      );
-    }
-  }
-}
-
-// Run JWT secret validation immediately on module load
-validateJwtSecretOnStartup();
-
 // ─── Rate Limiter (in-memory) ──────────────────────────────
 
-interface RateLimitEntry { count: number; resetAt: number; }
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
 const rateLimitMap = new Map<string, RateLimitEntry>();
 
-function checkRateLimit(key: string, maxRequests: number, windowMs: number): boolean {
+function checkRateLimit(
+  key: string,
+  maxRequests: number,
+  windowMs: number,
+): boolean {
   const now = Date.now();
   const entry = rateLimitMap.get(key);
   if (!entry || now > entry.resetAt) {
@@ -94,7 +58,8 @@ function checkRateLimit(key: string, maxRequests: number, windowMs: number): boo
 
 function sanitizeString(input: unknown): unknown {
   if (typeof input === "string") {
-    return input.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    return input
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
       .replace(/<[^>]*>/g, "")
       .trim();
   }
@@ -111,11 +76,19 @@ function sanitizeString(input: unknown): unknown {
 
 // ─── Audit Logger ──────────────────────────────────────────
 
-export function auditLog(opts: { action: string; actor: string; resource?: string; details?: string; ip?: string }) {
+export function auditLog(opts: {
+  action: string;
+  actor: string;
+  resource?: string;
+  details?: string;
+  ip?: string;
+}) {
   try {
-    sqlite.prepare(
-      "INSERT INTO workflow_audit_log (id, action, actor, details, created_at) VALUES (?, ?, ?, ?, datetime('now'))"
-    ).run(randomUUID(), opts.action, opts.actor, opts.details ?? null);
+    sqlite
+      .prepare(
+        "INSERT INTO workflow_audit_log (id, action, actor, details, created_at) VALUES (?, ?, ?, ?, datetime('now'))",
+      )
+      .run(randomUUID(), opts.action, opts.actor, opts.details ?? null);
   } catch {
     // Audit logging should never break the app
   }
@@ -126,75 +99,212 @@ const t = initTRPC.context<TrpcContext>().create({
 });
 
 export const createRouter = t.router;
-export const publicQuery = t.procedure;
+/** Explicitly unauthenticated procedure. Reserved for health and identity bootstrap endpoints. */
+export const anonymousQuery = t.procedure;
+// ─── Unified identity + deny-by-default authorization ─────
 
-// ─── Unified Auth: Supports both JWT (Entra ID) and local session tokens ──
-
-interface AuthedUser {
-  id: string;
-  email: string;
-  role: string;
-  firstName: string;
-  lastName: string;
+function rawObject(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
-async function resolveUser(req: Request): Promise<AuthedUser | null> {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
+function scopedResourceFromInput(
+  input: unknown,
+  base: AccessResource,
+): Partial<AccessResource> {
+  const record = rawObject(input);
+  if (!record) return {};
+  const result: Partial<AccessResource> = {};
 
-  const token = authHeader.slice(7);
-  if (!token) return null;
+  const divisionValue = record.divisionId ?? record.division;
+  if (isDivisionId(divisionValue)) result.division = divisionValue;
+  else if (typeof divisionValue === "string") {
+    const byCode = getDivisionByCode(divisionValue);
+    if (byCode) result.division = byCode.id;
+  }
 
-  // Try local session first
-  try {
-    const session = sqlite.prepare(
-      "SELECT s.user_id, u.email, u.first_name, u.last_name, u.role, u.department, u.is_active FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.token = ? AND s.expires_at > datetime('now')"
-    ).get(token) as any;
+  const categoryValue = record.divisionCategory;
+  if (isDivisionCategory(categoryValue))
+    result.divisionCategory = categoryValue;
 
-    if (session && session.is_active) {
-      return {
-        id: session.user_id,
-        email: session.email,
-        role: session.role,
-        firstName: session.first_name,
-        lastName: session.last_name,
-      };
+  const department = normalizeBhcDepartment(
+    record.departmentCode ?? record.toDepartment ?? record.department,
+  );
+  if (department) result.department = department;
+
+  const recordScope = record.recordScope;
+  if (
+    recordScope === "own" ||
+    recordScope === "department" ||
+    recordScope === "division" ||
+    recordScope === "enterprise"
+  ) {
+    result.recordScope = recordScope;
+  }
+
+  const ownerId =
+    record.ownerId ??
+    (base.domain === "self-service" ? record.userId : undefined);
+  if (typeof ownerId === "string") {
+    result.ownerId = ownerId;
+    if (!result.recordScope && base.domain === "self-service")
+      result.recordScope = "own";
+  }
+  return result;
+}
+
+function mergeProcedureScope(
+  base: AccessResource,
+  scoped: Partial<AccessResource>,
+): AccessResource {
+  if (base.division && scoped.division && base.division !== scoped.division) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Resource division does not match the procedure boundary",
+    });
+  }
+  if (
+    base.divisionCategory &&
+    scoped.divisionCategory &&
+    base.divisionCategory !== scoped.divisionCategory
+  ) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Resource PC/CO tag does not match the procedure boundary",
+    });
+  }
+  if (
+    base.department &&
+    scoped.department &&
+    base.department !== scoped.department
+  ) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Resource department does not match the procedure boundary",
+    });
+  }
+  return {
+    ...base,
+    ...scoped,
+    division: base.division ?? scoped.division,
+    divisionCategory: base.divisionCategory ?? scoped.divisionCategory,
+    department: base.department ?? scoped.department,
+  };
+}
+
+// Authenticated procedure resolves a revocable, environment-scoped session,
+// then denies access unless the path, role, permission, action, and scope are explicit.
+export const authedQuery = t.procedure.use(
+  async ({ ctx, next, path, type, getRawInput }) => {
+    const user: IdentityUser | null = resolveIdentityUser(ctx.req);
+    if (!user) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Unauthorized: invalid or expired session",
+      });
     }
-  } catch {
-    // Session lookup failed, try JWT fallback
-  }
 
-  // Fallback: JWT verification (for future Entra ID integration)
-  try {
-    const { jwtVerify } = await import("jose");
-    const { env } = await import("./lib/env");
-    const secret = new TextEncoder().encode(env.jwtSecret);
-    const { payload } = await jwtVerify(token, secret, { clockTolerance: 60 });
-    return {
-      id: payload.sub as string,
-      email: payload.email as string,
-      role: payload.role as string,
-      firstName: payload.firstName as string,
-      lastName: payload.lastName as string,
-    };
-  } catch {
-    return null;
-  }
-}
+    const dataScope = resolveRequestedDataScope(user, ctx.req);
+    if (!dataScope) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "This account cannot access the requested workspace.",
+      });
+    }
+    if (
+      dataScope === "training" &&
+      (path.startsWith("msgraph.") || path.startsWith("email."))
+    ) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message:
+          "Live Microsoft 365 and email connections are unavailable in Training.",
+      });
+    }
+    const operationalIdentityProcedures = new Set([
+      "auth.listUsers",
+      "auth.createTrainingAccount",
+      "auth.updateUser",
+      "auth.deleteUser",
+      "auth.listAccessReviews",
+      "auth.completeAccessReview",
+    ]);
+    if (dataScope === "training" && operationalIdentityProcedures.has(path)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message:
+          "Account administration is available only in the Operational workspace.",
+      });
+    }
 
-// Authenticated procedure - verifies session token or JWT
-export const authedQuery = t.procedure.use(async ({ ctx, next }) => {
-  const user = await resolveUser(ctx.req);
-  if (!user) {
-    throw new Error("Unauthorized: Invalid or expired session");
-  }
-  return next({ ctx: { ...ctx, user } });
-});
+    return runWithDataScope(dataScope, async () => {
+      const scopedUser: IdentityUser = { ...user, dataScope };
+      const baseResource = procedureAccessResource(path, type);
+      if (!baseResource) {
+        auditLog({
+          action: "authorization_denied",
+          actor: scopedUser.email,
+          resource: path,
+          details: "No explicit procedure access policy",
+        });
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `No explicit authorization policy for ${path}`,
+        });
+      }
 
-// Admin-only procedure (administrator or hr-director)
+      let rawInput: unknown;
+      try {
+        rawInput = await getRawInput();
+      } catch {
+        rawInput = undefined;
+      }
+      const resource = mergeProcedureScope(
+        baseResource,
+        scopedResourceFromInput(rawInput, baseResource),
+      );
+      const subject: AccessSubject = {
+        userId: scopedUser.id,
+        role: scopedUser.role,
+        department: scopedUser.department ?? undefined,
+      };
+      const access = authorizeAccess(subject, resource);
+      if (!access.allowed) {
+        auditLog({
+          action: "authorization_denied",
+          actor: scopedUser.email,
+          resource: path,
+          details: `${access.code}: ${access.reason}`,
+        });
+        throw new TRPCError({ code: "FORBIDDEN", message: access.reason });
+      }
+
+      return next({ ctx: { ...ctx, user: scopedUser } });
+    });
+  },
+);
+
+/**
+ * Compatibility name retained for existing domain routers. From M1.1 onward
+ * it is authenticated and centrally authorized; only anonymousQuery is public.
+ */
+export const publicQuery = authedQuery;
+
+// Admin-only procedure uses the canonical enterprise/user-management roles.
 export const adminQuery = authedQuery.use(async ({ ctx, next }) => {
-  if (ctx.user.role !== "administrator" && ctx.user.role !== "hr-director") {
-    throw new Error("Forbidden: Admin access required");
+  if (
+    ![
+      "super-admin",
+      "managing-director",
+      "administrator",
+      "hr-director",
+    ].includes(ctx.user.role)
+  ) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Admin access required",
+    });
   }
   return next({ ctx });
 });
@@ -203,7 +313,10 @@ export const adminQuery = authedQuery.use(async ({ ctx, next }) => {
 export function roleQuery(allowedRoles: string[]) {
   return authedQuery.use(async ({ ctx, next }) => {
     if (!allowedRoles.includes(ctx.user.role)) {
-      throw new Error(`Forbidden: Requires one of [${allowedRoles.join(", ")}]`);
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: `Requires one of [${allowedRoles.join(", ")}]`,
+      });
     }
     return next({ ctx });
   });
@@ -211,20 +324,36 @@ export function roleQuery(allowedRoles: string[]) {
 
 // ─── Rate-Limited Auth Procedure ───────────────────────────
 
-export const rateLimitedAuth = publicQuery.use(async ({ ctx, next }) => {
-  const clientIp = ctx.req.headers.get("x-forwarded-for") ?? "unknown";
-  if (!checkRateLimit(`auth:${clientIp}`, 10, 60000)) {
-    throw new Error("Too many requests. Please try again in 60 seconds.");
-  }
-  return next({ ctx });
-});
+export function rateLimitedAnonymous(
+  scope: string,
+  maxRequests: number,
+  windowMs: number,
+) {
+  return anonymousQuery.use(async ({ ctx, next }) => {
+    const clientIp =
+      ctx.req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      ctx.req.headers.get("x-real-ip") ||
+      "unknown";
+    if (!checkRateLimit(`${scope}:${clientIp}`, maxRequests, windowMs)) {
+      throw new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message: "Too many requests. Please try again later.",
+      });
+    }
+    return next({ ctx });
+  });
+}
+
+export const rateLimitedAuth = rateLimitedAnonymous("identity", 10, 60_000);
 
 // ─── Sanitized Input Procedure ─────────────────────────────
 
-export const sanitizedQuery = publicQuery.use(async ({ next, rawInput }) => {
-  const clean = sanitizeString(rawInput);
-  return next({ rawInput: clean });
-});
+export const sanitizedQuery = anonymousQuery.use(
+  async ({ next, getRawInput }) => {
+    const clean = sanitizeString(await getRawInput());
+    return next({ getRawInput: async () => clean });
+  },
+);
 
 // ─── Mutation with Audit Logging ───────────────────────────
 
@@ -260,11 +389,11 @@ export type ClinicalRecordType =
 /** Metadata attached to every clinical response */
 export interface ClinicalBoundaryMeta {
   requires_clinician_review: true;
-  reviewed_by: string | null;      // user_id of reviewing clinician
-  reviewed_at: string | null;      // ISO timestamp of review
+  reviewed_by: string | null; // user_id of reviewing clinician
+  reviewed_at: string | null; // ISO timestamp of review
   clinical_record_type: ClinicalRecordType;
-  generated_at: string;            // ISO timestamp
-  confidence_score?: number;       // 0-1, if applicable
+  generated_at: string; // ISO timestamp
+  confidence_score?: number; // 0-1, if applicable
 }
 
 /**
@@ -275,7 +404,7 @@ export interface ClinicalBoundaryMeta {
 export function requireClinicianReview<T extends Record<string, unknown>>(
   data: T,
   recordType: ClinicalRecordType,
-  confidenceScore?: number
+  confidenceScore?: number,
 ): T & { _clinical_boundary: ClinicalBoundaryMeta } {
   const bounded: T & { _clinical_boundary: ClinicalBoundaryMeta } = {
     ...data,
@@ -285,13 +414,17 @@ export function requireClinicianReview<T extends Record<string, unknown>>(
       reviewed_at: null,
       clinical_record_type: recordType,
       generated_at: new Date().toISOString(),
-      ...(confidenceScore !== undefined ? { confidence_score: confidenceScore } : {}),
+      ...(confidenceScore !== undefined
+        ? { confidence_score: confidenceScore }
+        : {}),
     },
   };
 
   // ── Boundary Violation: Block if unreviewed data escapes ──
   if (!bounded._clinical_boundary.requires_clinician_review) {
-    throw new Error("BOUNDARY_VIOLATION: Clinical output must require clinician review");
+    throw new Error(
+      "BOUNDARY_VIOLATION: Clinical output must require clinician review",
+    );
   }
 
   return bounded;
@@ -301,9 +434,11 @@ export function requireClinicianReview<T extends Record<string, unknown>>(
  * Mark a clinical record as reviewed by a licensed clinician.
  * This is the ONLY way to clear the `requires_clinician_review` flag.
  */
-export function markReviewedByClinician<T extends { _clinical_boundary: ClinicalBoundaryMeta }>(
+export function markReviewedByClinician<
+  T extends { _clinical_boundary: ClinicalBoundaryMeta },
+>(
   data: T,
-  clinicianId: string
+  clinicianId: string,
 ): T & { _clinical_boundary: ClinicalBoundaryMeta } {
   const reviewed = {
     ...data,
@@ -344,19 +479,22 @@ export const clinicalQuery = authedQuery.use(async ({ ctx, path, next }) => {
     if (!hasBoundary && !isRawArray) {
       throw new Error(
         `BOUNDARY_VIOLATION: Clinical endpoint "${path}" returned unmarked data. ` +
-        `All clinical outputs must be wrapped with requireClinicianReview().`
+          `All clinical outputs must be wrapped with requireClinicianReview().`,
       );
     }
 
     // If it's an array of clinical items, each item must have boundary metadata
     if (isRawArray && result.length > 0 && typeof result[0] === "object") {
       const allMarked = (result as unknown[]).every(
-        (item) => item && typeof item === "object" && "_clinical_boundary" in (item as object)
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          "_clinical_boundary" in (item as object),
       );
       if (!allMarked) {
         throw new Error(
           `BOUNDARY_VIOLATION: Clinical endpoint "${path}" returned array with unmarked items. ` +
-          `All clinical outputs must be wrapped with requireClinicianReview().`
+            `All clinical outputs must be wrapped with requireClinicianReview().`,
         );
       }
     }
@@ -384,22 +522,18 @@ export const clinicalQuery = authedQuery.use(async ({ ctx, path, next }) => {
 
 /** Status lifecycle for a compliance finding */
 export type ComplianceStatus =
-  | "pending_review"
-  | "under_review"
-  | "approved"
-  | "rejected"
-  | "escalated";
+  "pending_review" | "under_review" | "approved" | "rejected" | "escalated";
 
 /** A compliance finding that requires QA officer review */
 export interface ComplianceFinding {
   id?: string;
-  finding_type: string;        // e.g. "m3_violation", "gro_non_compliance", "part2_breach"
+  finding_type: string; // e.g. "m3_violation", "gro_non_compliance", "part2_breach"
   severity: "low" | "medium" | "high" | "critical";
   description: string;
   client_id?: string;
   program_id?: string;
-  evidence_refs?: string[];    // reference IDs to supporting evidence
-  reported_by: string;         // user_id of the reporter
+  evidence_refs?: string[]; // reference IDs to supporting evidence
+  reported_by: string; // user_id of the reporter
   qa_officer_id: string | null;
   status: ComplianceStatus;
   created_at?: string;
@@ -411,28 +545,33 @@ export interface ComplianceFinding {
  * Assign a QA officer from the available pool based on severity.
  * Critical/high findings go to senior QA; round-robin for load balancing.
  */
-function assignQAOfficer(severity: "low" | "medium" | "high" | "critical"): string | null {
+function assignQAOfficer(
+  severity: "low" | "medium" | "high" | "critical",
+): string | null {
+  void severity;
   try {
     // Query directly against users.role — user_roles/roles junction tables
     // are not used in this schema (role is a column on users)
-    const officer = sqlite.prepare(
-      `SELECT id FROM users
-       WHERE role IN ('qa-officer', 'compliance-officer', 'qa-senior',
+    const officer = sqlite
+      .prepare(
+        `SELECT id FROM users
+       WHERE role IN ('chart-auditor', 'hr-compliance-officer', 'clinical-supervisor',
                       'clinical-director', 'bhc-director', 'treatment-director')
          AND is_active = 1
        ORDER BY
          CASE role
            WHEN 'clinical-director' THEN 1
            WHEN 'bhc-director' THEN 2
-           WHEN 'qa-senior' THEN 3
-           WHEN 'compliance-officer' THEN 4
+           WHEN 'clinical-supervisor' THEN 3
+           WHEN 'hr-compliance-officer' THEN 4
            WHEN 'treatment-director' THEN 5
-           WHEN 'qa-officer' THEN 6
+           WHEN 'chart-auditor' THEN 6
            ELSE 7
          END,
          (SELECT COUNT(*) FROM compliance_queue cq WHERE cq.qa_officer_id = users.id AND cq.status = 'pending_review')
-       LIMIT 1`
-    ).get() as { id: string } | undefined;
+       LIMIT 1`,
+      )
+      .get() as { id: string } | undefined;
 
     if (officer) return officer.id;
 
@@ -465,24 +604,26 @@ export function routeToQA(finding: ComplianceFinding): ComplianceFinding {
 
   // ── Persist to compliance_queue table ──
   try {
-    sqlite.prepare(
-      `INSERT INTO compliance_queue (
+    sqlite
+      .prepare(
+        `INSERT INTO compliance_queue (
         id, finding_type, severity, description, client_id, program_id,
         evidence_refs, reported_by, qa_officer_id, status, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      enriched.id,
-      enriched.finding_type,
-      enriched.severity,
-      enriched.description,
-      enriched.client_id ?? null,
-      enriched.program_id ?? null,
-      enriched.evidence_refs ? JSON.stringify(enriched.evidence_refs) : null,
-      enriched.reported_by,
-      enriched.qa_officer_id,
-      enriched.status,
-      enriched.created_at
-    );
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        enriched.id,
+        enriched.finding_type,
+        enriched.severity,
+        enriched.description,
+        enriched.client_id ?? null,
+        enriched.program_id ?? null,
+        enriched.evidence_refs ? JSON.stringify(enriched.evidence_refs) : null,
+        enriched.reported_by,
+        enriched.qa_officer_id,
+        enriched.status,
+        enriched.created_at,
+      );
 
     // ── Log the routing action ──
     auditLog({
@@ -491,10 +632,10 @@ export function routeToQA(finding: ComplianceFinding): ComplianceFinding {
       resource: enriched.id,
       details: `Compliance finding [${enriched.finding_type}] routed to QA officer ${enriched.qa_officer_id} with severity ${enriched.severity}`,
     });
-  } catch (err) {
+  } catch (err: unknown) {
     // If queue write fails, still throw — compliance findings MUST be logged
     throw new Error(
-      `BOUNDARY_VIOLATION: Failed to route compliance finding to QA queue: ${(err as Error).message}`
+      `BOUNDARY_VIOLATION: Failed to route compliance finding to QA queue: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
@@ -509,37 +650,44 @@ export function updateComplianceStatus(
   findingId: string,
   newStatus: ComplianceStatus,
   updaterId: string,
-  resolutionNotes?: string
+  resolutionNotes?: string,
 ): void {
   try {
     // Verify the updater is the assigned QA officer or an admin
-    const finding = sqlite.prepare(
-      "SELECT qa_officer_id FROM compliance_queue WHERE id = ?"
-    ).get(findingId) as { qa_officer_id: string } | undefined;
+    const finding = sqlite
+      .prepare("SELECT qa_officer_id FROM compliance_queue WHERE id = ?")
+      .get(findingId) as { qa_officer_id: string } | undefined;
 
     if (!finding) {
       throw new Error(`Compliance finding ${findingId} not found`);
     }
 
-    const updater = sqlite.prepare(
-      "SELECT role FROM users WHERE id = ?"
-    ).get(updaterId) as { role: string } | undefined;
+    const updater = sqlite
+      .prepare("SELECT role FROM users WHERE id = ?")
+      .get(updaterId) as { role: string } | undefined;
 
-    const isAdmin = updater?.role === "administrator" || updater?.role === "compliance-officer";
+    const isAdmin = [
+      "super-admin",
+      "managing-director",
+      "administrator",
+      "hr-compliance-officer",
+    ].includes(updater?.role ?? "");
     const isAssignedQa = finding.qa_officer_id === updaterId;
 
     if (!isAdmin && !isAssignedQa) {
       throw new Error(
         `BOUNDARY_VIOLATION: User ${updaterId} is not authorized to update compliance finding ${findingId}. ` +
-        `Only the assigned QA officer or an admin can update status.`
+          `Only the assigned QA officer or an admin can update status.`,
       );
     }
 
-    sqlite.prepare(
-      `UPDATE compliance_queue
+    sqlite
+      .prepare(
+        `UPDATE compliance_queue
        SET status = ?, reviewed_at = datetime('now'), resolution_notes = ?
-       WHERE id = ?`
-    ).run(newStatus, resolutionNotes ?? null, findingId);
+       WHERE id = ?`,
+      )
+      .run(newStatus, resolutionNotes ?? null, findingId);
 
     auditLog({
       action: "compliance_status_updated",
@@ -547,8 +695,10 @@ export function updateComplianceStatus(
       resource: findingId,
       details: `Status changed to ${newStatus}${resolutionNotes ? ": " + resolutionNotes : ""}`,
     });
-  } catch (err) {
-    throw new Error(`Failed to update compliance status: ${(err as Error).message}`);
+  } catch (err: unknown) {
+    throw new Error(
+      `Failed to update compliance status: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 
@@ -563,8 +713,8 @@ export const complianceQuery = authedQuery.use(async ({ ctx, path, next }) => {
   const result = await next({ ctx });
 
   // Intercept any raw ComplianceFinding objects and route them
-  if (result && typeof result === "object") {
-    const raw = result as Record<string, unknown>;
+  if (result.ok && result.data && typeof result.data === "object") {
+    const raw = result.data as Record<string, unknown>;
 
     // If the result looks like an un-routed compliance finding, block it
     if (
@@ -574,7 +724,7 @@ export const complianceQuery = authedQuery.use(async ({ ctx, path, next }) => {
     ) {
       throw new Error(
         `BOUNDARY_VIOLATION: Compliance endpoint "${path}" returned an un-routed finding. ` +
-        `All compliance findings must be processed through routeToQA() before returning.`
+          `All compliance findings must be processed through routeToQA() before returning.`,
       );
     }
   }
@@ -627,7 +777,7 @@ export interface PHIAccessRecord {
   patient_id: string;
   record_type: PHIRecordType;
   endpoint: string;
-  access_purpose: string;      // why — e.g. "treatment_plan_review"
+  access_purpose: string; // why — e.g. "treatment_plan_review"
   ip_address: string | null;
   user_agent: string | null;
   accessed_at: string;
@@ -645,7 +795,7 @@ export function logPHIAccess(
   recordType: PHIRecordType,
   purpose: string,
   outcome: "allowed" | "denied" | "blocked" = "allowed",
-  denialReason?: string
+  denialReason?: string,
 ): PHIAccessRecord {
   const id = randomUUID();
   const now = new Date().toISOString();
@@ -658,7 +808,10 @@ export function logPHIAccess(
     record_type: recordType,
     endpoint: purpose, // the endpoint path or action name
     access_purpose: purpose,
-    ip_address: ctx.req.headers.get("x-forwarded-for") ?? ctx.req.headers.get("x-real-ip") ?? null,
+    ip_address:
+      ctx.req.headers.get("x-forwarded-for") ??
+      ctx.req.headers.get("x-real-ip") ??
+      null,
     user_agent: ctx.req.headers.get("user-agent") ?? null,
     accessed_at: now,
     outcome,
@@ -666,26 +819,28 @@ export function logPHIAccess(
   };
 
   try {
-    sqlite.prepare(
-      `INSERT INTO phi_access_log (
+    sqlite
+      .prepare(
+        `INSERT INTO phi_access_log (
         id, user_id, user_email, patient_id, record_type,
         endpoint, access_purpose, ip_address, user_agent,
         accessed_at, outcome, denial_reason
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      record.id,
-      record.user_id,
-      record.user_email,
-      record.patient_id,
-      record.record_type,
-      record.endpoint,
-      record.access_purpose,
-      record.ip_address,
-      record.user_agent,
-      record.accessed_at,
-      record.outcome,
-      record.denial_reason
-    );
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        record.id,
+        record.user_id,
+        record.user_email,
+        record.patient_id,
+        record.record_type,
+        record.endpoint,
+        record.access_purpose,
+        record.ip_address,
+        record.user_agent,
+        record.accessed_at,
+        record.outcome,
+        record.denial_reason,
+      );
   } catch (err) {
     // PHI logging failure is itself logged to the audit log
     auditLog({
@@ -707,38 +862,77 @@ export function logPHIAccess(
 export function authorizePHIAccess(
   ctx: TrpcContext & { user?: { id: string; email: string; role: string } },
   patientId: string,
-  recordType: PHIRecordType
+  recordType: PHIRecordType,
 ): { allowed: true } | { allowed: false; reason: string } {
   const user = ctx.user;
 
   // Unauthenticated users cannot access PHI
   if (!user) {
-    logPHIAccess(ctx, patientId, recordType, "auth_check", "denied", "Unauthenticated user");
+    logPHIAccess(
+      ctx,
+      patientId,
+      recordType,
+      "auth_check",
+      "denied",
+      "Unauthenticated user",
+    );
     return { allowed: false, reason: "Authentication required for PHI access" };
   }
 
   // Role-based PHI access control
   const phiAllowedRoles = [
+    "super-admin",
+    "managing-director",
     "administrator",
-    "hr-director",
-    "clinician",
+    "bhc-director",
+    "treatment-director",
+    "clinical-director",
+    "ccmg-program-director",
+    "mhtcm-supervisor",
+    "mhrs-supervisor",
+    "clinical-supervisor",
+    "chart-auditor",
+    "qmhp-cs",
     "case-manager",
     "therapist",
     "nurse",
-    "qa-officer",
-    "compliance-officer",
-    "billing-staff",
+    "intake-coordinator",
+    "billing-specialist",
   ];
 
   if (!phiAllowedRoles.includes(user.role)) {
-    logPHIAccess(ctx, patientId, recordType, "role_check", "denied", `Role ${user.role} not authorized for PHI`);
-    return { allowed: false, reason: `Role '${user.role}' is not authorized to access PHI` };
+    logPHIAccess(
+      ctx,
+      patientId,
+      recordType,
+      "role_check",
+      "denied",
+      `Role ${user.role} not authorized for PHI`,
+    );
+    return {
+      allowed: false,
+      reason: `Role '${user.role}' is not authorized to access PHI`,
+    };
   }
 
   // Billing staff can only access billing-related PHI
-  if (user.role === "billing-staff" && recordType !== "billing_record" && recordType !== "insurance") {
-    logPHIAccess(ctx, patientId, recordType, "billing_scope_check", "denied", "Billing staff scope violation");
-    return { allowed: false, reason: "Billing staff may only access billing and insurance records" };
+  if (
+    user.role === "billing-specialist" &&
+    recordType !== "billing_record" &&
+    recordType !== "insurance"
+  ) {
+    logPHIAccess(
+      ctx,
+      patientId,
+      recordType,
+      "billing_scope_check",
+      "denied",
+      "Billing staff scope violation",
+    );
+    return {
+      allowed: false,
+      reason: "Billing staff may only access billing and insurance records",
+    };
   }
 
   // All checks passed
@@ -768,27 +962,31 @@ export function authorizePHIAccess(
 export type PHILevel = "standard" | "sensitive" | "restricted" | "critical";
 
 /** Role clearance mapping — which PHI levels each role can access */
-const PHI_ROLE_CLEARANCE: Record<string, PHILevel[]> = {
+export const PHI_ROLE_CLEARANCE: Partial<Record<UserRole, PHILevel[]>> = {
   // Clinical roles — full access to all PHI levels
-  administrator:    ["standard", "sensitive", "restricted", "critical"],
-  "hr-director":    ["standard", "sensitive", "restricted", "critical"],
-  clinician:        ["standard", "sensitive", "restricted", "critical"],
-  therapist:        ["standard", "sensitive", "restricted"],
-  "case-manager":   ["standard", "sensitive", "restricted"],
-  nurse:            ["standard", "sensitive", "restricted"],
+  "super-admin": ["standard", "sensitive", "restricted", "critical"],
+  "managing-director": ["standard", "sensitive", "restricted", "critical"],
+  administrator: ["standard", "sensitive", "restricted", "critical"],
+  "bhc-director": ["standard", "sensitive", "restricted", "critical"],
+  "treatment-director": ["standard", "sensitive", "restricted", "critical"],
+  "clinical-director": ["standard", "sensitive", "restricted", "critical"],
+  "clinical-supervisor": ["standard", "sensitive", "restricted", "critical"],
+  "ccmg-program-director": ["standard", "sensitive", "restricted"],
+  "mhtcm-supervisor": ["standard", "sensitive", "restricted"],
+  "mhrs-supervisor": ["standard", "sensitive", "restricted"],
+  "qmhp-cs": ["standard", "sensitive", "restricted"],
+  therapist: ["standard", "sensitive", "restricted"],
+  "case-manager": ["standard", "sensitive", "restricted"],
+  nurse: ["standard", "sensitive", "restricted"],
   // QA/compliance — restricted access, no critical
-  "qa-officer":     ["standard", "sensitive"],
-  "compliance-officer": ["standard", "sensitive"],
+  "chart-auditor": ["standard", "sensitive"],
   // Billing — only standard level billing records
-  "billing-staff":  ["standard"],
-  // General staff — no PHI access
-  staff:            [],
-  rcs:              [],
-  "rcs-day":        [],
-  "rcs-night":      [],
-  intern:           [],
-  volunteer:        [],
+  "billing-specialist": ["standard"],
 };
+
+function phiClearanceForRole(role: string): readonly PHILevel[] {
+  return isUserRole(role) ? (PHI_ROLE_CLEARANCE[role] ?? []) : [];
+}
 
 /**
  * Determine the PHI sensitivity level for a given patient record
@@ -797,20 +995,23 @@ const PHI_ROLE_CLEARANCE: Record<string, PHILevel[]> = {
  */
 export function resolvePHILevel(
   patientId: string,
-  recordType: PHIRecordType
+  recordType: PHIRecordType,
 ): PHILevel {
   try {
     // Check if the patient record has a phi_level classification
-    const patient = sqlite.prepare(
-      "SELECT phi_level FROM patients WHERE id = ?"
-    ).get(patientId) as { phi_level: PHILevel | null } | undefined;
+    const patient = sqlite
+      .prepare("SELECT phi_level FROM patients WHERE id = ?")
+      .get(patientId) as { phi_level: PHILevel | null } | undefined;
 
     if (patient?.phi_level) {
       return patient.phi_level;
     }
 
     // Check document-level phi_level for document record types
-    if (recordType === "discharge_summary" || recordType === "clinical_assessment") {
+    if (
+      recordType === "discharge_summary" ||
+      recordType === "clinical_assessment"
+    ) {
       return "restricted";
     }
     if (recordType === "diagnosis" || recordType === "medication") {
@@ -838,9 +1039,9 @@ export function resolvePHILevel(
  */
 export function authorizePHILevel(
   userRole: string,
-  requiredLevel: PHILevel
+  requiredLevel: PHILevel,
 ): boolean {
-  const allowedLevels = PHI_ROLE_CLEARANCE[userRole] ?? [];
+  const allowedLevels = phiClearanceForRole(userRole);
   return allowedLevels.includes(requiredLevel);
 }
 
@@ -857,7 +1058,7 @@ export function authorizePHILevel(
 export function enforcePHIAccess(
   ctx: TrpcContext & { user?: { id: string; email: string; role: string } },
   patientId: string,
-  recordType: PHIRecordType
+  recordType: PHIRecordType,
 ): { allowed: true } | { allowed: false; reason: string } {
   // Step 1: Base role-based authorization
   const baseAuthz = authorizePHIAccess(ctx, patientId, recordType);
@@ -872,7 +1073,14 @@ export function enforcePHIAccess(
 
   if (!levelAuthorized) {
     const reason = `Role '${ctx.user!.role}' does not have clearance for PHI level '${phiLevel}' (patient: ${patientId}, record: ${recordType})`;
-    logPHIAccess(ctx, patientId, recordType, "phi_level_check", "denied", reason);
+    logPHIAccess(
+      ctx,
+      patientId,
+      recordType,
+      "phi_level_check",
+      "denied",
+      reason,
+    );
     auditLog({
       action: "phi_level_access_denied",
       actor: ctx.user!.email,
@@ -910,16 +1118,26 @@ export function enforcePHIAccess(
  *   phiGuardQuery({ patientId: "abc", recordType: "demographics" })
  *     .query(async ({ ctx }) => { ... })
  */
-export function phiGuardQuery(opts: { patientId?: string; recordType: PHIRecordType }) {
+export function phiGuardQuery(opts: {
+  patientId?: string;
+  recordType: PHIRecordType;
+}) {
   return authedQuery.use(async ({ ctx, path, next }) => {
     const user = ctx.user!;
 
     // ── Check 1: Validate the user has any PHI clearance at all ──
-    const userClearance = PHI_ROLE_CLEARANCE[user.role] ?? [];
+    const userClearance = phiClearanceForRole(user.role);
     if (userClearance.length === 0) {
       const reason = `Role '${user.role}' has no PHI clearance`;
       if (opts.patientId) {
-        logPHIAccess(ctx, opts.patientId, opts.recordType, path, "blocked", reason);
+        logPHIAccess(
+          ctx,
+          opts.patientId,
+          opts.recordType,
+          path,
+          "blocked",
+          reason,
+        );
       }
       auditLog({
         action: "phi_access_denied_no_clearance",
@@ -935,7 +1153,14 @@ export function phiGuardQuery(opts: { patientId?: string; recordType: PHIRecordT
     if (opts.patientId) {
       const authz = enforcePHIAccess(ctx, opts.patientId, opts.recordType);
       if (!authz.allowed) {
-        logPHIAccess(ctx, opts.patientId, opts.recordType, path, "blocked", authz.reason);
+        logPHIAccess(
+          ctx,
+          opts.patientId,
+          opts.recordType,
+          path,
+          "blocked",
+          authz.reason,
+        );
         throw new Error(`BOUNDARY_VIOLATION: ${authz.reason}`);
       }
     }
@@ -996,7 +1221,7 @@ export function reportBoundaryViolation(
   violationType: BoundaryViolationType,
   endpoint: string,
   description: string,
-  severity: ViolationSeverity = "critical"
+  severity: ViolationSeverity = "critical",
 ): never {
   const id = randomUUID();
   const now = new Date().toISOString();
@@ -1015,23 +1240,25 @@ export function reportBoundaryViolation(
 
   // Persist to boundary_violations table
   try {
-    sqlite.prepare(
-      `INSERT INTO boundary_violations (
+    sqlite
+      .prepare(
+        `INSERT INTO boundary_violations (
         id, violation_type, severity, endpoint,
         actor_id, actor_email, description, blocked, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      event.id,
-      event.violation_type,
-      event.severity,
-      event.endpoint,
-      event.actor_id,
-      event.actor_email,
-      event.description,
-      event.blocked ? 1 : 0,
-      event.created_at
-    );
-  } catch (err) {
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        event.id,
+        event.violation_type,
+        event.severity,
+        event.endpoint,
+        event.actor_id,
+        event.actor_email,
+        event.description,
+        event.blocked ? 1 : 0,
+        event.created_at,
+      );
+  } catch {
     // If violation table doesn't exist yet, fall back to audit log
     auditLog({
       action: "boundary_violation",
@@ -1044,7 +1271,7 @@ export function reportBoundaryViolation(
   // Always throw — boundary violations are NEVER allowed through
   throw new Error(
     `BOUNDARY_VIOLATION [${violationType}]: ${description}. ` +
-    `This incident has been logged (id: ${id}) and will be reviewed.`
+      `This incident has been logged (id: ${id}) and will be reviewed.`,
   );
 }
 
@@ -1056,20 +1283,41 @@ export const boundaryGuard = authedQuery.use(async ({ ctx, path, next }) => {
   const user = ctx.user!;
 
   // ── Check 1: Role escalation attempt ──
-  const suspiciousRoles = ["administrator", "hr-director", "qa-senior", "compliance-officer"];
-  const roleInPath = suspiciousRoles.some((r) => path.toLowerCase().includes(r.replace("-", "")));
-  if (roleInPath && !suspiciousRoles.includes(user.role)) {
+  const suspiciousRoles: UserRole[] = [
+    "super-admin",
+    "managing-director",
+    "administrator",
+    "hr-director",
+    "hr-compliance-officer",
+  ];
+  const roleInPath = suspiciousRoles.some((r) =>
+    path.toLowerCase().includes(r.replace("-", "")),
+  );
+  if (
+    roleInPath &&
+    (!isUserRole(user.role) || !suspiciousRoles.includes(user.role))
+  ) {
     reportBoundaryViolation(
       ctx,
       "role_escalation_attempt",
       path,
       `User with role '${user.role}' attempted to access privileged endpoint '${path}'`,
-      "critical"
+      "critical",
     );
   }
 
   // ── Check 2: Unauthenticated access to sensitive paths ──
-  const sensitivePatterns = ["/clinical/", "/compliance/", "/phi/", "/patient/", "/cans/", "/m5/", "/m3/", "/mhtcm/", "/mhrs/"];
+  const sensitivePatterns = [
+    "/clinical/",
+    "/compliance/",
+    "/phi/",
+    "/patient/",
+    "/cans/",
+    "/m5/",
+    "/m3/",
+    "/mhtcm/",
+    "/mhrs/",
+  ];
   const isSensitivePath = sensitivePatterns.some((p) => path.includes(p));
   if (isSensitivePath && !ctx.user) {
     reportBoundaryViolation(
@@ -1077,7 +1325,7 @@ export const boundaryGuard = authedQuery.use(async ({ ctx, path, next }) => {
       "unauthenticated_phi_access",
       path,
       `Unauthenticated request to sensitive endpoint '${path}'`,
-      "emergency"
+      "emergency",
     );
   }
 
@@ -1089,13 +1337,13 @@ export const boundaryGuard = authedQuery.use(async ({ ctx, path, next }) => {
 // ═══════════════════════════════════════════════════════════════
 
 /** Clinical endpoint: auth + clinical marking + boundary guard */
-export const clinicalEndpoint = clinicalQuery.use(async ({ ctx, path, next }) => {
+export const clinicalEndpoint = clinicalQuery.use(async ({ ctx, next }) => {
   const result = await next({ ctx });
   return result;
 });
 
 /** Compliance endpoint: auth + compliance routing + boundary guard */
-export const complianceEndpoint = complianceQuery.use(async ({ ctx, path, next }) => {
+export const complianceEndpoint = complianceQuery.use(async ({ ctx, next }) => {
   const result = await next({ ctx });
   return result;
 });

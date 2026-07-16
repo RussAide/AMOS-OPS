@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, publicQuery } from "../middleware";
 import { getDb } from "../queries/connection";
 import { claims, claimLineItems, payers } from "@db/schema";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 function generateClaimNumber() {
@@ -38,7 +38,7 @@ export const revenueRouter = createRouter({
 
   listClaims: publicQuery
     .input(z.object({
-      status: z.string().optional(),
+      status: z.enum(["draft", "pending", "submitted", "acknowledged", "pending_review", "approved", "denied", "appealed", "paid", "write_off"]).optional(),
       patientId: z.string().optional(),
       payerId: z.string().optional(),
       page: z.number().int().positive().default(1),
@@ -46,8 +46,14 @@ export const revenueRouter = createRouter({
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      const params = input ?? {};
-      let query = db.select().from(claims);
+      const params: {
+        status?: "draft" | "pending" | "submitted" | "acknowledged" | "pending_review" | "approved" | "denied" | "appealed" | "paid" | "write_off";
+        patientId?: string;
+        payerId?: string;
+        page?: number;
+        pageSize?: number;
+      } = input ?? {};
+      const query = db.select().from(claims);
 
       const conditions = [];
       if (params.status) conditions.push(eq(claims.status, params.status));
@@ -171,11 +177,9 @@ export const revenueRouter = createRouter({
     const now = new Date();
     const d30 = new Date(now.getTime() - 30 * 86400000).toISOString();
     const d60 = new Date(now.getTime() - 60 * 86400000).toISOString();
-    const d90 = new Date(now.getTime() - 90 * 86400000).toISOString();
-
-    const aging30 = allClaims.filter((c) => c.createdAt > d30 && ["submitted", "pending_review", "approved"].includes(c.status)).reduce((s, c) => s + c.totalAmount, 0);
-    const aging60 = allClaims.filter((c) => c.createdAt <= d30 && c.createdAt > d60 && ["submitted", "pending_review", "approved"].includes(c.status)).reduce((s, c) => s + c.totalAmount, 0);
-    const aging90 = allClaims.filter((c) => c.createdAt <= d60 && ["submitted", "pending_review", "approved"].includes(c.status)).reduce((s, c) => s + c.totalAmount, 0);
+    const aging30 = allClaims.filter((c) => c.createdAt !== null && c.createdAt > d30 && ["submitted", "pending_review", "approved"].includes(c.status)).reduce((s, c) => s + c.totalAmount, 0);
+    const aging60 = allClaims.filter((c) => c.createdAt !== null && c.createdAt <= d30 && c.createdAt > d60 && ["submitted", "pending_review", "approved"].includes(c.status)).reduce((s, c) => s + c.totalAmount, 0);
+    const aging90 = allClaims.filter((c) => c.createdAt !== null && c.createdAt <= d60 && ["submitted", "pending_review", "approved"].includes(c.status)).reduce((s, c) => s + c.totalAmount, 0);
 
     return {
       totalClaims,

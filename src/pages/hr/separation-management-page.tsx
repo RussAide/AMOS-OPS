@@ -3,26 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { trpc } from "@/providers/trpc";
 import {
   LogOut, ArrowLeft, CheckCircle2, Clock, AlertTriangle,
-  Search, Plus, Ban, Users, X
+  Search, Ban, Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-const CHECKLIST_DEF = [
-  { id: "exit-interview", label: "Exit Interview Conducted", category: "HR" },
-  { id: "equipment", label: "Equipment Returned (laptop, phone, keys)", category: "IT" },
-  { id: "access-cards", label: "Access Cards / Badges Returned", category: "Security" },
-  { id: "email-deactivated", label: "Email & System Accounts Deactivated", category: "IT" },
-  { id: "final-paycheck", label: "Final Paycheck Processed", category: "Payroll" },
-  { id: "benefits-term", label: "Benefits Termination Submitted", category: "HR" },
-  { id: "cobra-notice", label: "COBRA Notice Sent", category: "HR" },
-  { id: "reference-letter", label: "Reference Letter Provided (if eligible)", category: "HR" },
-  { id: "file-archived", label: "Personnel File Archived", category: "HR" },
-  { id: "turnover-doc", label: "Turnover Documentation Complete", category: "Supervisor" },
-];
 
 const CATEGORY_COLORS: Record<string, string> = {
   HR: "#245C5A", IT: "#2563EB", Security: "#D97706", Payroll: "#059669", Supervisor: "#7C3AED",

@@ -11,6 +11,80 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 
+interface IntakeYouth {
+  id: string;
+  mrn: string;
+  first_name: string;
+  last_name: string;
+  status: string;
+  age: number;
+  date_of_birth: string;
+  gender: string | null;
+  preferred_language: string | null;
+  guardian1_name: string;
+  guardian1_relationship: string;
+  guardian1_phone: string;
+  guardian2_name: string | null;
+  guardian2_relationship: string | null;
+  guardian2_phone: string | null;
+  assigned_clinician_name: string | null;
+  assigned_case_manager_name: string | null;
+  bed_assignment: string | null;
+  notes: string | null;
+}
+
+interface IntakeRecord {
+  current_step: string | null;
+  overall_status: string | null;
+  is_blocked: number | boolean;
+  block_reason: string | null;
+  referral_received_completed: number | boolean;
+  referral_received_date: string | null;
+  referral_received_by: string | null;
+  referral_elapsed_hours: number | null;
+  referral_received_notes: string | null;
+  screening_completed: number | boolean;
+  screening_date: string | null;
+  screening_completed_by: string | null;
+  screening_elapsed_hours: number | null;
+  screening_result: string | null;
+  screening_notes: string | null;
+  consent_completed: number | boolean;
+  consent_date: string | null;
+  consent_completed_by: string | null;
+  consent_elapsed_hours: number | null;
+  guardian_consent_obtained: number | boolean;
+  youth_assent_obtained: number | boolean;
+  hipaa_acknowledgment: number | boolean;
+  rights_acknowledgment: number | boolean;
+  consent_notes: string | null;
+  payer_completed: number | boolean;
+  payer_verification_date: string | null;
+  payer_verification_completed_by: string | null;
+  payer_elapsed_hours: number | null;
+  benefits_verified: number | boolean;
+  authorization_required: number | boolean;
+  authorization_submitted: number | boolean;
+  authorization_approved: number | boolean;
+  payer_notes: string | null;
+  disposition_completed: number | boolean;
+  disposition_date: string | null;
+  disposition_completed_by: string | null;
+  disposition_elapsed_hours: number | null;
+  disposition: string | null;
+  bed_assigned: string | null;
+  admission_scheduled_date: string | null;
+  disposition_reason: string | null;
+}
+
+interface ReferralChecklist extends Record<string, unknown> {
+  items_completed: number;
+  items_total: number;
+  all_items_complete: number | boolean;
+  completed_by: string | null;
+  completed_at: string | null;
+}
+
 const STEPS = [
   { key: "referral", label: "Referral Received", desc: "Log referral source and initial contact" },
   { key: "screening", label: "Initial Screening", desc: "Clinical screening and risk assessment" },
@@ -48,17 +122,20 @@ function StatusBadge({ status }: { status: string }) {
 export function IntakePipelinePage() {
   const [selectedYouthId, setSelectedYouthId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("pipeline");
-  const { data: youthList = [] } = trpc.m13.listYouth.useQuery();
-  const { data: intakeData } = trpc.m13.getIntake.useQuery(
-    { id: selectedYouthId ?? "" },
-    { enabled: !!selectedYouthId }
-  );
-  const { data: checklistData } = trpc.m13.getChecklist.useQuery(
+  const { data: rawYouthList = [] } = trpc.m13.listYouth.useQuery();
+  const { data: rawIntakeData } = trpc.m13.getIntakeByYouth.useQuery(
     { youthId: selectedYouthId ?? "" },
     { enabled: !!selectedYouthId }
   );
+  const { data: rawChecklistData } = trpc.m13.getChecklist.useQuery(
+    { youthId: selectedYouthId ?? "" },
+    { enabled: !!selectedYouthId }
+  );
+  const youthList = rawYouthList as IntakeYouth[];
+  const intakeData = rawIntakeData as IntakeRecord | null | undefined;
+  const checklistData = rawChecklistData as ReferralChecklist | null | undefined;
 
-  const selectedYouth = youthList.find((y: any) => y.id === selectedYouthId);
+  const selectedYouth = youthList.find((y) => y.id === selectedYouthId);
 
   return (
     <>
@@ -93,7 +170,7 @@ export function IntakePipelinePage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {youthList.map((youth: any) => (
+            {youthList.map((youth) => (
               <button
                 key={youth.id}
                 onClick={() => setSelectedYouthId(youth.id)}
@@ -128,8 +205,7 @@ export function IntakePipelinePage() {
 
           <TabsContent value="pipeline" className="space-y-4 mt-4">
             <PipelineVisualizer
-              intake={intakeData}
-              youth={selectedYouth}
+              intake={intakeData ?? undefined}
             />
           </TabsContent>
 
@@ -138,7 +214,7 @@ export function IntakePipelinePage() {
           </TabsContent>
 
           <TabsContent value="checklist" className="mt-4">
-            <ReferralChecklistView checklist={checklistData} youth={selectedYouth} />
+            <ReferralChecklistView checklist={checklistData ?? undefined} youth={selectedYouth} />
           </TabsContent>
         </Tabs>
       )}
@@ -147,7 +223,7 @@ export function IntakePipelinePage() {
   );
 }
 
-function PipelineVisualizer({ intake, youth }: { intake: any; youth: any }) {
+function PipelineVisualizer({ intake }: { intake: IntakeRecord | undefined }) {
   if (!intake) {
     return (
       <Card className="p-8 text-center">
@@ -324,8 +400,8 @@ function PipelineVisualizer({ intake, youth }: { intake: any; youth: any }) {
 }
 
 function StepDetailCard({ title, completed, date, by, elapsed, timeline, children }: {
-  title: string; completed: boolean; date: string | null; by: string | null;
-  elapsed: number | null; timeline: string; children: React.ReactNode;
+  title: string; completed: boolean; date?: string | null; by?: string | null;
+  elapsed?: number | null; timeline: string; children: React.ReactNode;
 }) {
   return (
     <Card className={completed ? "border-[#2e8b8b]/30" : ""}>
@@ -340,7 +416,7 @@ function StepDetailCard({ title, completed, date, by, elapsed, timeline, childre
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span>Expected: {timeline}</span>
-          {elapsed !== null && elapsed > 0 && <span>Elapsed: {elapsed}h</span>}
+          {elapsed != null && elapsed > 0 && <span>Elapsed: {elapsed}h</span>}
         </div>
       </CardHeader>
       <CardContent className="pt-0">
@@ -364,7 +440,7 @@ function ConsentItem({ label, checked }: { label: string; checked: boolean }) {
   );
 }
 
-function YouthProfileCard({ youth }: { youth: any }) {
+function YouthProfileCard({ youth }: { youth: IntakeYouth }) {
   return (
     <Card>
       <CardHeader>
@@ -430,7 +506,7 @@ function YouthProfileCard({ youth }: { youth: any }) {
   );
 }
 
-function ReferralChecklistView({ checklist, youth }: { checklist: any; youth: any }) {
+function ReferralChecklistView({ checklist, youth }: { checklist: ReferralChecklist | undefined; youth: IntakeYouth }) {
   if (!checklist) {
     return (
       <Card className="p-8 text-center">
@@ -451,7 +527,7 @@ function ReferralChecklistView({ checklist, youth }: { checklist: any; youth: an
     { key: "item8_legal_status_confirmed", label: "Legal status / custody confirmed" },
     { key: "item9_guardian_contact_verified", label: "Guardian contact information verified" },
     { key: "item10_service_activation_date_set", label: "Service activation date set" },
-  ];
+  ] as const;
 
   const completed = checklist.items_completed ?? 0;
   const total = checklist.items_total ?? 10;
@@ -479,7 +555,7 @@ function ReferralChecklistView({ checklist, youth }: { checklist: any; youth: an
       </CardHeader>
       <CardContent className="space-y-2">
         {items.map((item, idx) => {
-          const checked = (checklist as any)[item.key] === 1;
+          const checked = checklist[item.key] === 1;
           return (
             <div
               key={item.key}
@@ -509,6 +585,16 @@ function ReferralChecklistView({ checklist, youth }: { checklist: any; youth: an
 }
 
 function NewReferralForm() {
+  const createIntake = trpc.m13.createIntake.useMutation();
+  const createYouth = trpc.m13.createYouth.useMutation({
+    onSuccess: (youth, variables) => {
+      createIntake.mutate({
+        youthId: youth.id,
+        mrn: variables.mrn,
+        youthName: `${variables.firstName} ${variables.lastName}`,
+      });
+    },
+  });
   const [form, setForm] = useState({
     firstName: "", lastName: "", dateOfBirth: "", age: "",
     gender: "male" as string, guardian1Name: "", guardian1Relationship: "", guardian1Phone: "",
@@ -516,7 +602,19 @@ function NewReferralForm() {
   });
 
   const handleSubmit = () => {
-    trpc.m13.createIntake.useMutation().mutate({ ...form, status: "in_progress" } as any);
+    createYouth.mutate({
+      mrn: `DEMO-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+      firstName: form.firstName,
+      lastName: form.lastName,
+      dateOfBirth: form.dateOfBirth,
+      age: Number(form.age),
+      gender: form.gender as Parameters<typeof createYouth.mutate>[0]["gender"],
+      guardian1Name: form.guardian1Name,
+      guardian1Relationship: form.guardian1Relationship,
+      guardian1Phone: form.guardian1Phone,
+      referralSourceType: form.referralSource as Parameters<typeof createYouth.mutate>[0]["referralSourceType"],
+      notes: form.notes || undefined,
+    });
   };
 
   return (

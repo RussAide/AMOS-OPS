@@ -1,48 +1,31 @@
 import { relations } from "drizzle-orm";
 import {
-  users,
-  hrPeople,
   youthProfiles,
   campusStages,
   stageAssignments,
-  stageProgressionCriteria,
+  campusReadinessCriteria,
   censusAlerts,
   censusSnapshots,
   facilities,
   rooms,
   bedCensusV2,
   facilityPhases,
-  patients,
-  treatmentPlans,
-  clinicalSessions,
-  caseManagement,
-  claims,
-  claimLineItems,
-  audits,
-  incidents,
-  correctiveActions,
-  agentPersonas,
   mhtcmServicePlans,
   mhtcmEncounters,
-  mhtcmEligibility,
   ccmgCareCoordination,
   ccmgReferrals,
-  bhcDepartmentMetrics,
-  youthRightsAcknowledgments,
   restraintIncidents,
   prohibitedPractices,
-  recordRetention,
   mhrsServicePlans,
   mhrsEncounters,
   mhrsSkillsAssessments,
   sudRecords,
   part2Consents,
-  qsoaAgreements,
-  part2AuditLog,
-  part2BreachNotifications,
   mgmaDomains,
   mgmaKpiTargets,
-  mgmaScorecards,
+  mgmaMeasurements,
+  mgmaDataQualityResults,
+  mgmaOwnerApprovals,
   documentTemplates,
   generatedDocuments,
   shiftLogs,
@@ -57,7 +40,7 @@ import {
 export const campusStagesRelations = relations(campusStages, ({ many, one }) => ({
   facility: one(facilities, { fields: [campusStages.facilityId], references: [facilities.id] }),
   assignments: many(stageAssignments),
-  criteria: many(stageProgressionCriteria),
+  criteria: many(campusReadinessCriteria),
   censusAlerts: many(censusAlerts),
   rooms: many(rooms),
 }));
@@ -66,8 +49,8 @@ export const stageAssignmentsRelations = relations(stageAssignments, ({ one }) =
   toStage: one(campusStages, { fields: [stageAssignments.toStageId], references: [campusStages.id] }),
 }));
 
-export const stageProgressionCriteriaRelations = relations(stageProgressionCriteria, ({ one }) => ({
-  stage: one(campusStages, { fields: [stageProgressionCriteria.stageId], references: [campusStages.id] }),
+export const campusReadinessCriteriaRelations = relations(campusReadinessCriteria, ({ one }) => ({
+  stage: one(campusStages, { fields: [campusReadinessCriteria.stageId], references: [campusStages.id] }),
 }));
 
 export const censusAlertsRelations = relations(censusAlerts, ({ one }) => ({
@@ -160,8 +143,25 @@ export const mgmaDomainsRelations = relations(mgmaDomains, ({ many }) => ({
   kpis: many(mgmaKpiTargets),
 }));
 
-export const mgmaKpiTargetsRelations = relations(mgmaKpiTargets, ({ one }) => ({
+export const mgmaKpiTargetsRelations = relations(mgmaKpiTargets, ({ one, many }) => ({
   domain: one(mgmaDomains, { fields: [mgmaKpiTargets.domainId], references: [mgmaDomains.id] }),
+  measurements: many(mgmaMeasurements),
+  qualityResults: many(mgmaDataQualityResults),
+  ownerApprovals: many(mgmaOwnerApprovals),
+}));
+
+export const mgmaMeasurementsRelations = relations(mgmaMeasurements, ({ one, many }) => ({
+  kpi: one(mgmaKpiTargets, { fields: [mgmaMeasurements.kpiId], references: [mgmaKpiTargets.id] }),
+  qualityResults: many(mgmaDataQualityResults),
+}));
+
+export const mgmaDataQualityResultsRelations = relations(mgmaDataQualityResults, ({ one }) => ({
+  measurement: one(mgmaMeasurements, { fields: [mgmaDataQualityResults.measurementId], references: [mgmaMeasurements.id] }),
+  kpi: one(mgmaKpiTargets, { fields: [mgmaDataQualityResults.kpiId], references: [mgmaKpiTargets.id] }),
+}));
+
+export const mgmaOwnerApprovalsRelations = relations(mgmaOwnerApprovals, ({ one }) => ({
+  kpi: one(mgmaKpiTargets, { fields: [mgmaOwnerApprovals.kpiId], references: [mgmaKpiTargets.id] }),
 }));
 
 // ─── Document Relations ──────────────────────────────────────

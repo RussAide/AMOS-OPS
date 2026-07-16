@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {  useQueryClient } from "@tanstack/react-query";
 import { trpc } from "@/providers/trpc";
 import {
-  Building2, Bed, Users, TrendingUp, AlertTriangle, ChevronDown,
-  DoorOpen, Layers, Eye, VolumeX, Accessibility, CheckCircle2,
-  CircleDot, Clock, ArrowRightLeft, Pill, Phone, FileText,
+  Building2, Bed, Users, TrendingUp, AlertTriangle,
+  DoorOpen, Layers, Eye, VolumeX, Accessibility, CheckCircle2, Clock, Pill, Phone,
   BarChart3,
 } from "lucide-react";
 import { PredictiveAnalytics } from "./predictive-analytics";

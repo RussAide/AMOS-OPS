@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import {
-  Shield, Search, Plus, Edit3, Trash2, X, Check, AlertCircle,
-  Building2, FileBadge
+  Shield, Search, Plus, Edit3, Trash2, X, Check,
+  Building2
 } from "lucide-react";
 
 export function InsurancePlansPage() {

@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "../middleware";
+import { adminQuery, authedQuery, createRouter, publicQuery } from "../middleware";
 import { getDb } from "../queries/connection";
-import { documentTemplates, generatedDocuments } from "@db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { documentTemplates, generatedDocuments, documents as personnelDocuments } from "@db/schema";
+import { eq, and, desc, type InferInsertModel } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 // ══════════════════════════════════════════════════════════════
@@ -13,20 +13,97 @@ import { randomUUID } from "crypto";
 export const documentsRouter = createRouter({
 
   // ════════════════════════════════════════════════════════════
+  // PERSONNEL DOCUMENTS
+  // Backward-compatible HR lifecycle document surface.
+  // ════════════════════════════════════════════════════════════
+
+  list: authedQuery
+    .input(z.object({
+      personId: z.string().optional(),
+      moduleId: z.string().optional(),
+      status: z.enum(["uploaded", "verified", "rejected", "expired"]).optional(),
+    }).optional())
+    .query(async ({ input }) => {
+      const db = getDb();
+      const conditions = [];
+      if (input?.personId) conditions.push(eq(personnelDocuments.personId, input.personId));
+      if (input?.moduleId) conditions.push(eq(personnelDocuments.moduleId, input.moduleId));
+      if (input?.status) conditions.push(eq(personnelDocuments.status, input.status));
+
+      return conditions.length > 0
+        ? db.select().from(personnelDocuments).where(and(...conditions)).orderBy(desc(personnelDocuments.uploadedAt)).all()
+        : db.select().from(personnelDocuments).orderBy(desc(personnelDocuments.uploadedAt)).all();
+    }),
+
+  create: adminQuery
+    .input(z.object({
+      personId: z.string().min(1),
+      moduleId: z.string().min(1),
+      recordName: z.string().min(1),
+      fileName: z.string().min(1),
+      fileType: z.string().optional(),
+      fileSize: z.number().int().nonnegative().optional(),
+      filePath: z.string().optional(),
+      uploadedBy: z.string().optional(),
+      status: z.enum(["uploaded", "verified", "rejected", "expired"]).default("uploaded"),
+      expiryDate: z.string().optional(),
+      note: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const id = randomUUID();
+      await db.insert(personnelDocuments).values({
+        id,
+        personId: input.personId,
+        moduleId: input.moduleId,
+        recordName: input.recordName,
+        fileName: input.fileName,
+        fileType: input.fileType ?? null,
+        fileSize: input.fileSize ?? null,
+        filePath: input.filePath ?? null,
+        uploadedBy: input.uploadedBy ?? null,
+        status: input.status,
+        expiryDate: input.expiryDate ?? null,
+        note: input.note ?? null,
+      }).run();
+      return db.select().from(personnelDocuments).where(eq(personnelDocuments.id, id)).get();
+    }),
+
+  updateStatus: adminQuery
+    .input(z.object({
+      id: z.string().min(1),
+      status: z.enum(["uploaded", "verified", "rejected", "expired"]),
+      verifiedBy: z.string().optional(),
+      note: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const updateData: Partial<InferInsertModel<typeof personnelDocuments>> = {
+        status: input.status,
+      };
+      if (input.verifiedBy !== undefined) updateData.verifiedBy = input.verifiedBy;
+      if (input.note !== undefined) updateData.note = input.note;
+      if (input.status === "verified") updateData.verifiedAt = new Date().toISOString();
+
+      await db.update(personnelDocuments).set(updateData).where(eq(personnelDocuments.id, input.id)).run();
+      return db.select().from(personnelDocuments).where(eq(personnelDocuments.id, input.id)).get();
+    }),
+
+  // ════════════════════════════════════════════════════════════
   // TEMPLATES
   // ════════════════════════════════════════════════════════════
 
   listTemplates: publicQuery
     .input(z.object({
-      documentType: z.string().optional(),
+      documentType: z.enum(["clinical", "compliance", "administrative", "financial", "hr", "executive"]).optional(),
       division: z.string().optional(),
-      status: z.string().optional(),
+      status: z.enum(["draft", "active", "deprecated"]).optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
-      if (input?.documentType) conditions.push(eq(documentTemplates.documentType, input.documentType as any));
-      if (input?.status) conditions.push(eq(documentTemplates.status, input.status as any));
+      const conditions = [];
+      if (input?.documentType) conditions.push(eq(documentTemplates.documentType, input.documentType));
+      if (input?.status) conditions.push(eq(documentTemplates.status, input.status));
 
       let results = conditions.length > 0
         ? await db.select().from(documentTemplates).where(and(...conditions)).orderBy(documentTemplates.templateName)
@@ -60,15 +137,15 @@ export const documentsRouter = createRouter({
     .input(z.object({
       templateId: z.string().optional(),
       youthId: z.string().optional(),
-      status: z.string().optional(),
+      status: z.enum(["queued", "generating", "completed", "failed"]).optional(),
       generatedBy: z.string().optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.templateId) conditions.push(eq(generatedDocuments.templateId, input.templateId));
       if (input?.youthId) conditions.push(eq(generatedDocuments.youthId, input.youthId));
-      if (input?.status) conditions.push(eq(generatedDocuments.status, input.status as any));
+      if (input?.status) conditions.push(eq(generatedDocuments.status, input.status));
       if (input?.generatedBy) conditions.push(eq(generatedDocuments.generatedBy, input.generatedBy));
 
       const results = conditions.length > 0
@@ -124,7 +201,7 @@ export const documentsRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...fields } = input;
-      const updateData: Record<string, any> = {};
+      const updateData: Partial<InferInsertModel<typeof generatedDocuments>> = {};
       if (fields.status !== undefined) updateData.status = fields.status;
       if (fields.filePath !== undefined) updateData.filePath = fields.filePath;
       if (fields.fileSize !== undefined) updateData.fileSize = fields.fileSize;

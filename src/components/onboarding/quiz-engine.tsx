@@ -19,7 +19,6 @@ interface QuizEngineProps {
 
 export function QuizEngine({
   questions,
-  moduleTitle: _moduleTitle,
   passingScore = 80,
   onComplete,
   onCancel,

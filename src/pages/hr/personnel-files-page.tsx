@@ -29,18 +29,18 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 
 // ─── Demo Data ─────────────────────────────────────────────────
 const DEMO_PERSONNEL: PersonnelRecord[] = [
-  { id: "1", employeeId: "AMOS-1001", name: "Sarah Johnson", role: "Registered Nurse", department: "Clinical", status: "active", hireDate: "2023-01-15", email: "s.johnson@amos.org", phone: "(512) 555-0101", supervisor: "Dr. Sarah Chen" },
-  { id: "2", employeeId: "AMOS-1002", name: "Michael Chen", role: "LPHA Therapist", department: "Clinical", status: "active", hireDate: "2022-08-01", email: "m.chen@amos.org", phone: "(512) 555-0102", supervisor: "Dr. Sarah Chen" },
-  { id: "3", employeeId: "AMOS-1003", name: "David Park", role: "QMHP Specialist", department: "Clinical", status: "on_leave", hireDate: "2021-03-20", email: "d.park@amos.org", phone: "(512) 555-0103", supervisor: "Dr. Sarah Chen" },
-  { id: "4", employeeId: "AMOS-1004", name: "Emily Roberts", role: "Youth Care Worker", department: "GRO", status: "active", hireDate: "2024-02-10", email: "e.roberts@amos.org", phone: "(512) 555-0104", supervisor: "James Rodriguez" },
-  { id: "5", employeeId: "AMOS-1005", name: "James Wilson", role: "Residential Counselor", department: "GRO", status: "active", hireDate: "2023-06-15", email: "j.wilson@amos.org", phone: "(512) 555-0105", supervisor: "James Rodriguez" },
-  { id: "6", employeeId: "AMOS-1006", name: "Lisa Thompson", role: "Case Manager", department: "BHC", status: "new_hire", hireDate: "2025-06-01", email: "l.thompson@amos.org", phone: "(512) 555-0106", supervisor: "Marcus Williams" },
-  { id: "7", employeeId: "AMOS-1007", name: "Marcus Lee", role: "Billing Specialist", department: "Revenue", status: "active", hireDate: "2020-11-01", email: "m.lee@amos.org", phone: "(512) 555-0107", supervisor: "Rachel Kim" },
-  { id: "8", employeeId: "AMOS-1008", name: "Aisha Patel", role: "HR Coordinator", department: "HR", status: "active", hireDate: "2021-09-10", email: "a.patel@amos.org", phone: "(512) 555-0108", supervisor: "Aisha Patel" },
-  { id: "9", employeeId: "AMOS-1009", name: "Carlos Mendez", role: "Facilities Tech", department: "GAD", status: "active", hireDate: "2023-04-22", email: "c.mendez@amos.org", phone: "(512) 555-0109", supervisor: "Carlos Mendez" },
-  { id: "10", employeeId: "AMOS-1010", name: "Rachel Kim", role: "Revenue Manager", department: "Revenue", status: "on_leave", hireDate: "2022-01-05", email: "r.kim@amos.org", phone: "(512) 555-0110", supervisor: "Marcus Williams" },
-  { id: "11", employeeId: "AMOS-1011", name: "James Rodriguez", role: "RC Supervisor", department: "GRO", status: "active", hireDate: "2019-07-15", email: "j.rodriguez@amos.org", phone: "(512) 555-0111", supervisor: "Marcus Williams" },
-  { id: "12", employeeId: "AMOS-1012", name: "Lilian Ike", role: "Nurse Manager", department: "Clinical", status: "new_hire", hireDate: "2025-06-15", email: "l.ike@amos.org", phone: "(512) 555-0112", supervisor: "Dr. Sarah Chen" },
+  { id: "1", employeeId: "AMOS-1001", name: "Synthetic Staff 01", role: "Registered Nurse", department: "Clinical", status: "active", hireDate: "2023-01-15", email: "s.johnson@example.invalid", phone: "(512) 555-0101", supervisor: "Dr. Synthetic Youth 035" },
+  { id: "2", employeeId: "AMOS-1002", name: "Michael Chen", role: "LPHA Therapist", department: "Clinical", status: "active", hireDate: "2022-08-01", email: "m.chen@example.invalid", phone: "(512) 555-0102", supervisor: "Dr. Synthetic Youth 035" },
+  { id: "3", employeeId: "AMOS-1003", name: "Synthetic Staff 04", role: "QMHP Specialist", department: "Clinical", status: "on_leave", hireDate: "2021-03-20", email: "d.park@example.invalid", phone: "(512) 555-0103", supervisor: "Dr. Synthetic Youth 035" },
+  { id: "4", employeeId: "AMOS-1004", name: "Synthetic-Person-037 Roberts", role: "Youth Care Worker", department: "GRO", status: "active", hireDate: "2024-02-10", email: "e.roberts@example.invalid", phone: "(512) 555-0104", supervisor: "James Rodriguez" },
+  { id: "5", employeeId: "AMOS-1005", name: "Synthetic Staff 09", role: "Residential Counselor", department: "GRO", status: "active", hireDate: "2023-06-15", email: "j.wilson@example.invalid", phone: "(512) 555-0105", supervisor: "James Rodriguez" },
+  { id: "6", employeeId: "AMOS-1006", name: "Lisa Thompson", role: "Case Manager", department: "BHC", status: "new_hire", hireDate: "2025-06-01", email: "l.thompson@example.invalid", phone: "(512) 555-0106", supervisor: "Synthetic-Person-001 Williams" },
+  { id: "7", employeeId: "AMOS-1007", name: "Synthetic-Person-001 Lee", role: "Billing Specialist", department: "Revenue", status: "active", hireDate: "2020-11-01", email: "m.lee@example.invalid", phone: "(512) 555-0107", supervisor: "Rachel Kim" },
+  { id: "8", employeeId: "AMOS-1008", name: "Aisha Patel", role: "HR Coordinator", department: "HR", status: "active", hireDate: "2021-09-10", email: "a.patel@example.invalid", phone: "(512) 555-0108", supervisor: "Aisha Patel" },
+  { id: "9", employeeId: "AMOS-1009", name: "Synthetic-Person-004 Mendez", role: "Facilities Tech", department: "GAD", status: "active", hireDate: "2023-04-22", email: "c.mendez@example.invalid", phone: "(512) 555-0109", supervisor: "Synthetic-Person-004 Mendez" },
+  { id: "10", employeeId: "AMOS-1010", name: "Rachel Kim", role: "Revenue Manager", department: "Revenue", status: "on_leave", hireDate: "2022-01-05", email: "r.kim@example.invalid", phone: "(512) 555-0110", supervisor: "Synthetic-Person-001 Williams" },
+  { id: "11", employeeId: "AMOS-1011", name: "James Rodriguez", role: "RC Supervisor", department: "GRO", status: "active", hireDate: "2019-07-15", email: "j.rodriguez@example.invalid", phone: "(512) 555-0111", supervisor: "Synthetic-Person-001 Williams" },
+  { id: "12", employeeId: "AMOS-1012", name: "Demo Clinical Lead", role: "Nurse Manager", department: "Clinical", status: "new_hire", hireDate: "2025-06-15", email: "clinical.lead@amos-ops.invalid", phone: "(512) 555-0112", supervisor: "Dr. Synthetic Youth 035" },
 ];
 
 // ─── Sort ──────────────────────────────────────────────────────
@@ -104,7 +104,7 @@ export default function PersonnelFilesPage() {
     }).length,
   }), [personnel]);
 
-  const SortIcon = ({ field }: { field: SortField }) => {
+  const renderSortIcon = (field: SortField) => {
     if (sortField !== field) return <ArrowUpDown size={12} className="ml-1" style={{ color: "#9CA3AF" }} />;
     return sortDir === "asc"
       ? <ArrowUp size={12} className="ml-1" style={{ color: "#245C5A" }} />
@@ -200,20 +200,20 @@ export default function PersonnelFilesPage() {
             <thead>
               <tr style={{ borderBottom: "2px solid var(--card-border)", backgroundColor: "rgba(36,92,90,0.03)" }}>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("name")}>
-                  <span className="flex items-center">Name <SortIcon field="name" /></span>
+                  <span className="flex items-center">Name {renderSortIcon("name")}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold" style={{ color: "var(--topbar-subtitle)" }}>Employee ID</th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("role")}>
-                  <span className="flex items-center">Role <SortIcon field="role" /></span>
+                  <span className="flex items-center">Role {renderSortIcon("role")}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("department")}>
-                  <span className="flex items-center">Department <SortIcon field="department" /></span>
+                  <span className="flex items-center">Department {renderSortIcon("department")}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("status")}>
-                  <span className="flex items-center">Status <SortIcon field="status" /></span>
+                  <span className="flex items-center">Status {renderSortIcon("status")}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("hireDate")}>
-                  <span className="flex items-center">Hire Date <SortIcon field="hireDate" /></span>
+                  <span className="flex items-center">Hire Date {renderSortIcon("hireDate")}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold" style={{ color: "var(--topbar-subtitle)" }}>Actions</th>
               </tr>

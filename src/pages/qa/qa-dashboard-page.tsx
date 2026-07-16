@@ -4,15 +4,11 @@ import { trpc } from "@/providers/trpc";
 import {
   Shield,
   ClipboardCheck,
-  Search,
-  CheckCircle,
-  AlertTriangle,
   ChevronRight,
   FileWarning,
   Database,
   FileText,
   AlertOctagon,
-  BookOpen,
 } from "lucide-react";
 import { QASentinelFilters } from "@/components/sentinel/qa-sentinel-filters";
 import { SentinelControlBand } from "@/components/sentinel/sentinel-control-band";

@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
-import { useNavigate } from "react-router-dom";
 import {
-  BookOpen, Search, Plus, Filter, ChevronLeft, ChevronRight,
-  CheckCircle, Clock, AlertTriangle, X, FileText, User
+  BookOpen, Search, Plus, Filter,
+  CheckCircle, Clock, X, FileText, User
 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -15,10 +14,11 @@ const STATUS_LABELS: Record<string, string> = {
   completed: "Completed", discontinued: "Discontinued",
 };
 
+type TreatmentPlanStatus = "all" | "active" | "completed" | "draft" | "under_review" | "discontinued";
+
 export function TreatmentPlansPage() {
-  const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<TreatmentPlanStatus>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
@@ -43,7 +43,7 @@ export function TreatmentPlansPage() {
     assignedClinicianId: "", supervisorId: "",
   });
 
-  const statuses = ["all", "draft", "active", "under_review", "completed", "discontinued"];
+  const statuses: readonly TreatmentPlanStatus[] = ["all", "draft", "active", "under_review", "completed", "discontinued"];
 
   const filteredPlans = (plansData ?? []).filter((p) => {
     if (!search) return true;

@@ -3,7 +3,8 @@ import { trpc } from "@/providers/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "../../../api/router";
 
 const MED_STATUS: Record<string, string> = {
   administered: "bg-green-100 text-green-700",
@@ -18,21 +19,30 @@ const ROUTE_LABELS: Record<string, string> = {
   topical: "TOP", inhalation: "INH", rectal: "PR",
 };
 
+type MedicationRecord = inferRouterOutputs<AppRouter>["m19"]["listMedications"][number];
+
+interface ResidentialYouth {
+  id: string;
+  first_name: string;
+  last_name: string;
+}
+
 export function MedicationAdminPage() {
   const [filter, setFilter] = useState<string>("all");
   const utils = trpc.useUtils();
   const { data: medSummary } = trpc.m19.medSummary.useQuery();
   const { data: medications = [] } = trpc.m19.listMedications.useQuery();
-  const { data: youthList = [] } = trpc.m13.listYouth.useQuery();
+  const { data: rawYouthList = [] } = trpc.m13.listYouth.useQuery();
+  const youthList = rawYouthList as ResidentialYouth[];
   const adminMed = trpc.m19.administer.useMutation({ onSuccess: () => { utils.m19.listMedications.invalidate(); utils.m19.medSummary.invalidate(); } });
   const refuseMed = trpc.m19.recordRefusal.useMutation({ onSuccess: () => { utils.m19.listMedications.invalidate(); utils.m19.medSummary.invalidate(); } });
   const holdMed = trpc.m19.holdMedication.useMutation({ onSuccess: () => { utils.m19.listMedications.invalidate(); utils.m19.medSummary.invalidate(); } });
 
-  const filtered = filter === "all" ? medications : medications.filter((m: any) => m.status === filter);
+  const filtered = filter === "all" ? medications : medications.filter((m) => m.status === filter);
 
   // Group by youth
-  const byYouth: Record<string, any[]> = {};
-  filtered.forEach((m: any) => {
+  const byYouth: Record<string, MedicationRecord[]> = {};
+  filtered.forEach((m) => {
     if (!byYouth[m.youth_id]) byYouth[m.youth_id] = [];
     byYouth[m.youth_id].push(m);
   });
@@ -70,14 +80,14 @@ export function MedicationAdminPage() {
 
       {/* MAR by Youth */}
       {Object.entries(byYouth).map(([youthId, meds]) => {
-        const youth = youthList.find((y: any) => y.id === youthId);
+        const youth = youthList.find((y) => y.id === youthId);
         return (
           <Card key={youthId}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">{youth ? `${youth.first_name} ${youth.last_name}` : youthId} <span className="text-muted-foreground font-normal">({meds[0]?.mrn})</span></CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {meds.map((m: any) => (
+              {meds.map((m) => (
                 <div key={m.id} className={`flex items-center justify-between p-2.5 rounded border ${m.is_controlled === 1 ? "border-red-200 bg-red-50/30" : m.is_prn === 1 ? "border-purple-200 bg-purple-50/30" : "border-gray-200"}`}>
                   <div>
                     <div className="flex items-center gap-2">
@@ -98,7 +108,7 @@ export function MedicationAdminPage() {
                     {m.is_controlled === 1 && <Badge className="bg-red-100 text-red-700 text-xs">C-II</Badge>}
                     {m.status === "scheduled" && (
                       <>
-                        <Button size="sm" variant="outline" className="text-xs h-7 bg-green-50 border-green-200 text-green-700 hover:bg-green-100" onClick={() => adminMed.mutate({ medicationId: m.id, administeredBy: "RN Martinez", adminTime: new Date().toTimeString().slice(0,5), notes: "" })}>Administer</Button>
+                        <Button size="sm" variant="outline" className="text-xs h-7 bg-green-50 border-green-200 text-green-700 hover:bg-green-100" onClick={() => adminMed.mutate({ medicationId: m.id, administeredBy: "Synthetic Nurse 01", adminTime: new Date().toTimeString().slice(0,5), notes: "" })}>Administer</Button>
                         <Button size="sm" variant="outline" className="text-xs h-7 bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100" onClick={() => refuseMed.mutate({ medicationId: m.id, reason: "Youth refused" })}>Refuse</Button>
                         <Button size="sm" variant="outline" className="text-xs h-7 bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100" onClick={() => holdMed.mutate({ medicationId: m.id, reason: "Clinical hold" })}>Hold</Button>
                       </>

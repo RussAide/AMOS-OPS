@@ -1,0 +1,50 @@
+{
+  "id": "/operations-hub/mobile-offline",
+  "name": "AMOS-OPS Mobile Workspace",
+  "short_name": "AMOS Mobile",
+  "description": "Synthetic tablet and offline-first Operations Hub workspace for the approved AMOS-OPS M5.2 workflow set.",
+  "start_url": "/operations-hub/mobile-offline?source=pwa",
+  "scope": "/operations-hub/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#f1f5f9",
+  "theme_color": "#123f3d",
+  "categories": ["business", "medical", "productivity"],
+  "icons": [
+    {
+      "src": "/assets/AMOS-OPS_Logo_Small.png",
+      "sizes": "400x400",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/AMOS-OPS_Icon_Transparent.png",
+      "sizes": "1920x1920",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "GRO tablet medication pass",
+      "short_name": "Med pass",
+      "url": "/operations-hub/mobile-offline?workflow=gro_tablet_medication_pass"
+    },
+    {
+      "name": "GRO shift safety and handoff",
+      "short_name": "Handoff",
+      "url": "/operations-hub/mobile-offline?workflow=gro_shift_safety_handoff"
+    },
+    {
+      "name": "BHC field case-management contact",
+      "short_name": "Field contact",
+      "url": "/operations-hub/mobile-offline?workflow=bhc_field_case_management_contact"
+    },
+    {
+      "name": "Assigned enterprise task and structured form",
+      "short_name": "My task",
+      "url": "/operations-hub/mobile-offline?workflow=enterprise_task_structured_form"
+    }
+  ]
+}

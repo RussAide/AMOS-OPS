@@ -21,9 +21,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
-  AlertTriangle, Plus, Search, ShieldAlert, Clock, Calendar, User,
+  AlertTriangle, Plus, Search, ShieldAlert,
   CheckCircle2, XCircle, ChevronRight, RefreshCw, FileWarning,
-  Phone, Stethoscope, Send, Lock
+  Phone, Stethoscope, Lock
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -39,14 +39,14 @@ const INCIDENT_TYPES = [
   { value: "seclusion", label: "Seclusion" },
   { value: "restraint", label: "Restraint" },
   { value: "other", label: "Other" },
-];
+] as const;
 
 const SEVERITY_OPTIONS = [
   { value: "low", label: "Low", color: "bg-blue-100 text-blue-700 border-blue-200" },
   { value: "medium", label: "Medium", color: "bg-amber-100 text-amber-700 border-amber-200" },
   { value: "high", label: "High", color: "bg-orange-100 text-orange-700 border-orange-200" },
   { value: "critical", label: "Critical", color: "bg-red-100 text-red-700 border-red-200" },
-];
+] as const;
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Open", color: "bg-red-100 text-red-700" },
@@ -54,13 +54,15 @@ const STATUS_OPTIONS = [
   { value: "pending_supervisor", label: "Pending Supervisor", color: "bg-purple-100 text-purple-700" },
   { value: "resolved", label: "Resolved", color: "bg-green-100 text-green-700" },
   { value: "closed", label: "Closed", color: "bg-gray-100 text-gray-700" },
-];
+] as const;
+type IncidentStatus = typeof STATUS_OPTIONS[number]["value"];
+type IncidentSeverity = typeof SEVERITY_OPTIONS[number]["value"];
 
 export default function IncidentReportPage() {
   const utils = trpc.useUtils();
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
-  const [filterSeverity, setFilterSeverity] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"" | IncidentStatus>("");
+  const [filterSeverity, setFilterSeverity] = useState<"" | IncidentSeverity>("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
@@ -186,14 +188,14 @@ export default function IncidentReportPage() {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input placeholder="Search incidents..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as typeof filterStatus)}>
             <SelectTrigger className="w-[150px]"><SelectValue placeholder="All Statuses" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="">All Statuses</SelectItem>
               {STATUS_OPTIONS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={filterSeverity} onValueChange={setFilterSeverity}>
+          <Select value={filterSeverity} onValueChange={(value) => setFilterSeverity(value as typeof filterSeverity)}>
             <SelectTrigger className="w-[140px]"><SelectValue placeholder="All Severities" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="">All Severities</SelectItem>
@@ -302,8 +304,8 @@ export default function IncidentReportPage() {
               <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
               <Button
                 onClick={() => createReport.mutate({
-                  incidentType: formType as any,
-                  severity: formSeverity as any,
+                  incidentType: formType as Parameters<typeof createReport.mutate>[0]["incidentType"],
+                  severity: formSeverity as Parameters<typeof createReport.mutate>[0]["severity"],
                   youthName: formYouthName || undefined,
                   mrn: formMrn || undefined,
                   occurredAt: new Date().toISOString(),

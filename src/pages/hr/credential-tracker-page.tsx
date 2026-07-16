@@ -27,17 +27,17 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 
 // ─── Demo Data ─────────────────────────────────────────────────
 const DEMO_CREDENTIALS: CredentialRecord[] = [
-  { id: "1", employee: "Sarah Johnson", employeeId: "AMOS-1001", credentialType: "RN License", licenseNumber: "RN-2019-TX-4821", issueDate: "2023-01-15", expiryDate: "2026-01-15", status: "valid", daysLeft: 190 },
+  { id: "1", employee: "Synthetic Staff 01", employeeId: "AMOS-1001", credentialType: "RN License", licenseNumber: "RN-2019-TX-4821", issueDate: "2023-01-15", expiryDate: "2026-01-15", status: "valid", daysLeft: 190 },
   { id: "2", employee: "Michael Chen", employeeId: "AMOS-1002", credentialType: "LPHA Certification", licenseNumber: "LPHA-2020-1138", issueDate: "2024-03-10", expiryDate: "2026-03-10", status: "valid", daysLeft: 254 },
-  { id: "3", employee: "David Park", employeeId: "AMOS-1003", credentialType: "QMHP Credential", licenseNumber: "QMHP-2021-2056", issueDate: "2024-06-01", expiryDate: "2025-08-01", status: "expiring_soon", daysLeft: 42 },
-  { id: "4", employee: "Emily Roberts", employeeId: "AMOS-1004", credentialType: "CPI Certification", licenseNumber: "CPI-2023-7712", issueDate: "2023-11-20", expiryDate: "2025-07-15", status: "expiring_soon", daysLeft: 25 },
-  { id: "5", employee: "James Wilson", employeeId: "AMOS-1005", credentialType: "First Aid / CPR", licenseNumber: "CPR-2024-AHA-3391", issueDate: "2024-08-05", expiryDate: "2026-08-05", status: "valid", daysLeft: 422 },
+  { id: "3", employee: "Synthetic Staff 04", employeeId: "AMOS-1003", credentialType: "QMHP Credential", licenseNumber: "QMHP-2021-2056", issueDate: "2024-06-01", expiryDate: "2025-08-01", status: "expiring_soon", daysLeft: 42 },
+  { id: "4", employee: "Synthetic-Person-037 Roberts", employeeId: "AMOS-1004", credentialType: "CPI Certification", licenseNumber: "CPI-2023-7712", issueDate: "2023-11-20", expiryDate: "2025-07-15", status: "expiring_soon", daysLeft: 25 },
+  { id: "5", employee: "Synthetic Staff 09", employeeId: "AMOS-1005", credentialType: "First Aid / CPR", licenseNumber: "CPR-2024-AHA-3391", issueDate: "2024-08-05", expiryDate: "2026-08-05", status: "valid", daysLeft: 422 },
   { id: "6", employee: "Lisa Thompson", employeeId: "AMOS-1006", credentialType: "TB Test Result", licenseNumber: "TB-2025-0442", issueDate: "2025-01-10", expiryDate: "2026-01-10", status: "valid", daysLeft: 185 },
-  { id: "7", employee: "Marcus Lee", employeeId: "AMOS-1007", credentialType: "RN License", licenseNumber: "RN-2018-TX-3356", issueDate: "2022-09-01", expiryDate: "2025-05-15", status: "expired", daysLeft: -30 },
+  { id: "7", employee: "Synthetic-Person-001 Lee", employeeId: "AMOS-1007", credentialType: "RN License", licenseNumber: "RN-2018-TX-3356", issueDate: "2022-09-01", expiryDate: "2025-05-15", status: "expired", daysLeft: -30 },
   { id: "8", employee: "Aisha Patel", employeeId: "AMOS-1008", credentialType: "LPHA Certification", licenseNumber: "LPHA-2022-4489", issueDate: "2025-02-15", expiryDate: "2027-02-15", status: "valid", daysLeft: 590 },
-  { id: "9", employee: "Carlos Mendez", employeeId: "AMOS-1009", credentialType: "EPA 608 Certification", licenseNumber: "EPA-2024-5561", issueDate: "2024-04-01", expiryDate: "2026-04-01", status: "valid", daysLeft: 270 },
+  { id: "9", employee: "Synthetic-Person-004 Mendez", employeeId: "AMOS-1009", credentialType: "EPA 608 Certification", licenseNumber: "EPA-2024-5561", issueDate: "2024-04-01", expiryDate: "2026-04-01", status: "valid", daysLeft: 270 },
   { id: "10", employee: "Rachel Kim", employeeId: "AMOS-1010", credentialType: "CPA License", licenseNumber: "CPA-TX-2019-7782", issueDate: "2023-07-01", expiryDate: "2025-06-30", status: "expiring_soon", daysLeft: 10 },
-  { id: "11", employee: "Lilian Ike", employeeId: "AMOS-1011", credentialType: "LVN License", licenseNumber: "LVN-2024-TX-9912", issueDate: "2024-09-15", expiryDate: "2026-09-15", status: "valid", daysLeft: 447 },
+  { id: "11", employee: "Demo Clinical Lead", employeeId: "AMOS-1011", credentialType: "LVN License", licenseNumber: "LVN-2024-TX-9912", issueDate: "2024-09-15", expiryDate: "2026-09-15", status: "valid", daysLeft: 447 },
   { id: "12", employee: "James Rodriguez", employeeId: "AMOS-1012", credentialType: "CRC Certification", licenseNumber: "CRC-2022-1156", issueDate: "2024-01-20", expiryDate: "2026-01-20", status: "valid", daysLeft: 195 },
 ];
 
@@ -96,7 +96,7 @@ export default function CredentialTrackerPage() {
     expired: credentials.filter((r) => r.status === "expired").length,
   }), [credentials]);
 
-  const SortIcon = ({ field }: { field: SortField }) => {
+  const renderSortIcon = (field: SortField) => {
     if (sortField !== field) return <ArrowUpDown size={12} className="ml-1" style={{ color: "#9CA3AF" }} />;
     return sortDir === "asc"
       ? <ArrowUp size={12} className="ml-1" style={{ color: "#245C5A" }} />
@@ -190,20 +190,20 @@ export default function CredentialTrackerPage() {
             <thead>
               <tr style={{ borderBottom: "2px solid var(--card-border)", backgroundColor: "rgba(36,92,90,0.03)" }}>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("employee")}>
-                  <span className="flex items-center">Employee <SortIcon field="employee" /></span>
+                  <span className="flex items-center">Employee {renderSortIcon("employee")}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("credentialType")}>
-                  <span className="flex items-center">Credential Type <SortIcon field="credentialType" /></span>
+                  <span className="flex items-center">Credential Type {renderSortIcon("credentialType")}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold" style={{ color: "var(--topbar-subtitle)" }}>License #</th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("issueDate")}>
-                  <span className="flex items-center">Issue Date <SortIcon field="issueDate" /></span>
+                  <span className="flex items-center">Issue Date {renderSortIcon("issueDate")}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("expiryDate")}>
-                  <span className="flex items-center">Expiry Date <SortIcon field="expiryDate" /></span>
+                  <span className="flex items-center">Expiry Date {renderSortIcon("expiryDate")}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("status")}>
-                  <span className="flex items-center">Status <SortIcon field="status" /></span>
+                  <span className="flex items-center">Status {renderSortIcon("status")}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold" style={{ color: "var(--topbar-subtitle)" }}>Actions</th>
               </tr>

@@ -1,10 +1,15 @@
 /**
  * AMOS-OPS Canonical Role Definitions v4.2
  * Source: AMOS-OPS Enterprise Architecture Thesis v4.2
- * Total: 33 roles across 4 Operating Divisions
+ * Total: 36 roles across 4 Operating Divisions
  * Division Model: Profit Center (GRO, BHC) | Corporate Office (EO, GAD)
  * Last Updated: 2026-07-05
  */
+
+import type { DivisionCategory, DivisionId } from "./organization";
+
+export { DIVISIONS } from "./organization";
+export type { DivisionCategory, DivisionId } from "./organization";
 
 // ═══════════════════════════════════════════════════════════════
 // ═── UserRole Union ────────────────────────────────────────────
@@ -15,12 +20,13 @@ export type UserRole =
   | "super-admin"
   | "managing-director"
   | "administrator"
-  // ── General Administration Division (GAD) ──────────────
+  // ── Executive Office support roles (CTR-017) ───────────
   | "hr-director"
   | "hr-compliance-officer"
   | "revenue-cycle-manager"
   | "billing-specialist"
   | "training-coordinator"
+  // ── General Administration support role (CTR-018) ─────
   | "facilities-manager"
   // ── GRO Residential Division ───────────────────────────
   | "gro-administrator"
@@ -53,56 +59,6 @@ export type UserRole =
   | "bhc-front-desk";
 
 // ═══════════════════════════════════════════════════════════════
-// ═── Division Category ─────────────────────────────────────────
-// ═══════════════════════════════════════════════════════════════
-
-export type DivisionCategory = "profit-center" | "corporate-office";
-
-export interface DivisionInfo {
-  code: string;
-  name: string;
-  category: DivisionCategory;
-  color: string;
-  badgeBg: string;
-  badgeText: string;
-}
-
-export const DIVISIONS: Record<string, DivisionInfo> = {
-  gro: {
-    code: "GRO",
-    name: "General Residential Operations",
-    category: "profit-center",
-    color: "#245C5A",
-    badgeBg: "#245C5A",
-    badgeText: "#FFFFFF",
-  },
-  bhc: {
-    code: "BHC",
-    name: "Behavioral Health Collaborative",
-    category: "profit-center",
-    color: "#C45C4A",
-    badgeBg: "#C45C4A",
-    badgeText: "#FFFFFF",
-  },
-  eo: {
-    code: "EO",
-    name: "Executive Office",
-    category: "corporate-office",
-    color: "#991B1B",
-    badgeBg: "#991B1B",
-    badgeText: "#FFFFFF",
-  },
-  gad: {
-    code: "GAD",
-    name: "General Administration Division",
-    category: "corporate-office",
-    color: "#D97706",
-    badgeBg: "#D97706",
-    badgeText: "#FFFFFF",
-  },
-};
-
-// ═══════════════════════════════════════════════════════════════
 // ═── Role List ─────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════
 
@@ -111,12 +67,13 @@ export const ALL_ROLES: UserRole[] = [
   "super-admin",
   "managing-director",
   "administrator",
-  // GAD
+  // Executive Office support (CTR-017)
   "hr-director",
   "hr-compliance-officer",
   "revenue-cycle-manager",
   "billing-specialist",
   "training-coordinator",
+  // General Administration support (CTR-018)
   "facilities-manager",
   // GRO
   "gro-administrator",
@@ -158,14 +115,14 @@ export interface RoleDef {
   label: string;
   badgeColor: string;
   department: string;
-  division: string;
+  division: DivisionId;
   divisionCategory: DivisionCategory;
   description: string;
   clearances: string[];
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ═── Role Definitions (33 roles) ───────────────────────────────
+// ═── Role Definitions (36 roles) ───────────────────────────────
 // ═══════════════════════════════════════════════════════════════
 
 export const ROLE_DEFINITIONS: RoleDef[] = [
@@ -189,7 +146,7 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
     department: "Executive Office",
     division: "eo",
     divisionCategory: "corporate-office",
-    description: "Enterprise governance, strategic oversight, executive decision authority. (E. Russ Aideyan)",
+    description: "Enterprise governance, strategic oversight, executive decision authority. (Demo Executive)",
     clearances: ["all"],
   },
   {
@@ -204,14 +161,14 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
   },
 
   // ───────────────────────────────────────────────────────────
-  // GENERAL ADMINISTRATION DIVISION (GAD) — Corporate Office
+  // EXECUTIVE OFFICE SUPPORT — HR/compliance, revenue, billing, workforce training (CTR-017)
   // ───────────────────────────────────────────────────────────
   {
     id: "hr-director",
     label: "HR Director",
     badgeColor: "#245C5A",
     department: "Human Resources",
-    division: "gad",
+    division: "eo",
     divisionCategory: "corporate-office",
     description: "HR lifecycle management, clearance decisions, personnel oversight, credential tracking.",
     clearances: ["hr", "compliance", "admin"],
@@ -221,7 +178,7 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
     label: "HR / Compliance Officer",
     badgeColor: "#0F766E",
     department: "Human Resources",
-    division: "gad",
+    division: "eo",
     divisionCategory: "corporate-office",
     description: "HR operations, compliance monitoring, audit support, policy enforcement.",
     clearances: ["hr", "compliance"],
@@ -231,7 +188,7 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
     label: "Revenue Cycle Manager",
     badgeColor: "#D97706",
     department: "Revenue Operations",
-    division: "gad",
+    division: "eo",
     divisionCategory: "corporate-office",
     description: "Revenue cycle oversight, claims strategy, payer relations, AR management, MGMA KPI ownership.",
     clearances: ["revenue", "clinical", "compliance"],
@@ -241,7 +198,7 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
     label: "Billing Specialist",
     badgeColor: "#9CA3AF",
     department: "Revenue Operations",
-    division: "gad",
+    division: "eo",
     divisionCategory: "corporate-office",
     description: "Claims management, authorization tracking, payment posting, denial management.",
     clearances: ["revenue", "clinical"],
@@ -251,7 +208,7 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
     label: "Training Coordinator",
     badgeColor: "#B45309",
     department: "Workforce Development",
-    division: "gad",
+    division: "eo",
     divisionCategory: "corporate-office",
     description: "Staff training program management, compliance training delivery, competency tracking, LMS administration.",
     clearances: ["hr", "compliance"],
@@ -408,7 +365,7 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
     id: "bhc-director",
     label: "BHC Director",
     badgeColor: "#C45C4A",
-    department: "Behavioral Health Collaborative",
+    department: "BHC Division-wide",
     division: "bhc",
     divisionCategory: "profit-center",
     description: "BHC division oversight. Manages CCMG, MHTCM, and MHRS departments. Cross-divisional coordination with GRO.",
@@ -418,20 +375,20 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
     id: "treatment-director",
     label: "Treatment Director / LPHA",
     badgeColor: "#1E40AF",
-    department: "BHC / Clinical",
+    department: "BHC Division-wide",
     division: "bhc",
     divisionCategory: "profit-center",
-    description: "Clinical governance, treatment planning, LPHA oversight. (Dr. Hall)",
+    description: "Clinical governance, treatment planning, LPHA oversight. (Demo Clinical Director)",
     clearances: ["clinical", "compliance", "hr"],
   },
   {
     id: "clinical-director",
     label: "Clinical Director / PMHNP",
     badgeColor: "#2563EB",
-    department: "BHC / Clinical",
+    department: "BHC Division-wide",
     division: "bhc",
     divisionCategory: "profit-center",
-    description: "PMHNP-FNP clinical leadership, CCMG oversight, medication management. (Lilian Ike)",
+    description: "PMHNP-FNP clinical leadership, CCMG oversight, medication management. (Demo Clinical Lead)",
     clearances: ["clinical", "compliance"],
   },
   {
@@ -468,7 +425,7 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
     id: "clinical-supervisor",
     label: "Clinical Supervisor",
     badgeColor: "#4B5563",
-    department: "BHC / Clinical",
+    department: "BHC Division-wide",
     division: "bhc",
     divisionCategory: "profit-center",
     description: "Clinical team supervision, competency sign-offs, quality review, incident oversight.",
@@ -478,7 +435,7 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
     id: "chart-auditor",
     label: "Chart Auditor",
     badgeColor: "#6B7280",
-    department: "BHC / Quality Assurance",
+    department: "CCMG",
     division: "bhc",
     divisionCategory: "profit-center",
     description: "Clinical documentation audit, billing-chart correlation, compliance review, HHSC readiness.",
@@ -488,7 +445,7 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
     id: "qmhp-cs",
     label: "QMHP-CS",
     badgeColor: "#0891B2",
-    department: "BHC / MHTCM",
+    department: "MHTCM",
     division: "bhc",
     divisionCategory: "profit-center",
     description: "Qualified Mental Health Professional - Community Services. Case management, clinical documentation.",
@@ -498,17 +455,17 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
     id: "case-manager",
     label: "Case Manager / QMHP-CS",
     badgeColor: "#0E7490",
-    department: "BHC / MHTCM",
+    department: "MHTCM",
     division: "bhc",
     divisionCategory: "profit-center",
-    description: "Youth case management, service coordination, family engagement. (Jonthan Guidry)",
+    description: "Youth case management, service coordination, family engagement. (Demo Case Manager)",
     clearances: ["clinical", "hr"],
   },
   {
     id: "therapist",
     label: "Therapist",
     badgeColor: "#06B6D4",
-    department: "BHC / MHRS",
+    department: "MHRS",
     division: "bhc",
     divisionCategory: "profit-center",
     description: "Individual and group therapy, treatment planning, clinical documentation.",
@@ -518,7 +475,7 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
     id: "nurse",
     label: "Nurse",
     badgeColor: "#EC4899",
-    department: "BHC / Clinical",
+    department: "CCMG",
     division: "bhc",
     divisionCategory: "profit-center",
     description: "Nursing care, health assessments, medication oversight, medical documentation.",
@@ -528,7 +485,7 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
     id: "intake-coordinator",
     label: "Intake Coordinator",
     badgeColor: "#8B5CF6",
-    department: "BHC / CCMG",
+    department: "CCMG",
     division: "bhc",
     divisionCategory: "profit-center",
     description: "Referral intake, admissions processing, eligibility verification, initial documentation.",
@@ -538,7 +495,7 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
     id: "bhc-front-desk",
     label: "BHC Front Desk",
     badgeColor: "#A78BFA",
-    department: "BHC / CCMG",
+    department: "CCMG",
     division: "bhc",
     divisionCategory: "profit-center",
     description: "BHC reception, appointment scheduling, client check-in, phone intake.",
@@ -547,7 +504,7 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
 ];
 
 // ═══════════════════════════════════════════════════════════════
-// ═── Permission Matrix (33 roles × 14 permissions) ─────────────
+// ═── Permission Matrix (derived from 36-role registry) ─────────
 // ═══════════════════════════════════════════════════════════════
 
 export interface Permissions {
@@ -601,13 +558,13 @@ export const PERMISSION_MATRIX: Record<UserRole, Permissions> = {
     canViewRevenue: true, canEditRevenue: false,
     canViewGRO: true, canEditGRO: true,
     canViewOperations: true, canEditOperations: true,
-    canViewAdmin: true, canEditAdmin: false,
+    canViewAdmin: true, canEditAdmin: true,
     canViewExecutive: true,
     canSupervise: true, canClearPersonnel: true,
     canViewReports: true, canViewOnboarding: true,
     canManageDocuments: true,
   },
-  // ── General Administration ─────────────────────────────
+  // ── Executive Office support (CTR-017) ────────────────
   "hr-director": {
     canViewHR: true, canEditHR: true,
     canViewCompliance: true, canEditCompliance: false,
@@ -615,7 +572,7 @@ export const PERMISSION_MATRIX: Record<UserRole, Permissions> = {
     canViewRevenue: false, canEditRevenue: false,
     canViewGRO: false, canEditGRO: false,
     canViewOperations: true, canEditOperations: false,
-    canViewAdmin: true, canEditAdmin: false,
+    canViewAdmin: true, canEditAdmin: true,
     canViewExecutive: true,
     canSupervise: true, canClearPersonnel: true,
     canViewReports: true, canViewOnboarding: true,
@@ -1042,7 +999,7 @@ export const PERMISSION_MATRIX: Record<UserRole, Permissions> = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// ═── Nav Visibility (33 roles × 13 sections) ───────────────────
+// ═── Nav Visibility (derived from 36-role registry) ────────────
 // ═══════════════════════════════════════════════════════════════
 
 export const ROLE_NAV_VISIBILITY: Record<UserRole, Record<string, boolean>> = {
@@ -1094,6 +1051,10 @@ export const ROLE_NAV_VISIBILITY: Record<UserRole, Record<string, boolean>> = {
 
 export function getRoleDef(role: UserRole): RoleDef {
   return ROLE_DEFINITIONS.find((r) => r.id === role) ?? ROLE_DEFINITIONS[0];
+}
+
+export function isUserRole(value: unknown): value is UserRole {
+  return typeof value === "string" && (ALL_ROLES as readonly string[]).includes(value);
 }
 
 export function getPermissions(role: UserRole): Permissions {

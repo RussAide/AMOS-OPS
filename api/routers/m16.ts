@@ -5,12 +5,16 @@ import { randomUUID } from "crypto";
 
 // ─── M15: Case Management Router ─────────────────────────────
 
+interface CountRow {
+  c: number;
+}
+
 export const m16Router = createRouter({
   listCases: authedQuery
     .input(z.object({ youthId: z.string().optional(), status: z.string().optional() }).optional())
     .query(async ({ input }) => {
       let sql = "SELECT * FROM case_management WHERE 1=1";
-      const params: any[] = [];
+      const params: unknown[] = [];
       if (input?.youthId) { sql += " AND youth_id = ?"; params.push(input.youthId); }
       if (input?.status) { sql += " AND status = ?"; params.push(input.status); }
       sql += " ORDER BY updated_at DESC";
@@ -96,7 +100,7 @@ export const m16Router = createRouter({
       };
 
       const updates: string[] = [];
-      const values: any[] = [];
+      const values: unknown[] = [];
       for (const [key, val] of Object.entries(fields)) {
         if (val !== undefined) {
           updates.push(`${fieldMap[key] ?? key} = ?`);
@@ -114,11 +118,11 @@ export const m16Router = createRouter({
 
   // ─── Case Management Summary ───────────────────────────────
   caseMgmtSummary: authedQuery.query(async () => {
-    const activeCases = sqlite.prepare("SELECT COUNT(*) as c FROM case_management WHERE status = 'active'").get() as any;
-    const onHoldCases = sqlite.prepare("SELECT COUNT(*) as c FROM case_management WHERE status = 'on_hold'").get() as any;
-    const pendingReview = sqlite.prepare("SELECT COUNT(*) as c FROM case_management WHERE status = 'pending_review'").get() as any;
-    const totalCases = sqlite.prepare("SELECT COUNT(*) as c FROM case_management").get() as any;
-    const overdueReviews = sqlite.prepare("SELECT COUNT(*) as c FROM case_management WHERE next_review_date < ? AND status = 'active'").get(new Date().toISOString().split("T")[0]) as any;
+    const activeCases = sqlite.prepare("SELECT COUNT(*) as c FROM case_management WHERE status = 'active'").get() as CountRow | undefined;
+    const onHoldCases = sqlite.prepare("SELECT COUNT(*) as c FROM case_management WHERE status = 'on_hold'").get() as CountRow | undefined;
+    const pendingReview = sqlite.prepare("SELECT COUNT(*) as c FROM case_management WHERE status = 'pending_review'").get() as CountRow | undefined;
+    const totalCases = sqlite.prepare("SELECT COUNT(*) as c FROM case_management").get() as CountRow | undefined;
+    const overdueReviews = sqlite.prepare("SELECT COUNT(*) as c FROM case_management WHERE next_review_date < ? AND status = 'active'").get(new Date().toISOString().split("T")[0]) as CountRow | undefined;
 
     return {
       activeCases: activeCases?.c ?? 0,

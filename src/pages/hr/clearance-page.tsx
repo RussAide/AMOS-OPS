@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Search,
   Shield,
@@ -47,7 +47,7 @@ const demoData: ClearanceRecord[] = [
   },
   {
     id: 3,
-    employee: "Emily Chen",
+    employee: "Synthetic-Person-037 Chen",
     position: "Mental Health Counselor",
     clearanceLevel: "Standard",
     issuedDate: "2023-06-22",

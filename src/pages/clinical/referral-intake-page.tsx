@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import {
-  ArrowRightLeft, Search, Plus, Filter, X, Clock, CheckCircle,
-  AlertTriangle, User, Building, ArrowRight, Ban, FileText
+  ArrowRightLeft, Search, Plus, Filter, X, CheckCircle,
+  AlertTriangle, Building, ArrowRight, Ban
 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -20,16 +20,16 @@ const URGENCY_COLORS: Record<string, string> = {
 };
 const DEPT_OPTIONS = ["CCMG", "MHTCM", "MHRS", "GRO"] as const;
 const TYPE_OPTIONS = ["internal", "external", "gro_to_bhc", "bhc_to_gro", "inter_department"] as const;
+type ReferralDisplayStatus = "pending" | "accepted" | "assigned" | "in_progress" | "completed" | "declined" | "cancelled" | "no_show";
+type ReferralUrgency = "routine" | "urgent" | "emergency";
 
 export function ReferralIntakePage() {
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | ReferralDisplayStatus>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [selectedReferralId, setSelectedReferralId] = useState<string | null>(null);
 
-  const { data: referrals, isLoading } = trpc.bhc.listReferrals.useQuery(
-    statusFilter === "all" ? undefined : { status: statusFilter }
-  );
+  const { data: referrals, isLoading } = trpc.bhc.listReferrals.useQuery();
   const { data: patientsData } = trpc.bhc.listPatients.useQuery({ pageSize: 100 });
   const utils = trpc.useUtils();
 
@@ -51,12 +51,13 @@ export function ReferralIntakePage() {
     referralType: "internal" as typeof TYPE_OPTIONS[number],
     fromDepartment: "GRO" as typeof DEPT_OPTIONS[number],
     toDepartment: "CCMG" as typeof DEPT_OPTIONS[number],
-    requestedBy: "", reasonForReferral: "", clinicalJustification: "", urgency: "routine" as "routine" | "urgent" | "emergency",
+    requestedBy: "", reasonForReferral: "", clinicalJustification: "", urgency: "routine" as ReferralUrgency,
   });
 
-  const statuses = ["all", "pending", "accepted", "assigned", "in_progress", "completed", "declined"];
+  const statuses: readonly ("all" | ReferralDisplayStatus)[] = ["all", "pending", "accepted", "assigned", "in_progress", "completed", "declined"];
 
   const filteredReferrals = (referrals ?? []).filter((r) => {
+    if (statusFilter !== "all" && r.status !== statusFilter) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return r.youthName.toLowerCase().includes(q) || r.reasonForReferral.toLowerCase().includes(q) || r.mrn.toLowerCase().includes(q);
@@ -138,7 +139,7 @@ export function ReferralIntakePage() {
                   </span>
                 </div>
                 <span className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>
-                  {new Date(r.createdAt).toLocaleDateString()}
+                  {r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "—"}
                 </span>
               </div>
               <div className="flex items-center gap-2 mb-2 text-[12px]" style={{ color: "var(--topbar-subtitle)" }}>
@@ -221,7 +222,7 @@ export function ReferralIntakePage() {
                 <div>
                   <label className="text-[11px] font-medium" style={{ color: "var(--topbar-subtitle)" }}>Urgency</label>
                   <select className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none mt-1" style={{ borderColor: "var(--card-border)" }}
-                    value={form.urgency} onChange={(e) => setForm({ ...form, urgency: e.target.value as any })}>
+              value={form.urgency} onChange={(e) => setForm({ ...form, urgency: e.target.value as ReferralUrgency })}>
                     <option value="routine">Routine</option>
                     <option value="urgent">Urgent</option>
                     <option value="emergency">Emergency</option>

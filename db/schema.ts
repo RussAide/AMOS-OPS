@@ -11,29 +11,182 @@ export const users = sqliteTable("users", {
   passwordHash: text("password_hash").notNull(),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
-  role: text("role", { enum: [
-    // Executive Office (EO)
-    "super-admin", "managing-director", "administrator",
-    // General Administration Division (GAD)
-    "hr-director", "hr-compliance-officer", "revenue-cycle-manager",
-    "billing-specialist", "training-coordinator", "facilities-manager",
-    // GRO Residential
-    "gro-administrator", "program-director", "shift-supervisor",
-    "rcs-lead", "rcs-day", "rcs-night", "rcs-prn",
-    "youth-care-worker", "behavioral-support", "crisis-intervention-specialist",
-    "recreation-coordinator", "medication-aide", "family-liaison",
-    // BHC Division
-    "bhc-director", "treatment-director", "clinical-director",
-    "ccmg-program-director", "mhtcm-supervisor", "mhrs-supervisor",
-    "clinical-supervisor", "chart-auditor", "qmhp-cs",
-    "case-manager", "therapist", "nurse",
-    "intake-coordinator", "bhc-front-desk",
-  ] }).notNull().default("rcs-day"),
+  role: text("role", {
+    enum: [
+      // Executive Office (EO)
+      "super-admin",
+      "managing-director",
+      "administrator",
+      // Corporate Office support — EO: HR/compliance, revenue, billing, training; GAD: facilities
+      "hr-director",
+      "hr-compliance-officer",
+      "revenue-cycle-manager",
+      "billing-specialist",
+      "training-coordinator",
+      "facilities-manager",
+      // GRO Residential
+      "gro-administrator",
+      "program-director",
+      "shift-supervisor",
+      "rcs-lead",
+      "rcs-day",
+      "rcs-night",
+      "rcs-prn",
+      "youth-care-worker",
+      "behavioral-support",
+      "crisis-intervention-specialist",
+      "recreation-coordinator",
+      "medication-aide",
+      "family-liaison",
+      // BHC Division
+      "bhc-director",
+      "treatment-director",
+      "clinical-director",
+      "ccmg-program-director",
+      "mhtcm-supervisor",
+      "mhrs-supervisor",
+      "clinical-supervisor",
+      "chart-auditor",
+      "qmhp-cs",
+      "case-manager",
+      "therapist",
+      "nurse",
+      "intake-coordinator",
+      "bhc-front-desk",
+    ],
+  })
+    .notNull()
+    .default("rcs-day"),
   department: text("department"),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  accessStatus: text("access_status", {
+    enum: ["training", "cleared", "suspended", "deactivated"],
+  })
+    .notNull()
+    .default("cleared"),
+  identityType: text("identity_type", { enum: ["workforce", "external_guest"] })
+    .notNull()
+    .default("workforce"),
+  trainingAccess: integer("training_access", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  sponsorName: text("sponsor_name"),
+  accessExpiresAt: text("access_expires_at"),
+  clearanceReviewedBy: text("clearance_reviewed_by"),
+  clearanceReviewedAt: text("clearance_reviewed_at"),
+  clearanceEvidenceReference: text("clearance_evidence_reference"),
+  failedLoginCount: integer("failed_login_count").notNull().default(0),
+  lockedUntil: text("locked_until"),
+  passwordChangedAt: text("password_changed_at"),
+  mustChangePassword: integer("must_change_password", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  mfaEnabled: integer("mfa_enabled", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  mfaMethod: text("mfa_method").notNull().default("email-otp"),
+  lastLoginAt: text("last_login_at"),
+  lastAccessReviewAt: text("last_access_review_at"),
+  nextAccessReviewAt: text("next_access_review_at"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
 });
+
+export const identitySessions = sqliteTable("identity_sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(),
+  environmentId: text("environment_id").notNull(),
+  authenticatedAt: text("authenticated_at").notNull(),
+  lastSeenAt: text("last_seen_at").notNull(),
+  idleExpiresAt: text("idle_expires_at").notNull(),
+  absoluteExpiresAt: text("absolute_expires_at").notNull(),
+  revokedAt: text("revoked_at"),
+  revokeReason: text("revoke_reason"),
+  mfaVerified: integer("mfa_verified", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+});
+
+export const identityLoginAttempts = sqliteTable("identity_login_attempts", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+  normalizedEmail: text("normalized_email").notNull(),
+  successful: integer("successful", { mode: "boolean" }).notNull(),
+  outcome: text("outcome").notNull(),
+  attemptedAt: text("attempted_at").notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+});
+
+export const identityMfaChallenges = sqliteTable("identity_mfa_challenges", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull(),
+  purpose: text("purpose").notNull(),
+  createdAt: text("created_at").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  consumedAt: text("consumed_at"),
+  failedAttempts: integer("failed_attempts").notNull().default(0),
+  deliveryDestination: text("delivery_destination").notNull(),
+});
+
+export const identityPasswordResetTokens = sqliteTable(
+  "identity_password_reset_tokens",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdAt: text("created_at").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    consumedAt: text("consumed_at"),
+    requestedIp: text("requested_ip"),
+  },
+);
+
+export const identityAccessReviews = sqliteTable("identity_access_reviews", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  dueAt: text("due_at").notNull(),
+  status: text("status").notNull().default("pending"),
+  decision: text("decision"),
+  reviewerId: text("reviewer_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  reviewedAt: text("reviewed_at"),
+  rationale: text("rationale"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const identityAccessProfileEvents = sqliteTable(
+  "identity_access_profile_events",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    actorId: text("actor_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    previousStatus: text("previous_status"),
+    newStatus: text("new_status").notNull(),
+    previousIdentityType: text("previous_identity_type"),
+    newIdentityType: text("new_identity_type").notNull(),
+    evidenceReference: text("evidence_reference"),
+    rationale: text("rationale").notNull(),
+    occurredAt: text("occurred_at").notNull(),
+  },
+);
 
 // ─── HR People (Candidates & Employees) ──────────────────────
 
@@ -44,9 +197,13 @@ export const hrPeople = sqliteTable("hr_people", {
   employeeId: text("employee_id"),
   role: text("role").notNull(),
   department: text("department").notNull(),
-  lane: text("lane", { enum: ["activation", "management"] }).notNull().default("activation"),
+  lane: text("lane", { enum: ["activation", "management"] })
+    .notNull()
+    .default("activation"),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-  isEmployee: integer("is_employee", { mode: "boolean" }).notNull().default(false),
+  isEmployee: integer("is_employee", { mode: "boolean" })
+    .notNull()
+    .default(false),
   hireDate: text("hire_date"),
   supervisor: text("supervisor"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -92,7 +249,11 @@ export const documents = sqliteTable("documents", {
   uploadedBy: text("uploaded_by"),
   verifiedAt: text("verified_at"),
   verifiedBy: text("verified_by"),
-  status: text("status", { enum: ["uploaded", "verified", "rejected", "expired"] }).notNull().default("uploaded"),
+  status: text("status", {
+    enum: ["uploaded", "verified", "rejected", "expired"],
+  })
+    .notNull()
+    .default("uploaded"),
   expiryDate: text("expiry_date"),
   note: text("note"),
 });
@@ -116,7 +277,9 @@ export const trainingProgress = sqliteTable("training_progress", {
   userId: text("user_id").notNull(),
   moduleId: text("module_id").notNull(),
   completedSteps: integer("completed_steps").notNull().default(0),
-  status: text("status", { enum: ["available", "in-progress", "completed"] }).notNull().default("available"),
+  status: text("status", { enum: ["available", "in-progress", "completed"] })
+    .notNull()
+    .default("available"),
   quizScore: integer("quiz_score"),
   quizPassed: integer("quiz_passed", { mode: "boolean" }).default(false),
   startedAt: text("started_at"),
@@ -133,7 +296,9 @@ export const credentials = sqliteTable("credentials", {
   issuingBody: text("issuing_body"),
   issueDate: text("issue_date"),
   expiryDate: text("expiry_date"),
-  status: text("status", { enum: ["valid", "expiring", "expired", "pending"] }).notNull().default("pending"),
+  status: text("status", { enum: ["valid", "expiring", "expired", "pending"] })
+    .notNull()
+    .default("pending"),
   documentId: text("document_id"),
   verifiedBy: text("verified_by"),
   verifiedAt: text("verified_at"),
@@ -146,13 +311,17 @@ export const credentials = sqliteTable("credentials", {
 export const performanceReviews = sqliteTable("performance_reviews", {
   id: text("id").primaryKey(),
   personId: text("person_id").notNull(),
-  reviewType: text("review_type", { enum: ["30-day", "90-day", "annual", "corrective"] }).notNull(),
+  reviewType: text("review_type", {
+    enum: ["30-day", "90-day", "annual", "corrective"],
+  }).notNull(),
   reviewDate: text("review_date").notNull(),
   competencies: text("competencies"),
   goals: text("goals"),
   supervisorComments: text("supervisor_comments"),
   actionItems: text("action_items"),
-  overallRating: text("overall_rating", { enum: ["exceeds", "meets", "needs-improvement", "unsatisfactory"] }),
+  overallRating: text("overall_rating", {
+    enum: ["exceeds", "meets", "needs-improvement", "unsatisfactory"],
+  }),
   reviewedBy: text("reviewed_by"),
   reviewedAt: text("reviewed_at"),
   signedOffBy: text("signed_off_by"),
@@ -200,7 +369,9 @@ export const agentPersonas = sqliteTable("agent_personas", {
   description: text("description").notNull(),
   scope: text("scope"),
   boundariesJson: text("boundaries_json"),
-  status: text("status", { enum: ["active", "pilot", "deferred"] }).notNull().default("deferred"),
+  status: text("status", { enum: ["active", "pilot", "deferred"] })
+    .notNull()
+    .default("deferred"),
   wave: text("wave").default("wave3"),
   category: text("category").notNull(),
   color: text("color"),
@@ -225,10 +396,18 @@ export const formTemplates = sqliteTable("form_templates", {
   lifecycleModule: text("lifecycle_module"),
   roleApplicabilityJson: text("role_applicability_json"),
   triggeringStatus: text("triggering_status"),
-  requiredForGate: integer("required_for_gate", { mode: "boolean" }).notNull().default(false),
-  signatureRequired: integer("signature_required", { mode: "boolean" }).notNull().default(false),
-  reviewerRequired: integer("reviewer_required", { mode: "boolean" }).notNull().default(false),
-  outputFormat: text("output_format", { enum: ["pdf", "docx"] }).notNull().default("pdf"),
+  requiredForGate: integer("required_for_gate", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  signatureRequired: integer("signature_required", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  reviewerRequired: integer("reviewer_required", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  outputFormat: text("output_format", { enum: ["pdf", "docx"] })
+    .notNull()
+    .default("pdf"),
   sourcePdfPath: text("source_pdf_path"),
   activeVersion: integer("active_version").notNull().default(1),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
@@ -246,10 +425,22 @@ export const formTemplateFields = sqliteTable("form_template_fields", {
   templateId: text("template_id").notNull(),
   name: text("name").notNull(),
   label: text("label").notNull(),
-  fieldType: text("field_type", { enum: [
-    "text", "textarea", "date", "checkbox", "select", "multiselect",
-    "number", "email", "phone", "signature", "initials", "file",
-  ] }).notNull(),
+  fieldType: text("field_type", {
+    enum: [
+      "text",
+      "textarea",
+      "date",
+      "checkbox",
+      "select",
+      "multiselect",
+      "number",
+      "email",
+      "phone",
+      "signature",
+      "initials",
+      "file",
+    ],
+  }).notNull(),
   required: integer("required", { mode: "boolean" }).notNull().default(false),
   optionsJson: text("options_json"),
   placeholder: text("placeholder"),
@@ -267,8 +458,12 @@ export const formRoleBindings = sqliteTable("form_role_bindings", {
   id: text("id").primaryKey(),
   templateId: text("template_id").notNull(),
   role: text("role").notNull(),
-  isRequired: integer("is_required", { mode: "boolean" }).notNull().default(false),
-  isAutoAssigned: integer("is_auto_assigned", { mode: "boolean" }).notNull().default(true),
+  isRequired: integer("is_required", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  isAutoAssigned: integer("is_auto_assigned", { mode: "boolean" })
+    .notNull()
+    .default(true),
   assignmentTrigger: text("assignment_trigger").notNull().default("on-create"),
   dueDays: integer("due_days").notNull().default(7),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -282,16 +477,31 @@ export const formInstances = sqliteTable("form_instances", {
   personId: text("person_id").notNull(),
   moduleId: text("module_id"),
   packetId: text("packet_id"),
-  status: text("status", { enum: [
-    "draft", "assigned", "in-progress", "submitted",
-    "under-review", "returned-for-correction", "approved",
-    "locked", "filed-to-dms", "expired", "waived", "superseded",
-  ] }).notNull().default("assigned"),
+  status: text("status", {
+    enum: [
+      "draft",
+      "assigned",
+      "in-progress",
+      "submitted",
+      "under-review",
+      "returned-for-correction",
+      "approved",
+      "locked",
+      "filed-to-dms",
+      "expired",
+      "waived",
+      "superseded",
+    ],
+  })
+    .notNull()
+    .default("assigned"),
   assignedToUserId: text("assigned_to_user_id"),
   assignedByUserId: text("assigned_by_user_id"),
   assignedAt: text("assigned_at").$defaultFn(() => new Date().toISOString()),
   dueDate: text("due_date"),
-  overdueReminderSent: integer("overdue_reminder_sent", { mode: "boolean" }).notNull().default(false),
+  overdueReminderSent: integer("overdue_reminder_sent", { mode: "boolean" })
+    .notNull()
+    .default(false),
   submittedByUserId: text("submitted_by_user_id"),
   submittedAt: text("submitted_at"),
   reviewedByUserId: text("reviewed_by_user_id"),
@@ -311,15 +521,33 @@ export const formInstances = sqliteTable("form_instances", {
 export const formPackets = sqliteTable("form_packets", {
   id: text("id").primaryKey(),
   personId: text("person_id").notNull(),
-  packetType: text("packet_type", { enum: [
-    "candidate-intake", "conditional-offer", "pre-employment",
-    "screening", "final-agreement", "orientation", "training",
-    "clearance", "personnel-file", "audit",
-  ] }).notNull(),
-  status: text("status", { enum: [
-    "packet-not-started", "packet-building", "packet-incomplete",
-    "packet-ready-for-review", "packet-approved", "packet-locked", "packet-filed",
-  ] }).notNull().default("packet-not-started"),
+  packetType: text("packet_type", {
+    enum: [
+      "candidate-intake",
+      "conditional-offer",
+      "pre-employment",
+      "screening",
+      "final-agreement",
+      "orientation",
+      "training",
+      "clearance",
+      "personnel-file",
+      "audit",
+    ],
+  }).notNull(),
+  status: text("status", {
+    enum: [
+      "packet-not-started",
+      "packet-building",
+      "packet-incomplete",
+      "packet-ready-for-review",
+      "packet-approved",
+      "packet-locked",
+      "packet-filed",
+    ],
+  })
+    .notNull()
+    .default("packet-not-started"),
   requiredFormIdsJson: text("required_form_ids_json"),
   completedFormIdsJson: text("completed_form_ids_json"),
   missingFormIdsJson: text("missing_form_ids_json"),
@@ -348,7 +576,9 @@ export const patients = sqliteTable("patients", {
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   dateOfBirth: text("date_of_birth").notNull(),
-  gender: text("gender", { enum: ["male", "female", "non_binary", "prefer_not_say"] }),
+  gender: text("gender", {
+    enum: ["male", "female", "non_binary", "prefer_not_say"],
+  }),
   phone: text("phone"),
   email: text("email"),
   address: text("address"),
@@ -356,7 +586,11 @@ export const patients = sqliteTable("patients", {
   emergencyName: text("emergency_name"),
   emergencyPhone: text("emergency_phone"),
   referralSource: text("referral_source"),
-  status: text("status", { enum: ["intake", "active", "hold", "discharged", "transferred"] }).notNull().default("intake"),
+  status: text("status", {
+    enum: ["intake", "active", "hold", "discharged", "transferred"],
+  })
+    .notNull()
+    .default("intake"),
   assignedClinicianId: text("assigned_clinician_id"),
   intakeDate: text("intake_date").$defaultFn(() => new Date().toISOString()),
   dischargeDate: text("discharge_date"),
@@ -373,7 +607,11 @@ export const treatmentPlans = sqliteTable("treatment_plans", {
   id: text("id").primaryKey(),
   patientId: text("patient_id").notNull(),
   planNumber: text("plan_number").notNull(),
-  status: text("status", { enum: ["draft", "active", "under_review", "completed", "discontinued"] }).notNull().default("draft"),
+  status: text("status", {
+    enum: ["draft", "active", "under_review", "completed", "discontinued"],
+  })
+    .notNull()
+    .default("draft"),
   primaryDiagnosis: text("primary_diagnosis").notNull(),
   secondaryDiagnosis: text("secondary_diagnosis"),
   presentingProblem: text("presenting_problem").notNull(),
@@ -399,7 +637,17 @@ export const clinicalSessions = sqliteTable("clinical_sessions", {
   treatmentPlanId: text("treatment_plan_id"),
   clinicianId: text("clinician_id").notNull(),
   sessionDate: text("session_date").notNull(),
-  sessionType: text("session_type", { enum: ["individual", "group", "family", "couples", "intake", "crisis", "telehealth"] }),
+  sessionType: text("session_type", {
+    enum: [
+      "individual",
+      "group",
+      "family",
+      "couples",
+      "intake",
+      "crisis",
+      "telehealth",
+    ],
+  }),
   durationMinutes: integer("duration_minutes").notNull().default(60),
   chiefComplaint: text("chief_complaint"),
   sessionNotes: text("session_notes"),
@@ -409,7 +657,11 @@ export const clinicalSessions = sqliteTable("clinical_sessions", {
   riskAssessmentJson: text("risk_assessment_json"),
   nextSessionDate: text("next_session_date"),
   nextSessionGoals: text("next_session_goals"),
-  status: text("status", { enum: ["scheduled", "in_progress", "completed", "cancelled", "no_show"] }).notNull().default("scheduled"),
+  status: text("status", {
+    enum: ["scheduled", "in_progress", "completed", "cancelled", "no_show"],
+  })
+    .notNull()
+    .default("scheduled"),
   billingCode: text("billing_code"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
@@ -421,12 +673,25 @@ export const outcomeMeasures = sqliteTable("outcome_measures", {
   id: text("id").primaryKey(),
   patientId: text("patient_id").notNull(),
   sessionId: text("session_id"),
-  measureType: text("measure_type", { enum: ["PHQ-9", "GAD-7", "PSS-10", "WHO-5", "DASS-21", "PCL-5", "CGI-S"] }).notNull(),
+  measureType: text("measure_type", {
+    enum: ["PHQ-9", "GAD-7", "PSS-10", "WHO-5", "DASS-21", "PCL-5", "CGI-S"],
+  }).notNull(),
   score: integer("score").notNull(),
   maxScore: integer("max_score").notNull(),
-  severityLevel: text("severity_level", { enum: ["none", "minimal", "mild", "moderate", "moderately_severe", "severe"] }),
+  severityLevel: text("severity_level", {
+    enum: [
+      "none",
+      "minimal",
+      "mild",
+      "moderate",
+      "moderately_severe",
+      "severe",
+    ],
+  }),
   administeredBy: text("administered_by").notNull(),
-  administeredAt: text("administered_at").$defaultFn(() => new Date().toISOString()),
+  administeredAt: text("administered_at").$defaultFn(() =>
+    new Date().toISOString(),
+  ),
   notes: text("notes"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
 });
@@ -436,7 +701,11 @@ export const outcomeMeasures = sqliteTable("outcome_measures", {
 export const payers = sqliteTable("payers", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
-  payerType: text("payer_type", { enum: ["insurance", "medicaid", "medicare", "self_pay", "other"] }).notNull().default("insurance"),
+  payerType: text("payer_type", {
+    enum: ["insurance", "medicaid", "medicare", "self_pay", "other"],
+  })
+    .notNull()
+    .default("insurance"),
   contactPhone: text("contact_phone"),
   contactEmail: text("contact_email"),
   claimsAddress: text("claims_address"),
@@ -454,7 +723,22 @@ export const claims = sqliteTable("claims", {
   clinicianId: text("clinician_id").notNull(),
   serviceDate: text("service_date").notNull(),
   submissionDate: text("submission_date"),
-  status: text("status", { enum: ["draft", "pending", "submitted", "acknowledged", "pending_review", "approved", "denied", "appealed", "paid", "write_off"] }).notNull().default("draft"),
+  status: text("status", {
+    enum: [
+      "draft",
+      "pending",
+      "submitted",
+      "acknowledged",
+      "pending_review",
+      "approved",
+      "denied",
+      "appealed",
+      "paid",
+      "write_off",
+    ],
+  })
+    .notNull()
+    .default("draft"),
   totalAmount: integer("total_amount").notNull(), // cents
   allowedAmount: integer("allowed_amount"), // cents
   paidAmount: integer("paid_amount"), // cents
@@ -462,7 +746,11 @@ export const claims = sqliteTable("claims", {
   denialReason: text("denial_reason"),
   denialCode: text("denial_code"),
   appealDate: text("appeal_date"),
-  appealStatus: text("appeal_status", { enum: ["not_appealed", "in_review", "approved", "denied"] }).notNull().default("not_appealed"),
+  appealStatus: text("appeal_status", {
+    enum: ["not_appealed", "in_review", "approved", "denied"],
+  })
+    .notNull()
+    .default("not_appealed"),
   notes: text("notes"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
@@ -489,9 +777,15 @@ export const audits = sqliteTable("audits_qa", {
   id: text("id").primaryKey(),
   auditNumber: text("audit_number").notNull().unique(),
   title: text("title").notNull(),
-  auditType: text("audit_type", { enum: ["internal", "external", "regulatory", "peer_review", "random"] }).notNull(),
+  auditType: text("audit_type", {
+    enum: ["internal", "external", "regulatory", "peer_review", "random"],
+  }).notNull(),
   scope: text("scope").notNull(), // description of what's being audited
-  status: text("status", { enum: ["planned", "in_progress", "pending_review", "completed", "closed"] }).notNull().default("planned"),
+  status: text("status", {
+    enum: ["planned", "in_progress", "pending_review", "completed", "closed"],
+  })
+    .notNull()
+    .default("planned"),
   assignedAuditorId: text("assigned_auditor_id"),
   department: text("department"),
   findingsJson: text("findings_json").default("[]"),
@@ -510,16 +804,34 @@ export const incidents = sqliteTable("incidents", {
   incidentNumber: text("incident_number").notNull().unique(),
   title: text("title").notNull(),
   description: text("description").notNull(),
-  incidentType: text("incident_type", { enum: ["medication_error", "fall", "behavioral", "clinical_error", "equipment", "environmental", "other"] }).notNull(),
-  severity: text("severity", { enum: ["low", "moderate", "high", "critical"] }).notNull(),
-  status: text("status", { enum: ["open", "under_investigation", "resolved", "closed"] }).notNull().default("open"),
+  incidentType: text("incident_type", {
+    enum: [
+      "medication_error",
+      "fall",
+      "behavioral",
+      "clinical_error",
+      "equipment",
+      "environmental",
+      "other",
+    ],
+  }).notNull(),
+  severity: text("severity", {
+    enum: ["low", "moderate", "high", "critical"],
+  }).notNull(),
+  status: text("status", {
+    enum: ["open", "under_investigation", "resolved", "closed"],
+  })
+    .notNull()
+    .default("open"),
   patientId: text("patient_id"),
   reportedBy: text("reported_by").notNull(),
   assignedTo: text("assigned_to"),
   occurredAt: text("occurred_at").notNull(),
   resolvedAt: text("resolved_at"),
   resolutionNotes: text("resolution_notes"),
-  followUpRequired: integer("follow_up_required", { mode: "boolean" }).notNull().default(false),
+  followUpRequired: integer("follow_up_required", { mode: "boolean" })
+    .notNull()
+    .default(false),
   followUpDate: text("follow_up_date"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
@@ -534,8 +846,20 @@ export const correctiveActions = sqliteTable("corrective_actions", {
   description: text("description").notNull(),
   relatedAuditId: text("related_audit_id"),
   relatedIncidentId: text("related_incident_id"),
-  priority: text("priority", { enum: ["low", "medium", "high", "urgent"] }).notNull(),
-  status: text("status", { enum: ["open", "in_progress", "pending_verification", "completed", "overdue"] }).notNull().default("open"),
+  priority: text("priority", {
+    enum: ["low", "medium", "high", "urgent"],
+  }).notNull(),
+  status: text("status", {
+    enum: [
+      "open",
+      "in_progress",
+      "pending_verification",
+      "completed",
+      "overdue",
+    ],
+  })
+    .notNull()
+    .default("open"),
   assignedTo: text("assigned_to").notNull(),
   dueDate: text("due_date").notNull(),
   completedAt: text("completed_at"),
@@ -584,8 +908,14 @@ export const msGraphUsers = sqliteTable("ms_graph_users", {
   jobTitle: text("job_title"),
   department: text("department"),
   officeLocation: text("office_location"),
-  accountEnabled: integer("account_enabled", { mode: "boolean" }).notNull().default(true),
-  syncStatus: text("sync_status", { enum: ["active", "disabled", "pending", "error"] }).notNull().default("pending"),
+  accountEnabled: integer("account_enabled", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  syncStatus: text("sync_status", {
+    enum: ["active", "disabled", "pending", "error"],
+  })
+    .notNull()
+    .default("pending"),
   lastSyncAt: text("last_sync_at"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
 });
@@ -605,8 +935,12 @@ export const msGraphGroups = sqliteTable("ms_graph_groups", {
 
 export const msGraphSyncLog = sqliteTable("ms_graph_sync_log", {
   id: text("id").primaryKey(),
-  syncType: text("sync_type", { enum: ["full", "delta", "users", "groups"] }).notNull(),
-  status: text("status", { enum: ["running", "completed", "failed", "partial"] }).notNull(),
+  syncType: text("sync_type", {
+    enum: ["full", "delta", "users", "groups"],
+  }).notNull(),
+  status: text("status", {
+    enum: ["running", "completed", "failed", "partial"],
+  }).notNull(),
   usersSynced: integer("users_synced").default(0),
   groupsSynced: integer("groups_synced").default(0),
   errorsJson: text("errors_json"),
@@ -638,9 +972,19 @@ export const dmsDocuments = sqliteTable("dms_documents", {
   categoryId: text("category_id").notNull(),
   category: text("category").notNull(),
   department: text("department").notNull(),
-  status: text("status", { enum: [
-    "draft", "in-review", "approved", "published", "archived", "superseded",
-  ] }).notNull().default("draft"),
+  status: text("status", {
+    enum: [
+      "draft",
+      "in-review",
+      "approved",
+      "published",
+      "archived",
+      "superseded",
+      "rejected",
+    ],
+  })
+    .notNull()
+    .default("draft"),
   version: integer("version").notNull().default(1),
   authorId: text("author_id").notNull(),
   authorName: text("author_name").notNull(),
@@ -701,7 +1045,9 @@ export const documentAuditLog = sqliteTable("document_audit_log", {
 export const notifications = sqliteTable("notifications", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),
-  type: text("type", { enum: ["status-change", "alert", "document", "training", "system"] }).notNull(),
+  type: text("type", {
+    enum: ["status-change", "alert", "document", "training", "system"],
+  }).notNull(),
   title: text("title").notNull(),
   message: text("message").notNull(),
   personName: text("person_name"),
@@ -724,7 +1070,9 @@ export const youthProfiles = sqliteTable("youth_profiles", {
   lastName: text("last_name").notNull(),
   dateOfBirth: text("date_of_birth").notNull(),
   age: integer("age").notNull(),
-  gender: text("gender", { enum: ["male", "female", "non_binary", "prefer_not_say"] }),
+  gender: text("gender", {
+    enum: ["male", "female", "non_binary", "prefer_not_say"],
+  }),
   race: text("race"),
   ethnicity: text("ethnicity"),
   preferredLanguage: text("preferred_language").default("English"),
@@ -745,7 +1093,18 @@ export const youthProfiles = sqliteTable("youth_profiles", {
   emergencyName: text("emergency_name"),
   emergencyRelationship: text("emergency_relationship"),
   emergencyPhone: text("emergency_phone"),
-  referralSourceType: text("referral_source_type", { enum: ["self", "family", "school", "dcf", "hospital", "court", "other_provider", "other"] }),
+  referralSourceType: text("referral_source_type", {
+    enum: [
+      "self",
+      "family",
+      "school",
+      "dcf",
+      "hospital",
+      "court",
+      "other_provider",
+      "other",
+    ],
+  }),
   referralSourceName: text("referral_source_name"),
   referralSourcePhone: text("referral_source_phone"),
   referredBy: text("referred_by"),
@@ -754,8 +1113,31 @@ export const youthProfiles = sqliteTable("youth_profiles", {
   assignedClinicianName: text("assigned_clinician_name"),
   assignedCaseManagerId: text("assigned_case_manager_id"),
   assignedCaseManagerName: text("assigned_case_manager_name"),
-  status: text("status", { enum: ["referral_pending", "screening", "intake", "assessment", "admitted", "active", "hold", "discharge_planning", "discharged", "transferred"] }).notNull().default("referral_pending"),
-  levelOfCare: text("level_of_care", { enum: ["residential", "day_treatment", "outpatient", "crisis_stabilization", "not_yet_determined"] }).default("not_yet_determined"),
+  status: text("status", {
+    enum: [
+      "referral_pending",
+      "screening",
+      "intake",
+      "assessment",
+      "admitted",
+      "active",
+      "hold",
+      "discharge_planning",
+      "discharged",
+      "transferred",
+    ],
+  })
+    .notNull()
+    .default("referral_pending"),
+  levelOfCare: text("level_of_care", {
+    enum: [
+      "residential",
+      "day_treatment",
+      "outpatient",
+      "crisis_stabilization",
+      "not_yet_determined",
+    ],
+  }).default("not_yet_determined"),
   bedAssignment: text("bed_assignment"),
   primaryPayerId: text("primary_payer_id"),
   primaryPayerName: text("primary_payer_name"),
@@ -785,38 +1167,91 @@ export const intakePipeline = sqliteTable("intake_pipeline", {
   referralReceivedDate: text("referral_received_date"),
   referralReceivedBy: text("referral_received_by"),
   referralReceivedNotes: text("referral_received_notes"),
-  referralReceivedCompleted: integer("referral_received_completed", { mode: "boolean" }).notNull().default(false),
+  referralReceivedCompleted: integer("referral_received_completed", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   screeningDate: text("screening_date"),
   screeningCompletedBy: text("screening_completed_by"),
-  screeningResult: text("screening_result", { enum: ["pass", "fail", "needs_review", "pending"] }),
+  screeningResult: text("screening_result", {
+    enum: ["pass", "fail", "needs_review", "pending"],
+  }),
   screeningNotes: text("screening_notes"),
-  screeningCompleted: integer("screening_completed", { mode: "boolean" }).notNull().default(false),
+  screeningCompleted: integer("screening_completed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   consentDate: text("consent_date"),
   consentCompletedBy: text("consent_completed_by"),
-  guardianConsentObtained: integer("guardian_consent_obtained", { mode: "boolean" }).notNull().default(false),
-  youthAssentObtained: integer("youth_assent_obtained", { mode: "boolean" }).notNull().default(false),
-  hipaaAcknowledgment: integer("hipaa_acknowledgment", { mode: "boolean" }).notNull().default(false),
-  rightsAcknowledgment: integer("rights_acknowledgment", { mode: "boolean" }).notNull().default(false),
+  guardianConsentObtained: integer("guardian_consent_obtained", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  youthAssentObtained: integer("youth_assent_obtained", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  hipaaAcknowledgment: integer("hipaa_acknowledgment", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  rightsAcknowledgment: integer("rights_acknowledgment", { mode: "boolean" })
+    .notNull()
+    .default(false),
   consentNotes: text("consent_notes"),
-  consentCompleted: integer("consent_completed", { mode: "boolean" }).notNull().default(false),
+  consentCompleted: integer("consent_completed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   payerVerificationDate: text("payer_verification_date"),
   payerVerificationCompletedBy: text("payer_verification_completed_by"),
-  benefitsVerified: integer("benefits_verified", { mode: "boolean" }).notNull().default(false),
-  authorizationRequired: integer("authorization_required", { mode: "boolean" }).notNull().default(false),
-  authorizationSubmitted: integer("authorization_submitted", { mode: "boolean" }).notNull().default(false),
-  authorizationApproved: integer("authorization_approved", { mode: "boolean" }).notNull().default(false),
+  benefitsVerified: integer("benefits_verified", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  authorizationRequired: integer("authorization_required", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  authorizationSubmitted: integer("authorization_submitted", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  authorizationApproved: integer("authorization_approved", { mode: "boolean" })
+    .notNull()
+    .default(false),
   payerNotes: text("payer_notes"),
-  payerCompleted: integer("payer_completed", { mode: "boolean" }).notNull().default(false),
+  payerCompleted: integer("payer_completed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   dispositionDate: text("disposition_date"),
   dispositionCompletedBy: text("disposition_completed_by"),
-  disposition: text("disposition", { enum: ["admit", "deny", "waitlist", "refer_elsewhere", "pending"] }),
+  disposition: text("disposition", {
+    enum: ["admit", "deny", "waitlist", "refer_elsewhere", "pending"],
+  }),
   dispositionReason: text("disposition_reason"),
   bedAssigned: text("bed_assigned"),
   admissionScheduledDate: text("admission_scheduled_date"),
-  dispositionCompleted: integer("disposition_completed", { mode: "boolean" }).notNull().default(false),
-  currentStep: text("current_step", { enum: ["referral", "screening", "consent", "payer", "disposition", "completed"] }).notNull().default("referral"),
-  overallStatus: text("overall_status", { enum: ["in_progress", "completed", "blocked", "abandoned"] }).notNull().default("in_progress"),
-  isBlocked: integer("is_blocked", { mode: "boolean" }).notNull().default(false),
+  dispositionCompleted: integer("disposition_completed", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  currentStep: text("current_step", {
+    enum: [
+      "referral",
+      "screening",
+      "consent",
+      "payer",
+      "disposition",
+      "completed",
+    ],
+  })
+    .notNull()
+    .default("referral"),
+  overallStatus: text("overall_status", {
+    enum: ["in_progress", "completed", "blocked", "abandoned"],
+  })
+    .notNull()
+    .default("in_progress"),
+  isBlocked: integer("is_blocked", { mode: "boolean" })
+    .notNull()
+    .default(false),
   blockReason: text("block_reason"),
   referralElapsedHours: integer("referral_elapsed_hours").default(0),
   screeningElapsedHours: integer("screening_elapsed_hours").default(0),
@@ -836,7 +1271,11 @@ export const assessments = sqliteTable("assessments", {
   youthId: text("youth_id").notNull(),
   mrn: text("mrn").notNull(),
   youthName: text("youth_name").notNull(),
-  assessmentType: text("assessment_type", { enum: ["intake", "quarterly", "annual", "discharge", "incident_driven"] }).notNull().default("intake"),
+  assessmentType: text("assessment_type", {
+    enum: ["intake", "quarterly", "annual", "discharge", "incident_driven"],
+  })
+    .notNull()
+    .default("intake"),
   assessmentDate: text("assessment_date").notNull(),
   completedBy: text("completed_by").notNull(),
   completedById: text("completed_by_id"),
@@ -851,25 +1290,60 @@ export const assessments = sqliteTable("assessments", {
   medicalHistory: text("medical_history"),
   familyHistory: text("family_history"),
   educationalHistory: text("educational_history"),
-  cansCompleted: integer("cans_completed", { mode: "boolean" }).notNull().default(false),
+  cansCompleted: integer("cans_completed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   cansTotalScore: integer("cans_total_score"),
-  cansRiskLevel: text("cans_risk_level", { enum: ["low", "moderate", "high", "very_high"] }),
-  locDetermined: integer("loc_determined", { mode: "boolean" }).notNull().default(false),
-  locLevel: text("loc_level", { enum: ["loc_1_high_acuity", "loc_2_moderate_acuity", "loc_3_low_acuity", "not_determined"] }).default("not_determined"),
+  cansRiskLevel: text("cans_risk_level", {
+    enum: ["low", "moderate", "high", "very_high"],
+  }),
+  locDetermined: integer("loc_determined", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  locLevel: text("loc_level", {
+    enum: [
+      "loc_1_high_acuity",
+      "loc_2_moderate_acuity",
+      "loc_3_low_acuity",
+      "not_determined",
+    ],
+  }).default("not_determined"),
   locDecisionMatrixJson: text("loc_decision_matrix_json"),
   locClinicalRationale: text("loc_clinical_rationale"),
   locApprovedBy: text("loc_approved_by"),
   locApprovedAt: text("loc_approved_at"),
-  riskSuicide: text("risk_suicide", { enum: ["none", "low", "moderate", "high", "imminent"] }),
-  riskSelfHarm: text("risk_self_harm", { enum: ["none", "low", "moderate", "high", "imminent"] }),
-  riskAggression: text("risk_aggression", { enum: ["none", "low", "moderate", "high", "imminent"] }),
-  riskElopement: text("risk_elopement", { enum: ["none", "low", "moderate", "high", "imminent"] }),
-  riskSubstanceUse: text("risk_substance_use", { enum: ["none", "low", "moderate", "high", "imminent"] }),
-  riskVulnerability: text("risk_vulnerability", { enum: ["none", "low", "moderate", "high", "imminent"] }),
-  overallRiskLevel: text("overall_risk_level", { enum: ["low", "moderate", "high", "critical"] }),
-  safetyPlanRequired: integer("safety_plan_required", { mode: "boolean" }).notNull().default(false),
-  safetyPlanCompleted: integer("safety_plan_completed", { mode: "boolean" }).notNull().default(false),
-  status: text("status", { enum: ["draft", "in_progress", "pending_review", "completed", "superseded"] }).notNull().default("draft"),
+  riskSuicide: text("risk_suicide", {
+    enum: ["none", "low", "moderate", "high", "imminent"],
+  }),
+  riskSelfHarm: text("risk_self_harm", {
+    enum: ["none", "low", "moderate", "high", "imminent"],
+  }),
+  riskAggression: text("risk_aggression", {
+    enum: ["none", "low", "moderate", "high", "imminent"],
+  }),
+  riskElopement: text("risk_elopement", {
+    enum: ["none", "low", "moderate", "high", "imminent"],
+  }),
+  riskSubstanceUse: text("risk_substance_use", {
+    enum: ["none", "low", "moderate", "high", "imminent"],
+  }),
+  riskVulnerability: text("risk_vulnerability", {
+    enum: ["none", "low", "moderate", "high", "imminent"],
+  }),
+  overallRiskLevel: text("overall_risk_level", {
+    enum: ["low", "moderate", "high", "critical"],
+  }),
+  safetyPlanRequired: integer("safety_plan_required", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  safetyPlanCompleted: integer("safety_plan_completed", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  status: text("status", {
+    enum: ["draft", "in_progress", "pending_review", "completed", "superseded"],
+  })
+    .notNull()
+    .default("draft"),
   reviewedBy: text("reviewed_by"),
   reviewedAt: text("reviewed_at"),
   approvedBy: text("approved_by"),
@@ -888,12 +1362,16 @@ export const assessmentDomains = sqliteTable("assessment_domains", {
   domainNumber: integer("domain_number").notNull(),
   domainName: text("domain_name").notNull(),
   score: integer("score"),
-  scoreLabel: text("score_label", { enum: ["no_evidence", "mild", "moderate", "severe"] }),
+  scoreLabel: text("score_label", {
+    enum: ["no_evidence", "mild", "moderate", "severe"],
+  }),
   strengths: text("strengths"),
   needs: text("needs"),
   observations: text("observations"),
   clinicalNotes: text("clinical_notes"),
-  interventionNeeded: integer("intervention_needed", { mode: "boolean" }).notNull().default(false),
+  interventionNeeded: integer("intervention_needed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   interventionDescription: text("intervention_description"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
@@ -905,19 +1383,63 @@ export const referralChecklists = sqliteTable("referral_checklists", {
   id: text("id").primaryKey(),
   youthId: text("youth_id").notNull(),
   intakeId: text("intake_id").notNull(),
-  item1ReferralFormReceived: integer("item1_referral_form_received", { mode: "boolean" }).notNull().default(false),
-  item2DemographicsComplete: integer("item2_demographics_complete", { mode: "boolean" }).notNull().default(false),
-  item3InsuranceVerified: integer("item3_insurance_verified", { mode: "boolean" }).notNull().default(false),
-  item4ConsentForRelease: integer("item4_consent_for_release", { mode: "boolean" }).notNull().default(false),
-  item5PsychiatricHistory: integer("item5_psychiatric_history", { mode: "boolean" }).notNull().default(false),
-  item6MedicalRecordsRequested: integer("item6_medical_records_requested", { mode: "boolean" }).notNull().default(false),
-  item7EducationalRecordsRequested: integer("item7_educational_records_requested", { mode: "boolean" }).notNull().default(false),
-  item8LegalStatusConfirmed: integer("item8_legal_status_confirmed", { mode: "boolean" }).notNull().default(false),
-  item9GuardianContactVerified: integer("item9_guardian_contact_verified", { mode: "boolean" }).notNull().default(false),
-  item10ServiceActivationDateSet: integer("item10_service_activation_date_set", { mode: "boolean" }).notNull().default(false),
+  item1ReferralFormReceived: integer("item1_referral_form_received", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  item2DemographicsComplete: integer("item2_demographics_complete", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  item3InsuranceVerified: integer("item3_insurance_verified", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  item4ConsentForRelease: integer("item4_consent_for_release", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  item5PsychiatricHistory: integer("item5_psychiatric_history", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  item6MedicalRecordsRequested: integer("item6_medical_records_requested", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  item7EducationalRecordsRequested: integer(
+    "item7_educational_records_requested",
+    { mode: "boolean" },
+  )
+    .notNull()
+    .default(false),
+  item8LegalStatusConfirmed: integer("item8_legal_status_confirmed", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  item9GuardianContactVerified: integer("item9_guardian_contact_verified", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  item10ServiceActivationDateSet: integer(
+    "item10_service_activation_date_set",
+    { mode: "boolean" },
+  )
+    .notNull()
+    .default(false),
   itemsCompleted: integer("items_completed").notNull().default(0),
   itemsTotal: integer("items_total").notNull().default(10),
-  allItemsComplete: integer("all_items_complete", { mode: "boolean" }).notNull().default(false),
+  allItemsComplete: integer("all_items_complete", { mode: "boolean" })
+    .notNull()
+    .default(false),
   completedBy: text("completed_by"),
   completedAt: text("completed_at"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -936,30 +1458,48 @@ export const dailyObservations = sqliteTable("daily_observations", {
   youthName: text("youth_name").notNull(),
   mrn: text("mrn").notNull(),
   observationDate: text("observation_date").notNull(),
-  shift: text("shift", { enum: ["day", "evening", "night", "overnight"] }).notNull(),
+  shift: text("shift", {
+    enum: ["day", "evening", "night", "overnight"],
+  }).notNull(),
   observedBy: text("observed_by").notNull(),
   observedById: text("observed_by_id"),
-  domain1Safety: integer("domain1_safety", { mode: "boolean" }).notNull().default(false),
+  domain1Safety: integer("domain1_safety", { mode: "boolean" })
+    .notNull()
+    .default(false),
   domain1SafetyNotes: text("domain1_safety_notes"),
   domain1SafetyScore: integer("domain1_safety_score"),
-  domain2Regulation: integer("domain2_regulation", { mode: "boolean" }).notNull().default(false),
+  domain2Regulation: integer("domain2_regulation", { mode: "boolean" })
+    .notNull()
+    .default(false),
   domain2RegulationNotes: text("domain2_regulation_notes"),
   domain2RegulationScore: integer("domain2_regulation_score"),
-  domain3Functioning: integer("domain3_functioning", { mode: "boolean" }).notNull().default(false),
+  domain3Functioning: integer("domain3_functioning", { mode: "boolean" })
+    .notNull()
+    .default(false),
   domain3FunctioningNotes: text("domain3_functioning_notes"),
   domain3FunctioningScore: integer("domain3_functioning_score"),
-  domain4Medication: integer("domain4_medication", { mode: "boolean" }).notNull().default(false),
+  domain4Medication: integer("domain4_medication", { mode: "boolean" })
+    .notNull()
+    .default(false),
   domain4MedicationNotes: text("domain4_medication_notes"),
   domain4MedicationScore: integer("domain4_medication_score"),
-  domain5Relationships: integer("domain5_relationships", { mode: "boolean" }).notNull().default(false),
+  domain5Relationships: integer("domain5_relationships", { mode: "boolean" })
+    .notNull()
+    .default(false),
   domain5RelationshipsNotes: text("domain5_relationships_notes"),
   domain5RelationshipsScore: integer("domain5_relationships_score"),
-  domain6Participation: integer("domain6_participation", { mode: "boolean" }).notNull().default(false),
+  domain6Participation: integer("domain6_participation", { mode: "boolean" })
+    .notNull()
+    .default(false),
   domain6ParticipationNotes: text("domain6_participation_notes"),
   domain6ParticipationScore: integer("domain6_participation_score"),
-  clinicallySignificant: integer("clinically_significant", { mode: "boolean" }).notNull().default(false),
+  clinicallySignificant: integer("clinically_significant", { mode: "boolean" })
+    .notNull()
+    .default(false),
   clinicalConcerns: text("clinical_concerns"),
-  routedToClinician: integer("routed_to_clinician", { mode: "boolean" }).notNull().default(false),
+  routedToClinician: integer("routed_to_clinician", { mode: "boolean" })
+    .notNull()
+    .default(false),
   routedToClinicianId: text("routed_to_clinician_id"),
   routedToClinicianName: text("routed_to_clinician_name"),
   clinicianResponse: text("clinician_response"),
@@ -972,7 +1512,14 @@ export const dailyObservations = sqliteTable("daily_observations", {
 
 export const meetings = sqliteTable("meetings", {
   id: text("id").primaryKey(),
-  meetingType: text("meeting_type", { enum: ["daily_huddle", "case_staffing", "treatment_plan_review", "family_conference"] }).notNull(),
+  meetingType: text("meeting_type", {
+    enum: [
+      "daily_huddle",
+      "case_staffing",
+      "treatment_plan_review",
+      "family_conference",
+    ],
+  }).notNull(),
   title: text("title").notNull(),
   scheduledDate: text("scheduled_date").notNull(),
   scheduledTime: text("scheduled_time"),
@@ -983,9 +1530,15 @@ export const meetings = sqliteTable("meetings", {
   youthIdsJson: text("youth_ids_json"),
   agendaJson: text("agenda_json"),
   notes: text("notes"),
-  status: text("status", { enum: ["scheduled", "in_progress", "completed", "cancelled", "no_show"] }).notNull().default("scheduled"),
+  status: text("status", {
+    enum: ["scheduled", "in_progress", "completed", "cancelled", "no_show"],
+  })
+    .notNull()
+    .default("scheduled"),
   completedAt: text("completed_at"),
-  followUpRequired: integer("follow_up_required", { mode: "boolean" }).notNull().default(false),
+  followUpRequired: integer("follow_up_required", { mode: "boolean" })
+    .notNull()
+    .default(false),
   followUpNotes: text("follow_up_notes"),
   nextMeetingDate: text("next_meeting_date"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -999,9 +1552,15 @@ export const meetingActionItems = sqliteTable("meeting_action_items", {
   description: text("description").notNull(),
   assignedToId: text("assigned_to_id"),
   assignedToName: text("assigned_to_name"),
-  priority: text("priority", { enum: ["low", "medium", "high", "urgent"] }).notNull().default("medium"),
+  priority: text("priority", { enum: ["low", "medium", "high", "urgent"] })
+    .notNull()
+    .default("medium"),
   dueDate: text("due_date"),
-  status: text("status", { enum: ["open", "in_progress", "completed", "overdue"] }).notNull().default("open"),
+  status: text("status", {
+    enum: ["open", "in_progress", "completed", "overdue"],
+  })
+    .notNull()
+    .default("open"),
   completedAt: text("completed_at"),
   completedBy: text("completed_by"),
   notes: text("notes"),
@@ -1016,9 +1575,21 @@ export const escalationEvents = sqliteTable("escalation_events", {
   youthId: text("youth_id").notNull(),
   youthName: text("youth_name").notNull(),
   mrn: text("mrn").notNull(),
-  tier: text("tier", { enum: ["routine", "clinical", "urgent", "crisis", "post_crisis"] }).notNull(),
-  previousTier: text("previous_tier", { enum: ["routine", "clinical", "urgent", "crisis", "post_crisis"] }),
-  triggerSource: text("trigger_source", { enum: ["observation", "staff_report", "family_report", "youth_self_report", "automated_alert"] }),
+  tier: text("tier", {
+    enum: ["routine", "clinical", "urgent", "crisis", "post_crisis"],
+  }).notNull(),
+  previousTier: text("previous_tier", {
+    enum: ["routine", "clinical", "urgent", "crisis", "post_crisis"],
+  }),
+  triggerSource: text("trigger_source", {
+    enum: [
+      "observation",
+      "staff_report",
+      "family_report",
+      "youth_self_report",
+      "automated_alert",
+    ],
+  }),
   triggerDescription: text("trigger_description").notNull(),
   triggerDetail: text("trigger_detail"),
   responseActions: text("response_actions"),
@@ -1029,9 +1600,21 @@ export const escalationEvents = sqliteTable("escalation_events", {
   resolutionNotes: text("resolution_notes"),
   resolvedAt: text("resolved_at"),
   resolvedBy: text("resolved_by"),
-  status: text("status", { enum: ["active", "escalating", "de_escalating", "resolved", "monitoring"] }).notNull().default("active"),
-  requiresPostCrisisReview: integer("requires_post_crisis_review", { mode: "boolean" }).notNull().default(false),
-  postCrisisReviewCompleted: integer("post_crisis_review_completed", { mode: "boolean" }).notNull().default(false),
+  status: text("status", {
+    enum: ["active", "escalating", "de_escalating", "resolved", "monitoring"],
+  })
+    .notNull()
+    .default("active"),
+  requiresPostCrisisReview: integer("requires_post_crisis_review", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  postCrisisReviewCompleted: integer("post_crisis_review_completed", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   postCrisisReviewDate: text("post_crisis_review_date"),
   postCrisisReviewBy: text("post_crisis_review_by"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -1053,22 +1636,38 @@ export const caseManagement = sqliteTable("case_management", {
   caseManagerId: text("case_manager_id"),
   caseManagerName: text("case_manager_name"),
   // 6 care management functions per SOP
-  function1Coordination: integer("function1_coordination", { mode: "boolean" }).notNull().default(false),
+  function1Coordination: integer("function1_coordination", { mode: "boolean" })
+    .notNull()
+    .default(false),
   function1CoordinationNotes: text("function1_coordination_notes"),
-  function2Referrals: integer("function2_referrals", { mode: "boolean" }).notNull().default(false),
+  function2Referrals: integer("function2_referrals", { mode: "boolean" })
+    .notNull()
+    .default(false),
   function2ReferralsJson: text("function2_referrals_json"), // array of {provider, type, status, date}
-  function3Collaterals: integer("function3_collaterals", { mode: "boolean" }).notNull().default(false),
+  function3Collaterals: integer("function3_collaterals", { mode: "boolean" })
+    .notNull()
+    .default(false),
   function3CollateralsJson: text("function3_collaterals_json"), // array of {contact, relationship, date, notes}
-  function4Barriers: integer("function4_barriers", { mode: "boolean" }).notNull().default(false),
+  function4Barriers: integer("function4_barriers", { mode: "boolean" })
+    .notNull()
+    .default(false),
   function4BarriersJson: text("function4_barriers_json"), // array of {barrier, impact, resolution}
-  function5Monitoring: integer("function5_monitoring", { mode: "boolean" }).notNull().default(false),
+  function5Monitoring: integer("function5_monitoring", { mode: "boolean" })
+    .notNull()
+    .default(false),
   function5MonitoringNotes: text("function5_monitoring_notes"),
-  function6Transition: integer("function6_transition", { mode: "boolean" }).notNull().default(false),
+  function6Transition: integer("function6_transition", { mode: "boolean" })
+    .notNull()
+    .default(false),
   function6TransitionNotes: text("function6_transition_notes"),
   transitionPlanDate: text("transition_plan_date"),
   projectedDischargeDate: text("projected_discharge_date"),
   // Status
-  status: text("status", { enum: ["active", "on_hold", "pending_review", "closed", "transferred"] }).notNull().default("active"),
+  status: text("status", {
+    enum: ["active", "on_hold", "pending_review", "closed", "transferred"],
+  })
+    .notNull()
+    .default("active"),
   lastReviewDate: text("last_review_date"),
   nextReviewDate: text("next_review_date"),
   // System
@@ -1086,39 +1685,75 @@ export const crisisEvents = sqliteTable("crisis_events", {
   youthName: text("youth_name").notNull(),
   mrn: text("mrn").notNull(),
   // 5 crisis types
-  crisisType: text("crisis_type", { enum: ["behavioral_escalation", "suicide_self_harm", "medical_emergency", "elopement", "substance_intoxication"] }).notNull(),
+  crisisType: text("crisis_type", {
+    enum: [
+      "behavioral_escalation",
+      "suicide_self_harm",
+      "medical_emergency",
+      "elopement",
+      "substance_intoxication",
+    ],
+  }).notNull(),
   // 7-step SOP workflow
-  step1Identified: integer("step1_identified", { mode: "boolean" }).notNull().default(false),
+  step1Identified: integer("step1_identified", { mode: "boolean" })
+    .notNull()
+    .default(false),
   step1IdentifiedAt: text("step1_identified_at"),
   step1IdentifiedBy: text("step1_identified_by"),
-  step2Activated: integer("step2_activated", { mode: "boolean" }).notNull().default(false),
+  step2Activated: integer("step2_activated", { mode: "boolean" })
+    .notNull()
+    .default(false),
   step2ActivatedAt: text("step2_activated_at"),
   step2ActivatedBy: text("step2_activated_by"),
-  step3Responded: integer("step3_responded", { mode: "boolean" }).notNull().default(false),
+  step3Responded: integer("step3_responded", { mode: "boolean" })
+    .notNull()
+    .default(false),
   step3RespondedAt: text("step3_responded_at"),
   step3ResponderName: text("step3_responder_name"),
   step3ResponseActions: text("step3_response_actions"),
-  step4EnsuredSafety: integer("step4_ensured_safety", { mode: "boolean" }).notNull().default(false),
+  step4EnsuredSafety: integer("step4_ensured_safety", { mode: "boolean" })
+    .notNull()
+    .default(false),
   step4SafetyMeasures: text("step4_safety_measures"),
   step4EnsuredAt: text("step4_ensured_at"),
-  step5Notified: integer("step5_notified", { mode: "boolean" }).notNull().default(false),
+  step5Notified: integer("step5_notified", { mode: "boolean" })
+    .notNull()
+    .default(false),
   step5NotifiedParties: text("step5_notified_parties"), // JSON array
   step5NotifiedAt: text("step5_notified_at"),
-  step6Documented: integer("step6_documented", { mode: "boolean" }).notNull().default(false),
+  step6Documented: integer("step6_documented", { mode: "boolean" })
+    .notNull()
+    .default(false),
   step6DocumentedAt: text("step6_documented_at"),
   step6DocumentationRef: text("step6_documentation_ref"),
-  step7Reviewed: integer("step7_reviewed", { mode: "boolean" }).notNull().default(false),
+  step7Reviewed: integer("step7_reviewed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   step7ReviewedAt: text("step7_reviewed_at"),
   step7ReviewedBy: text("step7_reviewed_by"),
   step7ReviewNotes: text("step7_review_notes"),
   // Current step tracking
   currentStep: integer("current_step").notNull().default(1), // 1-7
-  overallStatus: text("overall_status", { enum: ["active", "contained", "resolved", "under_review"] }).notNull().default("active"),
+  overallStatus: text("overall_status", {
+    enum: ["active", "contained", "resolved", "under_review"],
+  })
+    .notNull()
+    .default("active"),
   // Outcome
-  youthInjured: integer("youth_injured", { mode: "boolean" }).notNull().default(false),
-  staffInjured: integer("staff_injured", { mode: "boolean" }).notNull().default(false),
-  restrictiveInterventionUsed: integer("restrictive_intervention_used", { mode: "boolean" }).notNull().default(false),
-  restrictiveInterventionType: text("restrictive_intervention_type", { enum: ["restraint", "seclusion", "prn_medication", "none"] }),
+  youthInjured: integer("youth_injured", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  staffInjured: integer("staff_injured", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  restrictiveInterventionUsed: integer("restrictive_intervention_used", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  restrictiveInterventionType: text("restrictive_intervention_type", {
+    enum: ["restraint", "seclusion", "prn_medication", "none"],
+  }),
   // System
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
@@ -1143,10 +1778,14 @@ export const crisisDebriefs = sqliteTable("crisis_debriefs", {
   field8StaffPerspective: text("field8_staff_perspective"),
   field9PlanAdjustments: text("field9_plan_adjustments"),
   // Safety plan update
-  safetyPlanUpdated: integer("safety_plan_updated", { mode: "boolean" }).notNull().default(false),
+  safetyPlanUpdated: integer("safety_plan_updated", { mode: "boolean" })
+    .notNull()
+    .default(false),
   safetyPlanChanges: text("safety_plan_changes"),
   // Follow-up
-  followUpRequired: integer("follow_up_required", { mode: "boolean" }).notNull().default(false),
+  followUpRequired: integer("follow_up_required", { mode: "boolean" })
+    .notNull()
+    .default(false),
   followUpActions: text("follow_up_actions"),
   followUpDate: text("follow_up_date"),
   // Completion
@@ -1171,14 +1810,20 @@ export const bedCensus = sqliteTable("bed_census", {
   roomNumber: text("room_number").notNull(),
   bedLetter: text("bed_letter").notNull(), // A, B for shared rooms
   bedName: text("bed_name").notNull(), // e.g. "101-A"
-  isOccupied: integer("is_occupied", { mode: "boolean" }).notNull().default(false),
+  isOccupied: integer("is_occupied", { mode: "boolean" })
+    .notNull()
+    .default(false),
   youthId: text("youth_id"),
   youthName: text("youth_name"),
   mrn: text("mrn"),
   assignedDate: text("assigned_date"),
   // Room features
-  isAccessible: integer("is_accessible", { mode: "boolean" }).notNull().default(false),
-  isObservation: integer("is_observation", { mode: "boolean" }).notNull().default(false),
+  isAccessible: integer("is_accessible", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  isObservation: integer("is_observation", { mode: "boolean" })
+    .notNull()
+    .default(false),
   isQuiet: integer("is_quiet", { mode: "boolean" }).notNull().default(false),
   notes: text("notes"),
   // System
@@ -1191,7 +1836,9 @@ export const bedCensus = sqliteTable("bed_census", {
 export const shifts = sqliteTable("shifts", {
   id: text("id").primaryKey(),
   shiftDate: text("shift_date").notNull(),
-  shiftType: text("shift_type", { enum: ["day", "evening", "night", "overnight"] }).notNull(),
+  shiftType: text("shift_type", {
+    enum: ["day", "evening", "night", "overnight"],
+  }).notNull(),
   startTime: text("start_time").notNull(),
   endTime: text("end_time").notNull(),
   // Staff assignments
@@ -1202,8 +1849,16 @@ export const shifts = sqliteTable("shifts", {
   nurseName: text("nurse_name"),
   clinicianOnCall: text("clinician_on_call"),
   // Status
-  status: text("status", { enum: ["scheduled", "in_progress", "completed", "no_show", "absent"] }).notNull().default("scheduled"),
-  coverageStatus: text("coverage_status", { enum: ["full", "partial", "uncovered"] }).notNull().default("full"),
+  status: text("status", {
+    enum: ["scheduled", "in_progress", "completed", "no_show", "absent"],
+  })
+    .notNull()
+    .default("scheduled"),
+  coverageStatus: text("coverage_status", {
+    enum: ["full", "partial", "uncovered"],
+  })
+    .notNull()
+    .default("full"),
   coverageNotes: text("coverage_notes"),
   // System
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -1231,7 +1886,9 @@ export const shiftHandoffs = sqliteTable("shift_handoffs", {
   // Notes
   generalNotes: text("general_notes"),
   // Status
-  status: text("status", { enum: ["pending", "in_progress", "completed"] }).notNull().default("pending"),
+  status: text("status", { enum: ["pending", "in_progress", "completed"] })
+    .notNull()
+    .default("pending"),
   completedAt: text("completed_at"),
   // System
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -1249,7 +1906,9 @@ export const behavioralObservations = sqliteTable("behavioral_observations", {
   observedBy: text("observed_by").notNull(),
   // Behavior details
   behaviorType: text("behavior_type").notNull(), // e.g. "aggression", "self_injury", "elopement"
-  frequency: text("frequency", { enum: ["single", "intermittent", "continuous"] }),
+  frequency: text("frequency", {
+    enum: ["single", "intermittent", "continuous"],
+  }),
   intensity: text("intensity", { enum: ["mild", "moderate", "severe"] }),
   duration: text("duration"), // e.g. "5 minutes"
   triggers: text("triggers"),
@@ -1257,11 +1916,15 @@ export const behavioralObservations = sqliteTable("behavioral_observations", {
   // Intervention
   interventionUsed: text("intervention_used"),
   interventionEffective: integer("intervention_effective", { mode: "boolean" }),
-  prnAdministered: integer("prn_administered", { mode: "boolean" }).notNull().default(false),
+  prnAdministered: integer("prn_administered", { mode: "boolean" })
+    .notNull()
+    .default(false),
   prnDetails: text("prn_details"),
   // Outcome
   outcome: text("outcome"),
-  followUpNeeded: integer("follow_up_needed", { mode: "boolean" }).notNull().default(false),
+  followUpNeeded: integer("follow_up_needed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   followUpActions: text("follow_up_actions"),
   // System
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -1276,7 +1939,9 @@ export const milieuNotes = sqliteTable("milieu_notes", {
   youthName: text("youth_name").notNull(),
   mrn: text("mrn").notNull(),
   noteDate: text("note_date").notNull(),
-  shift: text("shift", { enum: ["day", "evening", "night", "overnight"] }).notNull(),
+  shift: text("shift", {
+    enum: ["day", "evening", "night", "overnight"],
+  }).notNull(),
   recordedBy: text("recorded_by").notNull(),
   // Daily routine
   wakeTime: text("wake_time"),
@@ -1309,8 +1974,22 @@ export const familyContacts = sqliteTable("family_contacts", {
   mrn: text("mrn").notNull(),
   // Contact details
   contactDate: text("contact_date").notNull(),
-  contactType: text("contact_type", { enum: ["phone_call", "video_call", "in_person_visit", "letter", "email", "family_therapy", "education_session"] }).notNull(),
-  contactDirection: text("contact_direction", { enum: ["incoming", "outgoing"] }).notNull().default("incoming"),
+  contactType: text("contact_type", {
+    enum: [
+      "phone_call",
+      "video_call",
+      "in_person_visit",
+      "letter",
+      "email",
+      "family_therapy",
+      "education_session",
+    ],
+  }).notNull(),
+  contactDirection: text("contact_direction", {
+    enum: ["incoming", "outgoing"],
+  })
+    .notNull()
+    .default("incoming"),
   contactedPerson: text("contacted_person").notNull(),
   relationship: text("relationship"),
   phoneNumber: text("phone_number"),
@@ -1324,7 +2003,9 @@ export const familyContacts = sqliteTable("family_contacts", {
   youthParticipation: text("youth_participation"),
   concernsRaised: text("concerns_raised"),
   actionItems: text("action_items"),
-  followUpNeeded: integer("follow_up_needed", { mode: "boolean" }).notNull().default(false),
+  followUpNeeded: integer("follow_up_needed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   followUpDate: text("follow_up_date"),
   // Outcome
   outcome: text("outcome"),
@@ -1335,80 +2016,122 @@ export const familyContacts = sqliteTable("family_contacts", {
 
 // ─── M16: Restrictive Interventions ────────────────────────
 
-export const restrictiveInterventions = sqliteTable("restrictive_interventions", {
-  id: text("id").primaryKey(),
-  youthId: text("youth_id").notNull(),
-  youthName: text("youth_name").notNull(),
-  mrn: text("mrn").notNull(),
-  // Intervention details
-  interventionType: text("intervention_type", { enum: ["physical_restraint", "mechanical_restraint", "seclusion", "prn_medication", "time_out"] }).notNull(),
-  incidentDate: text("incident_date").notNull(),
-  startTime: text("start_time").notNull(),
-  endTime: text("end_time"),
-  durationMinutes: integer("duration_minutes"),
-  // Staff
-  initiatedBy: text("initiated_by").notNull(),
-  initiatedByRole: text("initiated_by_role"),
-  witnesses: text("witnesses"), // JSON array
-  // Trigger
-  precipitatingFactors: text("precipitating_factors"),
-  alternativesAttempted: text("alternatives_attempted"),
-  // Safety
-  youthInjuries: text("youth_injuries"),
-  staffInjuries: text("staff_injuries"),
-  medicalAssessment: text("medical_assessment"),
-  // Debrief
-  debriefCompleted: integer("debrief_completed", { mode: "boolean" }).notNull().default(false),
-  debriefDate: text("debrief_date"),
-  debriefNotes: text("debrief_notes"),
-  guardianNotified: integer("guardian_notified", { mode: "boolean" }).notNull().default(false),
-  guardianNotificationDate: text("guardian_notification_date"),
-  // System
-  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
-  updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
-});
+export const restrictiveInterventions = sqliteTable(
+  "restrictive_interventions",
+  {
+    id: text("id").primaryKey(),
+    youthId: text("youth_id").notNull(),
+    youthName: text("youth_name").notNull(),
+    mrn: text("mrn").notNull(),
+    // Intervention details
+    interventionType: text("intervention_type", {
+      enum: [
+        "physical_restraint",
+        "mechanical_restraint",
+        "seclusion",
+        "prn_medication",
+        "time_out",
+      ],
+    }).notNull(),
+    incidentDate: text("incident_date").notNull(),
+    startTime: text("start_time").notNull(),
+    endTime: text("end_time"),
+    durationMinutes: integer("duration_minutes"),
+    // Staff
+    initiatedBy: text("initiated_by").notNull(),
+    initiatedByRole: text("initiated_by_role"),
+    witnesses: text("witnesses"), // JSON array
+    // Trigger
+    precipitatingFactors: text("precipitating_factors"),
+    alternativesAttempted: text("alternatives_attempted"),
+    // Safety
+    youthInjuries: text("youth_injuries"),
+    staffInjuries: text("staff_injuries"),
+    medicalAssessment: text("medical_assessment"),
+    // Debrief
+    debriefCompleted: integer("debrief_completed", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    debriefDate: text("debrief_date"),
+    debriefNotes: text("debrief_notes"),
+    guardianNotified: integer("guardian_notified", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    guardianNotificationDate: text("guardian_notification_date"),
+    // System
+    createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+    updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
+  },
+);
 
 // ─── M16: Medication Administrations (MAR) ─────────────────
 
-export const medicationAdministrations = sqliteTable("medication_administrations", {
-  id: text("id").primaryKey(),
-  youthId: text("youth_id").notNull(),
-  youthName: text("youth_name").notNull(),
-  mrn: text("mrn").notNull(),
-  // Medication
-  medicationName: text("medication_name").notNull(),
-  genericName: text("generic_name"),
-  dosage: text("dosage").notNull(),
-  route: text("route", { enum: ["oral", "sublingual", "im", "iv", "subcutaneous", "topical", "inhalation", "rectal"] }).notNull(),
-  frequency: text("frequency").notNull(), // e.g. "BID", "TID", "QHS", "PRN"
-  indication: text("indication"),
-  prescribingProvider: text("prescribing_provider"),
-  prescriptionDate: text("prescription_date"),
-  // Administration
-  scheduledTime: text("scheduled_time").notNull(),
-  adminDate: text("admin_date").notNull(),
-  adminTime: text("admin_time"),
-  administeredBy: text("administered_by"),
-  witnessedBy: text("witnessed_by"),
-  // Status
-  status: text("status", { enum: ["scheduled", "administered", "refused", "held", "missed", "not_available"] }).notNull().default("scheduled"),
-  refusalReason: text("refusal_reason"),
-  holdReason: text("hold_reason"),
-  // PRN tracking
-  isPrn: integer("is_prn", { mode: "boolean" }).notNull().default(false),
-  prnReason: text("prn_reason"),
-  prnEffectiveness: text("prn_effectiveness"), // effective, partial, ineffective
-  // Controlled substance
-  isControlled: integer("is_controlled", { mode: "boolean" }).notNull().default(false),
-  controlledCountBefore: integer("controlled_count_before"),
-  controlledCountAfter: integer("controlled_count_after"),
-  wasteWitnessedBy: text("waste_witnessed_by"),
-  // Notes
-  notes: text("notes"),
-  // System
-  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
-  updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
-});
+export const medicationAdministrations = sqliteTable(
+  "medication_administrations",
+  {
+    id: text("id").primaryKey(),
+    youthId: text("youth_id").notNull(),
+    youthName: text("youth_name").notNull(),
+    mrn: text("mrn").notNull(),
+    // Medication
+    medicationName: text("medication_name").notNull(),
+    genericName: text("generic_name"),
+    dosage: text("dosage").notNull(),
+    route: text("route", {
+      enum: [
+        "oral",
+        "sublingual",
+        "im",
+        "iv",
+        "subcutaneous",
+        "topical",
+        "inhalation",
+        "rectal",
+      ],
+    }).notNull(),
+    frequency: text("frequency").notNull(), // e.g. "BID", "TID", "QHS", "PRN"
+    indication: text("indication"),
+    prescribingProvider: text("prescribing_provider"),
+    prescriptionDate: text("prescription_date"),
+    // Administration
+    scheduledTime: text("scheduled_time").notNull(),
+    adminDate: text("admin_date").notNull(),
+    adminTime: text("admin_time"),
+    administeredBy: text("administered_by"),
+    witnessedBy: text("witnessed_by"),
+    // Status
+    status: text("status", {
+      enum: [
+        "scheduled",
+        "administered",
+        "refused",
+        "held",
+        "missed",
+        "not_available",
+      ],
+    })
+      .notNull()
+      .default("scheduled"),
+    refusalReason: text("refusal_reason"),
+    holdReason: text("hold_reason"),
+    // PRN tracking
+    isPrn: integer("is_prn", { mode: "boolean" }).notNull().default(false),
+    prnReason: text("prn_reason"),
+    prnEffectiveness: text("prn_effectiveness"), // effective, partial, ineffective
+    // Controlled substance
+    isControlled: integer("is_controlled", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    controlledCountBefore: integer("controlled_count_before"),
+    controlledCountAfter: integer("controlled_count_after"),
+    wasteWitnessedBy: text("waste_witnessed_by"),
+    // Notes
+    notes: text("notes"),
+    // System
+    createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+    updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
+  },
+);
 
 // ═══════════════════════════════════════════════════════════════
 // M17: Authorization Lifecycle & Executive Intelligence
@@ -1421,22 +2144,79 @@ export const authorizations = sqliteTable("authorizations", {
   mrn: text("mrn").notNull(),
   payerName: text("payer_name").notNull(),
   policyNumber: text("policy_number"),
-  stage: text("stage", { enum: ["readiness", "submission", "tracking", "reauthorization", "retrospective"] }).notNull(),
-  status: text("status", { enum: ["pending", "in_progress", "submitted", "approved", "denied", "appealed", "expired", "closed"] }).notNull().default("pending"),
-  readinessClinicalDocs: integer("readiness_clinical_docs", { mode: "boolean" }).notNull().default(false),
-  readinessAssessmentCurrent: integer("readiness_assessment_current", { mode: "boolean" }).notNull().default(false),
-  readinessLOCSupported: integer("readiness_loc_supported", { mode: "boolean" }).notNull().default(false),
-  readinessTreatmentPlan: integer("readiness_treatment_plan", { mode: "boolean" }).notNull().default(false),
-  readinessProgressNotes: integer("readiness_progress_notes", { mode: "boolean" }).notNull().default(false),
-  readinessMedicalNecessity: integer("readiness_medical_necessity", { mode: "boolean" }).notNull().default(false),
-  readinessUtilizationReview: integer("readiness_utilization_review", { mode: "boolean" }).notNull().default(false),
-  readinessGuardianConsent: integer("readiness_guardian_consent", { mode: "boolean" }).notNull().default(false),
-  readinessUB04Clean: integer("readiness_ub04_clean", { mode: "boolean" }).notNull().default(false),
-  readinessExcludedServices: integer("readiness_excluded_services", { mode: "boolean" }).notNull().default(false),
+  stage: text("stage", {
+    enum: [
+      "readiness",
+      "submission",
+      "tracking",
+      "reauthorization",
+      "retrospective",
+    ],
+  }).notNull(),
+  status: text("status", {
+    enum: [
+      "pending",
+      "in_progress",
+      "submitted",
+      "approved",
+      "denied",
+      "appealed",
+      "expired",
+      "closed",
+    ],
+  })
+    .notNull()
+    .default("pending"),
+  readinessClinicalDocs: integer("readiness_clinical_docs", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  readinessAssessmentCurrent: integer("readiness_assessment_current", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  readinessLOCSupported: integer("readiness_loc_supported", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  readinessTreatmentPlan: integer("readiness_treatment_plan", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  readinessProgressNotes: integer("readiness_progress_notes", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  readinessMedicalNecessity: integer("readiness_medical_necessity", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  readinessUtilizationReview: integer("readiness_utilization_review", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  readinessGuardianConsent: integer("readiness_guardian_consent", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  readinessUB04Clean: integer("readiness_ub04_clean", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  readinessExcludedServices: integer("readiness_excluded_services", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   readinessMetAt: text("readiness_met_at"),
   submissionDate: text("submission_date"),
   submittedBy: text("submitted_by"),
-  submissionMethod: text("submission_method", { enum: ["portal", "fax", "email", "phone"] }),
+  submissionMethod: text("submission_method", {
+    enum: ["portal", "fax", "email", "phone"],
+  }),
   submissionReference: text("submission_reference"),
   authorizationNumber: text("authorization_number"),
   approvedUnits: integer("approved_units"),
@@ -1448,7 +2228,9 @@ export const authorizations = sqliteTable("authorizations", {
   appealStatus: text("appeal_status"),
   reauthDueDate: text("reauth_due_date"),
   reauthSubmittedAt: text("reauth_submitted_at"),
-  reauthStatus: text("reauth_status", { enum: ["not_due", "upcoming", "overdue", "submitted", "approved"] }).default("not_due"),
+  reauthStatus: text("reauth_status", {
+    enum: ["not_due", "upcoming", "overdue", "submitted", "approved"],
+  }).default("not_due"),
   daysUntilExpiration: integer("days_until_expiration"),
   retrospectiveReviewDate: text("retrospective_review_date"),
   retrospectiveFindings: text("retrospective_findings"),
@@ -1459,7 +2241,6 @@ export const authorizations = sqliteTable("authorizations", {
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
   createdBy: text("created_by"),
 });
-
 
 // ═══════════════════════════════════════════════════════════════
 // M18: Chart Audits (SOP Toolkit 8)
@@ -1472,27 +2253,53 @@ export const chartAudits = sqliteTable("chart_audits", {
   mrn: text("mrn").notNull(),
   auditDate: text("audit_date").notNull(),
   auditorName: text("auditor_name").notNull(),
-  area1IdentifyingInfo: integer("area1_identifying_info", { mode: "boolean" }).notNull().default(false),
+  area1IdentifyingInfo: integer("area1_identifying_info", { mode: "boolean" })
+    .notNull()
+    .default(false),
   area1Notes: text("area1_notes"),
-  area2ConsentForms: integer("area2_consent_forms", { mode: "boolean" }).notNull().default(false),
+  area2ConsentForms: integer("area2_consent_forms", { mode: "boolean" })
+    .notNull()
+    .default(false),
   area2Notes: text("area2_notes"),
-  area3AssessmentCurrent: integer("area3_assessment_current", { mode: "boolean" }).notNull().default(false),
+  area3AssessmentCurrent: integer("area3_assessment_current", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   area3Notes: text("area3_notes"),
-  area4TreatmentPlan: integer("area4_treatment_plan", { mode: "boolean" }).notNull().default(false),
+  area4TreatmentPlan: integer("area4_treatment_plan", { mode: "boolean" })
+    .notNull()
+    .default(false),
   area4Notes: text("area4_notes"),
-  area5ProgressNotes: integer("area5_progress_notes", { mode: "boolean" }).notNull().default(false),
+  area5ProgressNotes: integer("area5_progress_notes", { mode: "boolean" })
+    .notNull()
+    .default(false),
   area5Notes: text("area5_notes"),
-  area6MedicationRecords: integer("area6_medication_records", { mode: "boolean" }).notNull().default(false),
+  area6MedicationRecords: integer("area6_medication_records", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   area6Notes: text("area6_notes"),
-  area7SafetyPlans: integer("area7_safety_plans", { mode: "boolean" }).notNull().default(false),
+  area7SafetyPlans: integer("area7_safety_plans", { mode: "boolean" })
+    .notNull()
+    .default(false),
   area7Notes: text("area7_notes"),
-  area8IncidentReports: integer("area8_incident_reports", { mode: "boolean" }).notNull().default(false),
+  area8IncidentReports: integer("area8_incident_reports", { mode: "boolean" })
+    .notNull()
+    .default(false),
   area8Notes: text("area8_notes"),
-  area9AuthorizationBilling: integer("area9_authorization_billing", { mode: "boolean" }).notNull().default(false),
+  area9AuthorizationBilling: integer("area9_authorization_billing", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   area9Notes: text("area9_notes"),
   areasPassed: integer("areas_passed").notNull().default(0),
   areasTotal: integer("areas_total").notNull().default(9),
-  overallResult: text("overall_result", { enum: ["pass", "pass_with_notes", "fail", "incomplete"] }).default("incomplete"),
+  overallResult: text("overall_result", {
+    enum: ["pass", "pass_with_notes", "fail", "incomplete"],
+  }).default("incomplete"),
   correctiveActions: text("corrective_actions"),
   followUpDate: text("follow_up_date"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -1506,7 +2313,9 @@ export const facilities = sqliteTable("facilities", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   code: text("code").notNull(),
-  type: text("type", { enum: ["main_residence", "emergency_care", "purpose_built"] }).notNull(),
+  type: text("type", {
+    enum: ["main_residence", "emergency_care", "purpose_built"],
+  }).notNull(),
   address: text("address"),
   city: text("city"),
   state: text("state"),
@@ -1516,7 +2325,11 @@ export const facilities = sqliteTable("facilities", {
   currentOccupancy: integer("current_occupancy").notNull().default(0),
   totalRooms: integer("total_rooms").notNull().default(0),
   totalBeds: integer("total_beds").notNull().default(0),
-  status: text("status", { enum: ["active", "inactive", "planned", "under_construction"] }).notNull().default("active"),
+  status: text("status", {
+    enum: ["active", "inactive", "planned", "under_construction"],
+  })
+    .notNull()
+    .default("active"),
   activationDate: text("activation_date"),
   notes: text("notes"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -1527,14 +2340,30 @@ export const rooms = sqliteTable("rooms", {
   id: text("id").primaryKey(),
   facilityId: text("facility_id").notNull(),
   roomNumber: text("room_number").notNull(),
-  floor: text("floor", { enum: ["ground", "first", "second", "third", "basement"] }).notNull().default("ground"),
-  roomType: text("room_type", { enum: ["standard", "observation", "quiet", "ada_accessible", "isolation"] }).notNull().default("standard"),
+  floor: text("floor", {
+    enum: ["ground", "first", "second", "third", "basement"],
+  })
+    .notNull()
+    .default("ground"),
+  roomType: text("room_type", {
+    enum: ["standard", "observation", "quiet", "ada_accessible", "isolation"],
+  })
+    .notNull()
+    .default("standard"),
   maxBeds: integer("max_beds").notNull().default(2),
   currentOccupancy: integer("current_occupancy").notNull().default(0),
-  bedLayout: text("bed_layout", { enum: ["single", "double", "bunk"] }).notNull().default("double"),
-  hasPrivateBath: integer("has_private_bath", { mode: "boolean" }).notNull().default(false),
+  bedLayout: text("bed_layout", { enum: ["single", "double", "bunk"] })
+    .notNull()
+    .default("double"),
+  hasPrivateBath: integer("has_private_bath", { mode: "boolean" })
+    .notNull()
+    .default(false),
   hasWindow: integer("has_window", { mode: "boolean" }).notNull().default(true),
-  status: text("status", { enum: ["active", "inactive", "maintenance", "reserved"] }).notNull().default("active"),
+  status: text("status", {
+    enum: ["active", "inactive", "maintenance", "reserved"],
+  })
+    .notNull()
+    .default("active"),
   phaseActivationId: text("phase_activation_id"),
   notes: text("notes"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -1550,7 +2379,11 @@ export const facilityPhases = sqliteTable("facility_phases", {
   roomsActivated: integer("rooms_activated").notNull().default(0),
   activationDate: text("activation_date"),
   targetDate: text("target_date"),
-  status: text("status", { enum: ["pending", "active", "completed", "deferred"] }).notNull().default("pending"),
+  status: text("status", {
+    enum: ["pending", "active", "completed", "deferred"],
+  })
+    .notNull()
+    .default("pending"),
   approvedBy: text("approved_by"),
   approvalDate: text("approval_date"),
   notes: text("notes"),
@@ -1566,14 +2399,20 @@ export const bedCensusV2 = sqliteTable("bed_census_v2", {
   roomId: text("room_id").notNull(),
   bedNumber: text("bed_number").notNull(),
   bedLabel: text("bed_label").notNull(),
-  isOccupied: integer("is_occupied", { mode: "boolean" }).notNull().default(false),
+  isOccupied: integer("is_occupied", { mode: "boolean" })
+    .notNull()
+    .default(false),
   youthId: text("youth_id"),
   youthName: text("youth_name"),
   mrn: text("mrn"),
   assignedDate: text("assigned_date"),
   expectedDischargeDate: text("expected_discharge_date"),
-  isAccessible: integer("is_accessible", { mode: "boolean" }).notNull().default(false),
-  isObservation: integer("is_observation", { mode: "boolean" }).notNull().default(false),
+  isAccessible: integer("is_accessible", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  isObservation: integer("is_observation", { mode: "boolean" })
+    .notNull()
+    .default(false),
   isQuiet: integer("is_quiet", { mode: "boolean" }).notNull().default(false),
   notes: text("notes"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -1610,7 +2449,18 @@ export const mhrsServicePlans = sqliteTable("mhrs_service_plans", {
   therapistId: text("therapist_id"),
   therapistName: text("therapist_name"),
   // Plan lifecycle
-  planStatus: text("plan_status", { enum: ["draft", "active", "under_review", "approved", "superseded", "closed"] }).notNull().default("draft"),
+  planStatus: text("plan_status", {
+    enum: [
+      "draft",
+      "active",
+      "under_review",
+      "approved",
+      "superseded",
+      "closed",
+    ],
+  })
+    .notNull()
+    .default("draft"),
   version: integer("version").notNull().default(1),
   // Timelines
   intakeDate: text("intake_date").notNull(),
@@ -1621,19 +2471,49 @@ export const mhrsServicePlans = sqliteTable("mhrs_service_plans", {
   // 4 MHRS category goals
   cat1PsychoGoal: text("cat1_psycho_goal"),
   cat1PsychoObjectives: text("cat1_psycho_objectives"), // JSON array
-  cat1PsychoCompleted: integer("cat1_psycho_completed", { mode: "boolean" }).notNull().default(false),
+  cat1PsychoCompleted: integer("cat1_psycho_completed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   cat2SkillsGoal: text("cat2_skills_goal"),
   cat2SkillsObjectives: text("cat2_skills_objectives"), // JSON array
-  cat2SkillsCompleted: integer("cat2_skills_completed", { mode: "boolean" }).notNull().default(false),
+  cat2SkillsCompleted: integer("cat2_skills_completed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   cat3SupportiveGoal: text("cat3_supportive_goal"),
   cat3SupportiveObjectives: text("cat3_supportive_objectives"), // JSON array
-  cat3SupportiveCompleted: integer("cat3_supportive_completed", { mode: "boolean" }).notNull().default(false),
+  cat3SupportiveCompleted: integer("cat3_supportive_completed", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   cat4CommunityGoal: text("cat4_community_goal"),
   cat4CommunityObjectives: text("cat4_community_objectives"), // JSON array
-  cat4CommunityCompleted: integer("cat4_community_completed", { mode: "boolean" }).notNull().default(false),
+  cat4CommunityCompleted: integer("cat4_community_completed", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   // CANS functional domain linkage
-  cansDomainPrimary: text("cans_domain_primary", { enum: ["behavioral_emotional", "risk_behaviors", "functioning", "strengths", "caregiver_resources", "acculturation"] }),
-  cansDomainSecondary: text("cans_domain_secondary", { enum: ["behavioral_emotional", "risk_behaviors", "functioning", "strengths", "caregiver_resources", "acculturation"] }),
+  cansDomainPrimary: text("cans_domain_primary", {
+    enum: [
+      "behavioral_emotional",
+      "risk_behaviors",
+      "functioning",
+      "strengths",
+      "caregiver_resources",
+      "acculturation",
+    ],
+  }),
+  cansDomainSecondary: text("cans_domain_secondary", {
+    enum: [
+      "behavioral_emotional",
+      "risk_behaviors",
+      "functioning",
+      "strengths",
+      "caregiver_resources",
+      "acculturation",
+    ],
+  }),
   cansBaselineScore: integer("cans_baseline_score"),
   cansTargetScore: integer("cans_target_score"),
   // Approval
@@ -1661,15 +2541,40 @@ export const mhrsEncounters = sqliteTable("mhrs_encounters", {
   therapistName: text("therapist_name").notNull(),
   // Encounter
   encounterDate: text("encounter_date").notNull(),
-  encounterType: text("encounter_type", { enum: ["individual_skills", "group_skills", "psychoeducational", "community_integration", "family_session", "crisis_intervention"] }).notNull(),
+  encounterType: text("encounter_type", {
+    enum: [
+      "individual_skills",
+      "group_skills",
+      "psychoeducational",
+      "community_integration",
+      "family_session",
+      "crisis_intervention",
+    ],
+  }).notNull(),
   // H2017 billing
   billingCode: text("billing_code").notNull().default("H2017"),
   unitsBilled: integer("units_billed").notNull().default(1),
   minutesDelivered: integer("minutes_delivered").notNull().default(15),
   // Category mapping
-  mhrsCategory: text("mhrs_category", { enum: ["psychosocial_rehabilitation", "skills_training", "supportive_interventions", "community_integration"] }).notNull(),
+  mhrsCategory: text("mhrs_category", {
+    enum: [
+      "psychosocial_rehabilitation",
+      "skills_training",
+      "supportive_interventions",
+      "community_integration",
+    ],
+  }).notNull(),
   // CANS domain targeted
-  cansDomainTargeted: text("cans_domain_targeted", { enum: ["behavioral_emotional", "risk_behaviors", "functioning", "strengths", "caregiver_resources", "acculturation"] }),
+  cansDomainTargeted: text("cans_domain_targeted", {
+    enum: [
+      "behavioral_emotional",
+      "risk_behaviors",
+      "functioning",
+      "strengths",
+      "caregiver_resources",
+      "acculturation",
+    ],
+  }),
   // Documentation
   serviceDescription: text("service_description").notNull(),
   skillsTaught: text("skills_taught"),
@@ -1678,10 +2583,22 @@ export const mhrsEncounters = sqliteTable("mhrs_encounters", {
   homeworkAssignment: text("homework_assignment"),
   nextSteps: text("next_steps"),
   // Outcome
-  goalProgress: text("goal_progress", { enum: ["no_change", "minimal_progress", "moderate_progress", "significant_progress", "goal_achieved"] }).default("no_change"),
+  goalProgress: text("goal_progress", {
+    enum: [
+      "no_change",
+      "minimal_progress",
+      "moderate_progress",
+      "significant_progress",
+      "goal_achieved",
+    ],
+  }).default("no_change"),
   cansScoreCurrent: integer("cans_score_current"),
   // Status
-  documentationStatus: text("documentation_status", { enum: ["draft", "completed", "signed", "submitted"] }).notNull().default("draft"),
+  documentationStatus: text("documentation_status", {
+    enum: ["draft", "completed", "signed", "submitted"],
+  })
+    .notNull()
+    .default("draft"),
   signedBy: text("signed_by"),
   signedAt: text("signed_at"),
   // System
@@ -1702,7 +2619,16 @@ export const mhrsSkillsAssessments = sqliteTable("mhrs_skills_assessments", {
   assessedById: text("assessed_by_id"),
   assessmentDate: text("assessment_date").notNull(),
   // CANS functional domain
-  cansDomain: text("cans_domain", { enum: ["behavioral_emotional", "risk_behaviors", "functioning", "strengths", "caregiver_resources", "acculturation"] }).notNull(),
+  cansDomain: text("cans_domain", {
+    enum: [
+      "behavioral_emotional",
+      "risk_behaviors",
+      "functioning",
+      "strengths",
+      "caregiver_resources",
+      "acculturation",
+    ],
+  }).notNull(),
   // Skills rating (1-5 scale)
   skillAreasJson: text("skill_areas_json").notNull(), // [{area, baselineScore, currentScore, targetScore}]
   overallBaseline: integer("overall_baseline"),
@@ -1710,7 +2636,9 @@ export const mhrsSkillsAssessments = sqliteTable("mhrs_skills_assessments", {
   overallTarget: integer("overall_target"),
   // Progress
   progressPercentage: integer("progress_percentage"), // 0-100
-  readinessForTransition: text("readiness_for_transition", { enum: ["not_ready", "approaching", "ready", "transitioned"] }).default("not_ready"),
+  readinessForTransition: text("readiness_for_transition", {
+    enum: ["not_ready", "approaching", "ready", "transitioned"],
+  }).default("not_ready"),
   // System
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
@@ -1736,27 +2664,47 @@ export const ccmgCareCoordination = sqliteTable("ccmg_care_coordination", {
   caseManagerId: text("case_manager_id"),
   caseManagerName: text("case_manager_name"),
   // Cross-departmental assignment
-  assignedDepartment: text("assigned_department", { enum: ["CCMG", "MHTCM", "MHRS"] }).notNull().default("CCMG"),
+  assignedDepartment: text("assigned_department", {
+    enum: ["CCMG", "MHTCM", "MHRS"],
+  })
+    .notNull()
+    .default("CCMG"),
   departmentTransferDate: text("department_transfer_date"),
-  transferredFrom: text("transferred_from", { enum: ["CCMG", "MHTCM", "MHRS"] }),
+  transferredFrom: text("transferred_from", {
+    enum: ["CCMG", "MHTCM", "MHRS"],
+  }),
   transferRationale: text("transfer_rationale"),
   // Care coordination tracking
-  intakeCompleted: integer("intake_completed", { mode: "boolean" }).notNull().default(false),
+  intakeCompleted: integer("intake_completed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   intakeCompletedDate: text("intake_completed_date"),
-  assessmentCompleted: integer("assessment_completed", { mode: "boolean" }).notNull().default(false),
+  assessmentCompleted: integer("assessment_completed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   assessmentCompletedDate: text("assessment_completed_date"),
-  cansCompleted: integer("cans_completed", { mode: "boolean" }).notNull().default(false),
+  cansCompleted: integer("cans_completed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   cansScore: integer("cans_score"),
-  cansRiskLevel: text("cans_risk_level", { enum: ["low", "moderate", "high", "very_high"] }),
+  cansRiskLevel: text("cans_risk_level", {
+    enum: ["low", "moderate", "high", "very_high"],
+  }),
   // Cross-divisional liaison (GRO ↔ BHC)
   groLiaisonId: text("gro_liaison_id"),
   groLiaisonName: text("gro_liaison_name"),
   groFacilityId: text("gro_facility_id"),
   bedAssignment: text("bed_assignment"),
   // Status
-  status: text("status", { enum: ["intake", "active", "on_hold", "transitioning", "discharged"] }).notNull().default("intake"),
+  status: text("status", {
+    enum: ["intake", "active", "on_hold", "transitioning", "discharged"],
+  })
+    .notNull()
+    .default("intake"),
   // Timeline
-  admissionDate: text("admission_date").$defaultFn(() => new Date().toISOString()),
+  admissionDate: text("admission_date").$defaultFn(() =>
+    new Date().toISOString(),
+  ),
   projectedDischargeDate: text("projected_discharge_date"),
   actualDischargeDate: text("actual_discharge_date"),
   // System
@@ -1773,24 +2721,51 @@ export const ccmgReferrals = sqliteTable("ccmg_referrals", {
   youthName: text("youth_name").notNull(),
   mrn: text("mrn").notNull(),
   // Referral details
-  referralType: text("referral_type", { enum: ["internal", "external", "gro_to_bhc", "bhc_to_gro", "inter_department"] }).notNull(),
-  fromDepartment: text("from_department", { enum: ["CCMG", "MHTCM", "MHRS", "GRO"] }).notNull(),
-  toDepartment: text("to_department", { enum: ["CCMG", "MHTCM", "MHRS", "GRO"] }).notNull(),
+  referralType: text("referral_type", {
+    enum: [
+      "internal",
+      "external",
+      "gro_to_bhc",
+      "bhc_to_gro",
+      "inter_department",
+    ],
+  }).notNull(),
+  fromDepartment: text("from_department", {
+    enum: ["CCMG", "MHTCM", "MHRS", "GRO"],
+  }).notNull(),
+  toDepartment: text("to_department", {
+    enum: ["CCMG", "MHTCM", "MHRS", "GRO"],
+  }).notNull(),
   requestedBy: text("requested_by").notNull(),
   requestedById: text("requested_by_id"),
   requestDate: text("request_date").$defaultFn(() => new Date().toISOString()),
   // Content
   reasonForReferral: text("reason_for_referral").notNull(),
   clinicalJustification: text("clinical_justification"),
-  urgency: text("urgency", { enum: ["routine", "urgent", "emergency"] }).notNull().default("routine"),
+  urgency: text("urgency", { enum: ["routine", "urgent", "emergency"] })
+    .notNull()
+    .default("routine"),
   // Outcome
-  status: text("status", { enum: ["pending", "accepted", "scheduled", "completed", "declined", "cancelled"] }).notNull().default("pending"),
+  status: text("status", {
+    enum: [
+      "pending",
+      "accepted",
+      "scheduled",
+      "completed",
+      "declined",
+      "cancelled",
+    ],
+  })
+    .notNull()
+    .default("pending"),
   acceptedBy: text("accepted_by"),
   acceptedAt: text("accepted_at"),
   scheduledDate: text("scheduled_date"),
   completedDate: text("completed_date"),
   outcomeNotes: text("outcome_notes"),
-  followUpRequired: integer("follow_up_required", { mode: "boolean" }).notNull().default(false),
+  followUpRequired: integer("follow_up_required", { mode: "boolean" })
+    .notNull()
+    .default(false),
   followUpDate: text("follow_up_date"),
   // System
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -1824,6 +2799,315 @@ export const bhcDepartmentMetrics = sqliteTable("bhc_department_metrics", {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// M2.1: Controlled CCMG Oversight
+// Synthetic-prototype intake gates, CANS lineage, workflow, and audit
+// ═══════════════════════════════════════════════════════════════
+
+export const m21CcmgReferrals = sqliteTable("m21_ccmg_referrals", {
+  id: text("id").primaryKey(),
+  caseId: text("case_id").notNull().unique(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  youthId: text("youth_id").notNull(),
+  youthDisplayLabel: text("youth_display_label").notNull(),
+  referralSourceDivision: text("referral_source_division", {
+    enum: ["BHC", "GRO", "EO", "GAD", "external"],
+  }).notNull(),
+  referredAt: text("referred_at").notNull(),
+  referralReason: text("referral_reason").notNull(),
+  urgency: text("urgency", { enum: ["routine", "urgent", "emergency"] })
+    .notNull()
+    .default("routine"),
+  status: text("status", {
+    enum: [
+      "received",
+      "screening",
+      "held",
+      "rejected",
+      "ready_for_routing",
+      "active",
+      "closed",
+    ],
+  })
+    .notNull()
+    .default("received"),
+  holdReason: text("hold_reason"),
+  rejectionReason: text("rejection_reason"),
+  intakeStatus: text("intake_status", {
+    enum: ["not_started", "in_progress", "complete"],
+  })
+    .notNull()
+    .default("not_started"),
+  intakeCompletedAt: text("intake_completed_at"),
+  intakeCompletedBy: text("intake_completed_by"),
+  eligibilityStatus: text("eligibility_status", {
+    enum: ["pending", "eligible", "ineligible", "needs_review"],
+  })
+    .notNull()
+    .default("pending"),
+  ageQualified: integer("age_qualified", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  diagnosisQualified: integer("diagnosis_qualified", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  functionalImpairment: integer("functional_impairment", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  coverageQualified: integer("coverage_qualified", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  eligibilityRationale: text("eligibility_rationale"),
+  eligibilityDeterminedAt: text("eligibility_determined_at"),
+  eligibilityDeterminedBy: text("eligibility_determined_by"),
+  payerLabel: text("payer_label"),
+  payerVerificationStatus: text("payer_verification_status", {
+    enum: ["not_started", "pending", "verified", "failed"],
+  })
+    .notNull()
+    .default("not_started"),
+  payerVerifiedAt: text("payer_verified_at"),
+  authorizationRequired: integer("authorization_required", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  authorizationStatus: text("authorization_status", {
+    enum: ["not_required", "pending", "approved", "denied", "expired"],
+  })
+    .notNull()
+    .default("not_required"),
+  authorizationReference: text("authorization_reference"),
+  authorizationEffectiveAt: text("authorization_effective_at"),
+  authorizationExpiresAt: text("authorization_expires_at"),
+  consentStatus: text("consent_status", {
+    enum: ["pending", "active", "declined", "revoked", "expired"],
+  })
+    .notNull()
+    .default("pending"),
+  consentReference: text("consent_reference"),
+  consentEffectiveAt: text("consent_effective_at"),
+  consentExpiresAt: text("consent_expires_at"),
+  cansStatus: text("cans_status", {
+    enum: ["not_scheduled", "scheduled", "completed", "overdue", "cancelled"],
+  })
+    .notNull()
+    .default("not_scheduled"),
+  cansDueAt: text("cans_due_at"),
+  cansScheduledFor: text("cans_scheduled_for"),
+  currentCansAssessmentId: text("current_cans_assessment_id"),
+  currentCansVersion: integer("current_cans_version"),
+  cansAcuity: text("cans_acuity", {
+    enum: ["not_assessed", "low", "moderate", "high", "critical"],
+  })
+    .notNull()
+    .default("not_assessed"),
+  capacityRequired: integer("capacity_required", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  capacityFacilityLabel: text("capacity_facility_label"),
+  capacityStatus: text("capacity_status", {
+    enum: [
+      "not_required",
+      "unchecked",
+      "available",
+      "reserved",
+      "waitlisted",
+      "unavailable",
+    ],
+  })
+    .notNull()
+    .default("not_required"),
+  availableSlots: integer("available_slots"),
+  reservedSlotReference: text("reserved_slot_reference"),
+  capacityCheckedAt: text("capacity_checked_at"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+  version: integer("version").notNull().default(1),
+});
+
+export const m21CcmgCansAssessments = sqliteTable("m21_ccmg_cans_assessments", {
+  id: text("id").primaryKey(),
+  caseId: text("case_id").notNull(),
+  referralId: text("referral_id")
+    .notNull()
+    .references(() => m21CcmgReferrals.id, { onDelete: "restrict" }),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  version: integer("version").notNull(),
+  instrumentVersion: text("instrument_version").notNull(),
+  status: text("status", { enum: ["draft", "final", "superseded"] }).notNull(),
+  previousAssessmentId: text("previous_assessment_id"),
+  completedAt: text("completed_at"),
+  completedBy: text("completed_by"),
+  totalScore: integer("total_score"),
+  acuity: text("acuity", {
+    enum: ["low", "moderate", "high", "critical"],
+  }).notNull(),
+  domainScoresJson: text("domain_scores_json").notNull(),
+  actionableItemsJson: text("actionable_items_json").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const m21CcmgPlanLineage = sqliteTable("m21_ccmg_plan_lineage", {
+  id: text("id").primaryKey(),
+  caseId: text("case_id").notNull(),
+  referralId: text("referral_id")
+    .notNull()
+    .references(() => m21CcmgReferrals.id, { onDelete: "restrict" }),
+  cansAssessmentId: text("cans_assessment_id")
+    .notNull()
+    .references(() => m21CcmgCansAssessments.id, { onDelete: "restrict" }),
+  cansVersion: integer("cans_version").notNull(),
+  targetType: text("target_type", {
+    enum: ["mhtcm_plan", "mhrs_skills_goals"],
+  }).notNull(),
+  targetRecordId: text("target_record_id").notNull(),
+  targetVersion: integer("target_version").notNull(),
+  targetApprovalStatus: text("target_approval_status", {
+    enum: ["approved"],
+  }).notNull(),
+  targetApprovedBy: text("target_approved_by").notNull(),
+  targetApprovedAt: text("target_approved_at").notNull(),
+  routedBy: text("routed_by").notNull(),
+  routedAt: text("routed_at").notNull(),
+  mappedGoalsJson: text("mapped_goals_json").notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const m21CcmgWorkItems = sqliteTable("m21_ccmg_work_items", {
+  id: text("id").primaryKey(),
+  caseId: text("case_id").notNull(),
+  referralId: text("referral_id")
+    .notNull()
+    .references(() => m21CcmgReferrals.id, { onDelete: "restrict" }),
+  youthDisplayLabel: text("youth_display_label").notNull(),
+  queueId: text("queue_id", {
+    enum: ["intake", "qa", "cans", "medication_management", "mhtcm", "mhrs"],
+  }).notNull(),
+  title: text("title").notNull(),
+  status: text("status", {
+    enum: [
+      "pending",
+      "in_progress",
+      "blocked",
+      "awaiting_approval",
+      "completed",
+      "cancelled",
+    ],
+  }).notNull(),
+  priority: text("priority", { enum: ["routine", "urgent", "critical"] })
+    .notNull()
+    .default("routine"),
+  assignedDivision: text("assigned_division", {
+    enum: ["BHC", "GRO"],
+  }).notNull(),
+  assignedDepartment: text("assigned_department", {
+    enum: ["CCMG", "MHTCM", "MHRS", "GRO"],
+  }).notNull(),
+  assignedRole: text("assigned_role").notNull(),
+  assignedTo: text("assigned_to"),
+  dueAt: text("due_at").notNull(),
+  escalationLevel: text("escalation_level", {
+    enum: ["none", "supervisor", "director", "executive"],
+  })
+    .notNull()
+    .default("none"),
+  escalatedAt: text("escalated_at"),
+  escalationReason: text("escalation_reason"),
+  approvalStatus: text("approval_status", {
+    enum: ["not_required", "pending", "approved", "rejected"],
+  })
+    .notNull()
+    .default("not_required"),
+  approvedBy: text("approved_by"),
+  approvedAt: text("approved_at"),
+  approvalRationale: text("approval_rationale"),
+  exceptionCode: text("exception_code"),
+  exceptionReason: text("exception_reason"),
+  exceptionStatus: text("exception_status", {
+    enum: ["none", "open", "resolved", "waived"],
+  })
+    .notNull()
+    .default("none"),
+  sourceType: text("source_type").notNull(),
+  sourceId: text("source_id").notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  version: integer("version").notNull().default(1),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const m21CcmgHandoffs = sqliteTable("m21_ccmg_handoffs", {
+  id: text("id").primaryKey(),
+  caseId: text("case_id").notNull(),
+  referralId: text("referral_id")
+    .notNull()
+    .references(() => m21CcmgReferrals.id, { onDelete: "restrict" }),
+  workItemId: text("work_item_id")
+    .notNull()
+    .references(() => m21CcmgWorkItems.id, { onDelete: "restrict" }),
+  fromDivision: text("from_division", { enum: ["BHC", "GRO"] }).notNull(),
+  fromDepartment: text("from_department", {
+    enum: ["CCMG", "MHTCM", "MHRS", "GRO"],
+  }).notNull(),
+  toDivision: text("to_division", { enum: ["BHC", "GRO"] }).notNull(),
+  toDepartment: text("to_department", {
+    enum: ["CCMG", "MHTCM", "MHRS", "GRO"],
+  }).notNull(),
+  status: text("status", {
+    enum: ["initiated", "accepted", "rejected", "returned", "completed"],
+  }).notNull(),
+  reason: text("reason").notNull(),
+  payloadJson: text("payload_json").notNull().default("{}"),
+  initiatedBy: text("initiated_by").notNull(),
+  initiatedAt: text("initiated_at").notNull(),
+  dueAt: text("due_at").notNull(),
+  acceptedBy: text("accepted_by"),
+  acceptedAt: text("accepted_at"),
+  completedAt: text("completed_at"),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  version: integer("version").notNull().default(1),
+});
+
+export const m21CcmgAuditEvents = sqliteTable("m21_ccmg_audit_events", {
+  id: text("id").primaryKey(),
+  caseId: text("case_id"),
+  referralId: text("referral_id"),
+  workItemId: text("work_item_id"),
+  eventType: text("event_type", {
+    enum: [
+      "access",
+      "assignment",
+      "approval",
+      "plan_handoff",
+      "material_change",
+    ],
+  }).notNull(),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(),
+  actorId: text("actor_id").notNull(),
+  actorRole: text("actor_role").notNull(),
+  reason: text("reason").notNull(),
+  beforeJson: text("before_json"),
+  afterJson: text("after_json"),
+  changedFieldsJson: text("changed_fields_json").notNull().default("[]"),
+  correlationId: text("correlation_id").notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  occurredAt: text("occurred_at").notNull(),
+});
+
+// ═══════════════════════════════════════════════════════════════
 // MHTCM: Mental Health Targeted Case Management (T-004)
 // 6 core functions per HHSC. T1017 billing. Service plan within 14 days.
 // ═══════════════════════════════════════════════════════════════
@@ -1838,7 +3122,18 @@ export const mhtcmServicePlans = sqliteTable("mhtcm_service_plans", {
   caseManagerId: text("case_manager_id").notNull(),
   caseManagerName: text("case_manager_name").notNull(),
   // Plan lifecycle
-  planStatus: text("plan_status", { enum: ["draft", "active", "under_review", "approved", "superseded", "closed"] }).notNull().default("draft"),
+  planStatus: text("plan_status", {
+    enum: [
+      "draft",
+      "active",
+      "under_review",
+      "approved",
+      "superseded",
+      "closed",
+    ],
+  })
+    .notNull()
+    .default("draft"),
   version: integer("version").notNull().default(1),
   // Timelines
   intakeDate: text("intake_date").notNull(),
@@ -1848,22 +3143,57 @@ export const mhtcmServicePlans = sqliteTable("mhtcm_service_plans", {
   lastReviewDate: text("last_review_date"),
   // 6 MHTCM functions with goals
   function1IntakeGoal: text("function1_intake_goal"),
-  function1IntakeCompleted: integer("function1_intake_completed", { mode: "boolean" }).notNull().default(false),
+  function1IntakeCompleted: integer("function1_intake_completed", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   function2EligibilityGoal: text("function2_eligibility_goal"),
-  function2EligibilityCompleted: integer("function2_eligibility_completed", { mode: "boolean" }).notNull().default(false),
+  function2EligibilityCompleted: integer("function2_eligibility_completed", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   function3CoordinationGoal: text("function3_coordination_goal"),
-  function3CoordinationCompleted: integer("function3_coordination_completed", { mode: "boolean" }).notNull().default(false),
+  function3CoordinationCompleted: integer("function3_coordination_completed", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   function4ReferralGoal: text("function4_referral_goal"),
-  function4ReferralCompleted: integer("function4_referral_completed", { mode: "boolean" }).notNull().default(false),
+  function4ReferralCompleted: integer("function4_referral_completed", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   function5MonitoringGoal: text("function5_monitoring_goal"),
-  function5MonitoringCompleted: integer("function5_monitoring_completed", { mode: "boolean" }).notNull().default(false),
+  function5MonitoringCompleted: integer("function5_monitoring_completed", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   function6TransitionGoal: text("function6_transition_goal"),
-  function6TransitionCompleted: integer("function6_transition_completed", { mode: "boolean" }).notNull().default(false),
+  function6TransitionCompleted: integer("function6_transition_completed", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   // CANS integration
   cansScoreAtIntake: integer("cans_score_at_intake"),
-  cansRiskLevel: text("cans_risk_level", { enum: ["low", "moderate", "high", "very_high"] }),
-  locDetermined: integer("loc_determined", { mode: "boolean" }).notNull().default(false),
-  locLevel: text("loc_level", { enum: ["loc_1_high_acuity", "loc_2_moderate_acuity", "loc_3_low_acuity", "not_determined"] }).default("not_determined"),
+  cansRiskLevel: text("cans_risk_level", {
+    enum: ["low", "moderate", "high", "very_high"],
+  }),
+  locDetermined: integer("loc_determined", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  locLevel: text("loc_level", {
+    enum: [
+      "loc_1_high_acuity",
+      "loc_2_moderate_acuity",
+      "loc_3_low_acuity",
+      "not_determined",
+    ],
+  }).default("not_determined"),
   // Approval chain
   preparedBy: text("prepared_by"),
   preparedAt: text("prepared_at"),
@@ -1889,13 +3219,33 @@ export const mhtcmEncounters = sqliteTable("mhtcm_encounters", {
   caseManagerName: text("case_manager_name").notNull(),
   // Encounter details
   encounterDate: text("encounter_date").notNull(),
-  encounterType: text("encounter_type", { enum: ["intake_assessment", "care_coordination", "collateral_contact", "referral_linkage", "monitoring_visit", "crisis_response", "discharge_planning", "telehealth"] }).notNull(),
+  encounterType: text("encounter_type", {
+    enum: [
+      "intake_assessment",
+      "care_coordination",
+      "collateral_contact",
+      "referral_linkage",
+      "monitoring_visit",
+      "crisis_response",
+      "discharge_planning",
+      "telehealth",
+    ],
+  }).notNull(),
   // T1017 billing
   billingCode: text("billing_code").notNull().default("T1017"),
   unitsBilled: integer("units_billed").notNull().default(1), // per 15-min unit
   minutesDelivered: integer("minutes_delivered").notNull().default(15),
   // Function mapping
-  mhtcmFunction: text("mhtcm_function", { enum: ["intake", "eligibility", "coordination", "referral", "monitoring", "transition"] }).notNull(),
+  mhtcmFunction: text("mhtcm_function", {
+    enum: [
+      "intake",
+      "eligibility",
+      "coordination",
+      "referral",
+      "monitoring",
+      "transition",
+    ],
+  }).notNull(),
   // Documentation
   serviceDescription: text("service_description").notNull(),
   barriersIdentified: text("barriers_identified"),
@@ -1906,12 +3256,26 @@ export const mhtcmEncounters = sqliteTable("mhtcm_encounters", {
   // Collateral contacts
   collateralContactsJson: text("collateral_contacts_json"), // [{name, role, contactType, notes}]
   // Outcome
-  goalProgress: text("goal_progress", { enum: ["no_change", "minimal_progress", "moderate_progress", "significant_progress", "goal_achieved"] }).default("no_change"),
-  followUpRequired: integer("follow_up_required", { mode: "boolean" }).notNull().default(false),
+  goalProgress: text("goal_progress", {
+    enum: [
+      "no_change",
+      "minimal_progress",
+      "moderate_progress",
+      "significant_progress",
+      "goal_achieved",
+    ],
+  }).default("no_change"),
+  followUpRequired: integer("follow_up_required", { mode: "boolean" })
+    .notNull()
+    .default(false),
   followUpDate: text("follow_up_date"),
   followUpActions: text("follow_up_actions"),
   // Status
-  documentationStatus: text("documentation_status", { enum: ["draft", "completed", "signed", "submitted"] }).notNull().default("draft"),
+  documentationStatus: text("documentation_status", {
+    enum: ["draft", "completed", "signed", "submitted"],
+  })
+    .notNull()
+    .default("draft"),
   signedBy: text("signed_by"),
   signedAt: text("signed_at"),
   // System
@@ -1928,17 +3292,29 @@ export const mhtcmEligibility = sqliteTable("mhtcm_eligibility", {
   youthName: text("youth_name").notNull(),
   mrn: text("mrn").notNull(),
   // Eligibility criteria
-  ageQualified: integer("age_qualified", { mode: "boolean" }).notNull().default(false), // 3-17 for youth
-  diagnosisQualified: integer("diagnosis_qualified", { mode: "boolean" }).notNull().default(false), // DSM-5 diagnosis
-  functionalImpairment: integer("functional_impairment", { mode: "boolean" }).notNull().default(false), // CANS-based
-  medicaidEligible: integer("medicaid_eligible", { mode: "boolean" }).notNull().default(false),
+  ageQualified: integer("age_qualified", { mode: "boolean" })
+    .notNull()
+    .default(false), // 3-17 for youth
+  diagnosisQualified: integer("diagnosis_qualified", { mode: "boolean" })
+    .notNull()
+    .default(false), // DSM-5 diagnosis
+  functionalImpairment: integer("functional_impairment", { mode: "boolean" })
+    .notNull()
+    .default(false), // CANS-based
+  medicaidEligible: integer("medicaid_eligible", { mode: "boolean" })
+    .notNull()
+    .default(false),
   // Diagnosis
   primaryDiagnosis: text("primary_diagnosis"),
   primaryDiagnosisCode: text("primary_diagnosis_code"), // ICD-10
   secondaryDiagnosis: text("secondary_diagnosis"),
   secondaryDiagnosisCode: text("secondary_diagnosis_code"),
   // Determination
-  eligibilityStatus: text("eligibility_status", { enum: ["pending", "eligible", "ineligible", "under_review", "expired"] }).notNull().default("pending"),
+  eligibilityStatus: text("eligibility_status", {
+    enum: ["pending", "eligible", "ineligible", "under_review", "expired"],
+  })
+    .notNull()
+    .default("pending"),
   determinedBy: text("determined_by"),
   determinedAt: text("determined_at"),
   determinationRationale: text("determination_rationale"),
@@ -1949,7 +3325,9 @@ export const mhtcmEligibility = sqliteTable("mhtcm_eligibility", {
   effectiveDate: text("effective_date"),
   expirationDate: text("expiration_date"), // typically 1 year
   reauthorizationDue: text("reauthorization_due"),
-  reauthorizationStatus: text("reauthorization_status", { enum: ["not_due", "upcoming", "overdue", "submitted", "approved"] }).default("not_due"),
+  reauthorizationStatus: text("reauthorization_status", {
+    enum: ["not_due", "upcoming", "overdue", "submitted", "approved"],
+  }).default("not_due"),
   // System
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
@@ -1971,14 +3349,33 @@ export const sudRecords = sqliteTable("sud_records", {
   youthName: text("youth_name").notNull(),
   mrn: text("mrn").notNull(),
   // SUD information classification
-  substanceType: text("substance_type", { enum: ["alcohol", "cannabis", "opioids", "stimulants", "sedatives", "hallucinogens", "polysubstance", "other"] }).notNull(),
+  substanceType: text("substance_type", {
+    enum: [
+      "alcohol",
+      "cannabis",
+      "opioids",
+      "stimulants",
+      "sedatives",
+      "hallucinogens",
+      "polysubstance",
+      "other",
+    ],
+  }).notNull(),
   diagnosisCode: text("diagnosis_code"), // ICD-10 F10-F19
   severity: text("severity", { enum: ["mild", "moderate", "severe"] }),
   // 42 CFR Part 2 flags
-  isPart2Protected: integer("is_part2_protected", { mode: "boolean" }).notNull().default(true),
-  part2DesignationDate: text("part2_designation_date").$defaultFn(() => new Date().toISOString()),
+  isPart2Protected: integer("is_part2_protected", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  part2DesignationDate: text("part2_designation_date").$defaultFn(() =>
+    new Date().toISOString(),
+  ),
   // Status
-  status: text("status", { enum: ["active", "in_remission", "resolved", "transferred"] }).notNull().default("active"),
+  status: text("status", {
+    enum: ["active", "in_remission", "resolved", "transferred"],
+  })
+    .notNull()
+    .default("active"),
   // Clinical
   assessmentDate: text("assessment_date").notNull(),
   assessingClinicianId: text("assessing_clinician_id"),
@@ -2000,20 +3397,39 @@ export const part2Consents = sqliteTable("part2_consents", {
   mrn: text("mrn").notNull(),
   sudRecordId: text("sud_record_id").notNull(),
   // Consent scope
-  consentType: text("consent_type", { enum: ["initial", "renewal", "revocation", "amendment"] }).notNull(),
+  consentType: text("consent_type", {
+    enum: ["initial", "renewal", "revocation", "amendment"],
+  }).notNull(),
   // Recipient
   recipientName: text("recipient_name").notNull(),
   recipientOrganization: text("recipient_organization"),
-  recipientType: text("recipient_type", { enum: ["healthcare_provider", "insurance", "court", "family_member", "school", "employer", "research", "other"] }).notNull(),
+  recipientType: text("recipient_type", {
+    enum: [
+      "healthcare_provider",
+      "insurance",
+      "court",
+      "family_member",
+      "school",
+      "employer",
+      "research",
+      "other",
+    ],
+  }).notNull(),
   recipientNpi: text("recipient_npi"),
   // Scope
-  informationScope: text("information_scope", { enum: ["full_record", "summary_only", "specific_elements"] }).notNull().default("full_record"),
+  informationScope: text("information_scope", {
+    enum: ["full_record", "summary_only", "specific_elements"],
+  })
+    .notNull()
+    .default("full_record"),
   specificElements: text("specific_elements"), // JSON if scope is specific_elements
   purpose: text("purpose").notNull(),
   // Duration
   effectiveDate: text("effective_date").notNull(),
   expirationDate: text("expiration_date"),
-  expirationEvent: text("expiration_event", { enum: ["fixed_date", "treatment_end", "youth_age_18", "specific_event"] }).default("fixed_date"),
+  expirationEvent: text("expiration_event", {
+    enum: ["fixed_date", "treatment_end", "youth_age_18", "specific_event"],
+  }).default("fixed_date"),
   // Authorization
   authorizedBy: text("authorized_by").notNull(), // "youth_guardian" or "youth" if emancipated
   guardianName: text("guardian_name"),
@@ -2023,7 +3439,11 @@ export const part2Consents = sqliteTable("part2_consents", {
   witnessName: text("witness_name"),
   witnessSignature: text("witness_signature"),
   // Status
-  status: text("status", { enum: ["pending", "active", "expired", "revoked", "superseded"] }).notNull().default("pending"),
+  status: text("status", {
+    enum: ["pending", "active", "expired", "revoked", "superseded"],
+  })
+    .notNull()
+    .default("pending"),
   revokedAt: text("revoked_at"),
   revokedBy: text("revoked_by"),
   revocationReason: text("revocation_reason"),
@@ -2041,7 +3461,16 @@ export const part2Consents = sqliteTable("part2_consents", {
 export const qsoaAgreements = sqliteTable("qsoa_agreements", {
   id: text("id").primaryKey(),
   organizationName: text("organization_name").notNull(),
-  organizationType: text("organization_type", { enum: ["laboratory", "pharmacy", "billing_service", "quality_assurance", "it_vendor", "other"] }).notNull(),
+  organizationType: text("organization_type", {
+    enum: [
+      "laboratory",
+      "pharmacy",
+      "billing_service",
+      "quality_assurance",
+      "it_vendor",
+      "other",
+    ],
+  }).notNull(),
   contactName: text("contact_name"),
   contactPhone: text("contact_phone"),
   contactEmail: text("contact_email"),
@@ -2049,18 +3478,32 @@ export const qsoaAgreements = sqliteTable("qsoa_agreements", {
   agreementDate: text("agreement_date").notNull(),
   effectiveDate: text("effective_date").notNull(),
   expirationDate: text("expiration_date"),
-  autoRenew: integer("auto_renew", { mode: "boolean" }).notNull().default(false),
+  autoRenew: integer("auto_renew", { mode: "boolean" })
+    .notNull()
+    .default(false),
   // Scope
   servicesProvided: text("services_provided").notNull(),
-  dataAccessScope: text("data_access_scope", { enum: ["full", "limited", "de_identified"] }).notNull().default("limited"),
+  dataAccessScope: text("data_access_scope", {
+    enum: ["full", "limited", "de_identified"],
+  })
+    .notNull()
+    .default("limited"),
   dataAccessDescription: text("data_access_description"),
   // Compliance
-  baaExecuted: integer("baa_executed", { mode: "boolean" }).notNull().default(false),
+  baaExecuted: integer("baa_executed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   baaDate: text("baa_date"),
-  staffTrained: integer("staff_trained", { mode: "boolean" }).notNull().default(false),
+  staffTrained: integer("staff_trained", { mode: "boolean" })
+    .notNull()
+    .default(false),
   trainingDate: text("training_date"),
   // Status
-  status: text("status", { enum: ["draft", "active", "expiring_soon", "expired", "terminated"] }).notNull().default("draft"),
+  status: text("status", {
+    enum: ["draft", "active", "expiring_soon", "expired", "terminated"],
+  })
+    .notNull()
+    .default("draft"),
   // System
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
@@ -2074,20 +3517,36 @@ export const part2AuditLog = sqliteTable("part2_audit_log", {
   mrn: text("mrn").notNull(),
   sudRecordId: text("sud_record_id").notNull(),
   // Access details
-  accessType: text("access_type", { enum: ["view", "create", "update", "delete", "disclose", "print", "export"] }).notNull(),
+  accessType: text("access_type", {
+    enum: ["view", "create", "update", "delete", "disclose", "print", "export"],
+  }).notNull(),
   accessedBy: text("accessed_by").notNull(),
   accessedById: text("accessed_by_id"),
   accessedByRole: text("accessed_by_role"),
   // Context
-  accessTimestamp: text("access_timestamp").$defaultFn(() => new Date().toISOString()),
-  accessContext: text("access_context", { enum: ["treatment", "payment", "healthcare_operations", "audit", "research", "legal", "other"] }).notNull(),
+  accessTimestamp: text("access_timestamp").$defaultFn(() =>
+    new Date().toISOString(),
+  ),
+  accessContext: text("access_context", {
+    enum: [
+      "treatment",
+      "payment",
+      "healthcare_operations",
+      "audit",
+      "research",
+      "legal",
+      "other",
+    ],
+  }).notNull(),
   consentId: text("consent_id"), // null if internal access
   qsoaId: text("qsoa_id"), // null if not QSOA
   // Record details
   recordTypeAccessed: text("record_type_accessed").notNull(),
   fieldsAccessed: text("fields_accessed"), // JSON array
   // Flag
-  unauthorizedFlag: integer("unauthorized_flag", { mode: "boolean" }).notNull().default(false),
+  unauthorizedFlag: integer("unauthorized_flag", { mode: "boolean" })
+    .notNull()
+    .default(false),
   flagReason: text("flag_reason"),
   // IP / session
   ipAddress: text("ip_address"),
@@ -2098,35 +3557,55 @@ export const part2AuditLog = sqliteTable("part2_audit_log", {
 
 // ─── 42CFR2: Breach Notification ─────────────────────────────
 
-export const part2BreachNotifications = sqliteTable("part2_breach_notifications", {
-  id: text("id").primaryKey(),
-  breachNumber: text("breach_number").notNull().unique(),
-  // Breach details
-  discoveredDate: text("discovered_date").notNull(),
-  breachType: text("breach_type", { enum: ["unauthorized_access", "unauthorized_disclosure", "data_loss", "system_intrusion", "physical_theft", "other"] }).notNull(),
-  description: text("description").notNull(),
-  affectedYouthCount: integer("affected_youth_count").notNull().default(0),
-  affectedRecordCount: integer("affected_record_count").notNull().default(0),
-  // Affected youth (JSON array for simplicity)
-  affectedYouthJson: text("affected_youth_json"),
-  // Response
-  containmentActions: text("containment_actions"),
-  mitigationActions: text("mitigation_actions"),
-  // Notification timeline
-  secretaryNotified: integer("secretary_notified", { mode: "boolean" }).notNull().default(false),
-  secretaryNotifiedAt: text("secretary_notified_at"),
-  patientsNotified: integer("patients_notified", { mode: "boolean" }).notNull().default(false),
-  patientsNotifiedAt: text("patients_notified_at"),
-  patientsNotifiedBy: text("patients_notified_by"),
-  // Status
-  status: text("status", { enum: ["open", "contained", "mitigated", "notified", "closed"] }).notNull().default("open"),
-  closedAt: text("closed_at"),
-  closedBy: text("closed_by"),
-  // System
-  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
-  updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
-  createdBy: text("created_by"),
-});
+export const part2BreachNotifications = sqliteTable(
+  "part2_breach_notifications",
+  {
+    id: text("id").primaryKey(),
+    breachNumber: text("breach_number").notNull().unique(),
+    // Breach details
+    discoveredDate: text("discovered_date").notNull(),
+    breachType: text("breach_type", {
+      enum: [
+        "unauthorized_access",
+        "unauthorized_disclosure",
+        "data_loss",
+        "system_intrusion",
+        "physical_theft",
+        "other",
+      ],
+    }).notNull(),
+    description: text("description").notNull(),
+    affectedYouthCount: integer("affected_youth_count").notNull().default(0),
+    affectedRecordCount: integer("affected_record_count").notNull().default(0),
+    // Affected youth (JSON array for simplicity)
+    affectedYouthJson: text("affected_youth_json"),
+    // Response
+    containmentActions: text("containment_actions"),
+    mitigationActions: text("mitigation_actions"),
+    // Notification timeline
+    secretaryNotified: integer("secretary_notified", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    secretaryNotifiedAt: text("secretary_notified_at"),
+    patientsNotified: integer("patients_notified", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    patientsNotifiedAt: text("patients_notified_at"),
+    patientsNotifiedBy: text("patients_notified_by"),
+    // Status
+    status: text("status", {
+      enum: ["open", "contained", "mitigated", "notified", "closed"],
+    })
+      .notNull()
+      .default("open"),
+    closedAt: text("closed_at"),
+    closedBy: text("closed_by"),
+    // System
+    createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+    updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
+    createdBy: text("created_by"),
+  },
+);
 
 // ═══════════════════════════════════════════════════════════════
 // GRO: Minimum Standards Compliance (T-006)
@@ -2136,34 +3615,51 @@ export const part2BreachNotifications = sqliteTable("part2_breach_notifications"
 
 // ─── GRO: Youth Rights Acknowledgment ────────────────────────
 
-export const youthRightsAcknowledgments = sqliteTable("youth_rights_acknowledgments", {
-  id: text("id").primaryKey(),
-  youthId: text("youth_id").notNull(),
-  youthName: text("youth_name").notNull(),
-  mrn: text("mrn").notNull(),
-  // Rights document
-  rightsVersion: text("rights_version").notNull().default("2024-01"),
-  rightsDocumentUrl: text("rights_document_url"),
-  // Acknowledgment
-  acknowledgedByYouth: integer("acknowledged_by_youth", { mode: "boolean" }).notNull().default(false),
-  youthAcknowledgedAt: text("youth_acknowledged_at"),
-  acknowledgedByGuardian: integer("acknowledged_by_guardian", { mode: "boolean" }).notNull().default(false),
-  guardianAcknowledgedAt: text("guardian_acknowledged_at"),
-  guardianName: text("guardian_name"),
-  // Delivery
-  deliveredBy: text("delivered_by").notNull(),
-  deliveredById: text("delivered_by_id"),
-  deliveredAt: text("delivered_at").$defaultFn(() => new Date().toISOString()),
-  deliveryMethod: text("delivery_method", { enum: ["in_person", "video", "written", "interpreter"] }).notNull().default("in_person"),
-  language: text("language").notNull().default("English"),
-  interpreterUsed: integer("interpreter_used", { mode: "boolean" }).notNull().default(false),
-  interpreterName: text("interpreter_name"),
-  // Notes
-  notes: text("notes"),
-  // System
-  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
-  updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
-});
+export const youthRightsAcknowledgments = sqliteTable(
+  "youth_rights_acknowledgments",
+  {
+    id: text("id").primaryKey(),
+    youthId: text("youth_id").notNull(),
+    youthName: text("youth_name").notNull(),
+    mrn: text("mrn").notNull(),
+    // Rights document
+    rightsVersion: text("rights_version").notNull().default("2024-01"),
+    rightsDocumentUrl: text("rights_document_url"),
+    // Acknowledgment
+    acknowledgedByYouth: integer("acknowledged_by_youth", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    youthAcknowledgedAt: text("youth_acknowledged_at"),
+    acknowledgedByGuardian: integer("acknowledged_by_guardian", {
+      mode: "boolean",
+    })
+      .notNull()
+      .default(false),
+    guardianAcknowledgedAt: text("guardian_acknowledged_at"),
+    guardianName: text("guardian_name"),
+    // Delivery
+    deliveredBy: text("delivered_by").notNull(),
+    deliveredById: text("delivered_by_id"),
+    deliveredAt: text("delivered_at").$defaultFn(() =>
+      new Date().toISOString(),
+    ),
+    deliveryMethod: text("delivery_method", {
+      enum: ["in_person", "video", "written", "interpreter"],
+    })
+      .notNull()
+      .default("in_person"),
+    language: text("language").notNull().default("English"),
+    interpreterUsed: integer("interpreter_used", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    interpreterName: text("interpreter_name"),
+    // Notes
+    notes: text("notes"),
+    // System
+    createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+    updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
+  },
+);
 
 // ─── GRO: Restraint / Seclusion Incident Reports ─────────────
 
@@ -2177,7 +3673,16 @@ export const restraintIncidents = sqliteTable("restraint_incidents", {
   incidentDate: text("incident_date").notNull(),
   incidentTime: text("incident_time").notNull(),
   incidentLocation: text("incident_location").notNull(),
-  incidentType: text("incident_type", { enum: ["physical_restraint", "mechanical_restraint", "seclusion", "chemical_restraint", "time_out", "emergency_safety_intervention"] }).notNull(),
+  incidentType: text("incident_type", {
+    enum: [
+      "physical_restraint",
+      "mechanical_restraint",
+      "seclusion",
+      "chemical_restraint",
+      "time_out",
+      "emergency_safety_intervention",
+    ],
+  }).notNull(),
   // Staff involved
   primaryStaffId: text("primary_staff_id").notNull(),
   primaryStaffName: text("primary_staff_name").notNull(),
@@ -2196,21 +3701,41 @@ export const restraintIncidents = sqliteTable("restraint_incidents", {
   // Injuries
   youthInjuries: text("youth_injuries"),
   staffInjuries: text("staff_injuries"),
-  medicalAttentionRequired: integer("medical_attention_required", { mode: "boolean" }).notNull().default(false),
-  medicalEvaluationCompleted: integer("medical_evaluation_completed", { mode: "boolean" }).notNull().default(false),
+  medicalAttentionRequired: integer("medical_attention_required", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  medicalEvaluationCompleted: integer("medical_evaluation_completed", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   medicalEvaluationCompletedAt: text("medical_evaluation_completed_at"),
   medicalEvaluationBy: text("medical_evaluation_by"),
   // Documentation timeline (T-748 compliance)
-  initialDocumentationCompleted: integer("initial_documentation_completed", { mode: "boolean" }).notNull().default(false),
+  initialDocumentationCompleted: integer("initial_documentation_completed", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   initialDocumentationDue: text("initial_documentation_due"), // incidentTime + 1 hour
   initialDocumentationCompletedAt: text("initial_documentation_completed_at"),
   // Follow-up
-  followUpReviewCompleted: integer("follow_up_review_completed", { mode: "boolean" }).notNull().default(false),
+  followUpReviewCompleted: integer("follow_up_review_completed", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   followUpReviewDue: text("follow_up_review_due"), // incidentDate + 24 hours
   followUpReviewCompletedAt: text("follow_up_review_completed_at"),
   followUpActions: text("follow_up_actions"),
   // Status
-  status: text("status", { enum: ["open", "documented", "medical_pending", "under_review", "closed"] }).notNull().default("open"),
+  status: text("status", {
+    enum: ["open", "documented", "medical_pending", "under_review", "closed"],
+  })
+    .notNull()
+    .default("open"),
   // System
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
@@ -2225,14 +3750,34 @@ export const prohibitedPractices = sqliteTable("prohibited_practices", {
   incidentNumber: text("incident_number").notNull(),
   youthId: text("youth_id").notNull(),
   // 748.5567 — Prohibited practices
-  proneRestraintUsed: integer("prone_restraint_used", { mode: "boolean" }).notNull().default(false),
-  supineRestraintUsed: integer("supine_restraint_used", { mode: "boolean" }).notNull().default(false),
-  mechanicalRestraintUsed: integer("mechanical_restraint_used", { mode: "boolean" }).notNull().default(false),
-  chemicalRestraintUsed: integer("chemical_restraint_used", { mode: "boolean" }).notNull().default(false),
-  denialOfMeals: integer("denial_of_meals", { mode: "boolean" }).notNull().default(false),
-  denialOfSleep: integer("denial_of_sleep", { mode: "boolean" }).notNull().default(false),
-  corporalPunishment: integer("corporal_punishment", { mode: "boolean" }).notNull().default(false),
-  humiliationDegradation: integer("humiliation_degradation", { mode: "boolean" }).notNull().default(false),
+  proneRestraintUsed: integer("prone_restraint_used", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  supineRestraintUsed: integer("supine_restraint_used", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  mechanicalRestraintUsed: integer("mechanical_restraint_used", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  chemicalRestraintUsed: integer("chemical_restraint_used", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  denialOfMeals: integer("denial_of_meals", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  denialOfSleep: integer("denial_of_sleep", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  corporalPunishment: integer("corporal_punishment", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  humiliationDegradation: integer("humiliation_degradation", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   // Verification
   certified: integer("certified", { mode: "boolean" }).notNull().default(false),
   certifiedBy: text("certified_by"),
@@ -2250,13 +3795,29 @@ export const recordRetention = sqliteTable("record_retention", {
   youthName: text("youth_name").notNull(),
   mrn: text("mrn").notNull(),
   // Retention rules per T-748
-  recordType: text("record_type", { enum: ["admission_intake", "medical", "behavioral", "incident", "treatment_plan", "discharge_summary", "guardian_communication", "education", "medication_administration"] }).notNull(),
+  recordType: text("record_type", {
+    enum: [
+      "admission_intake",
+      "medical",
+      "behavioral",
+      "incident",
+      "treatment_plan",
+      "discharge_summary",
+      "guardian_communication",
+      "education",
+      "medication_administration",
+    ],
+  }).notNull(),
   // Timeline
   createdDate: text("created_date").notNull(),
   retentionYears: integer("retention_years").notNull().default(5),
   expirationDate: text("expiration_date").notNull(), // createdDate + retentionYears
   // Status
-  status: text("status", { enum: ["active", "expiring_soon", "expired", "archived", "destroyed"] }).notNull().default("active"),
+  status: text("status", {
+    enum: ["active", "expiring_soon", "expired", "archived", "destroyed"],
+  })
+    .notNull()
+    .default("active"),
   // Destruction
   destroyedBy: text("destroyed_by"),
   destroyedAt: text("destroyed_at"),
@@ -2267,7 +3828,7 @@ export const recordRetention = sqliteTable("record_retention", {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// M19-EXT: Three-Stage Campus Data Model (T-002)
+// M19-EXT: Three-Stage Campus Development Pathway (CTR-023)
 // ═══════════════════════════════════════════════════════════════
 
 // ─── Campus Stages ───────────────────────────────────────────
@@ -2275,7 +3836,7 @@ export const recordRetention = sqliteTable("record_retention", {
 export const campusStages = sqliteTable("campus_stages", {
   id: text("id").primaryKey(),
   stageNumber: integer("stage_number").notNull(), // 1, 2, 3
-  name: text("name").notNull(), // e.g. "Stage 1 — Assessment & Stabilization"
+  name: text("name").notNull(), // e.g. "Stage 1 — Main Residential Unit"
   description: text("description"),
   facilityId: text("facility_id").notNull(),
   // Capacity
@@ -2283,17 +3844,35 @@ export const campusStages = sqliteTable("campus_stages", {
   operationalCapacity: integer("operational_capacity").notNull().default(16),
   currentCensus: integer("current_census").notNull().default(0),
   // Alert thresholds (percentage)
-  capacityAlertThreshold: integer("capacity_alert_threshold").notNull().default(90), // % full → warning
-  capacityCriticalThreshold: integer("capacity_critical_threshold").notNull().default(95), // % full → critical
+  capacityAlertThreshold: integer("capacity_alert_threshold")
+    .notNull()
+    .default(90), // % full → warning
+  capacityCriticalThreshold: integer("capacity_critical_threshold")
+    .notNull()
+    .default(95), // % full → critical
   // Status
-  status: text("status", { enum: ["planned", "active", "paused", "closed"] }).notNull().default("planned"),
+  status: text("status", {
+    enum: [
+      "operational",
+      "licensing_in_progress",
+      "capital_planning",
+      "paused",
+      "closed",
+    ],
+  })
+    .notNull()
+    .default("capital_planning"),
   activationDate: text("activation_date"),
   deactivationDate: text("deactivation_date"),
   // Staffing ratios (per HHSC Title 26 TAC Ch 748)
   awakeStaffRatio: text("awake_staff_ratio").notNull().default("1:8"),
   overnightStaffRatio: text("overnight_staff_ratio").notNull().default("1:16"),
   // Clinical requirements
-  requiresLPHAAssessment: integer("requires_lpha_assessment", { mode: "boolean" }).notNull().default(false),
+  requiresLPHAAssessment: integer("requires_lpha_assessment", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   minAssessmentHours: integer("min_assessment_hours").notNull().default(0),
   // System
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -2309,7 +3888,11 @@ export const stageAssignments = sqliteTable("stage_assignments", {
   mrn: text("mrn").notNull(),
   fromStageId: text("from_stage_id"), // null for initial assignment
   toStageId: text("to_stage_id").notNull(),
-  assignmentType: text("assignment_type", { enum: ["initial", "progression", "regression", "transfer", "discharge"] }).notNull().default("initial"),
+  assignmentType: text("assignment_type", {
+    enum: ["placement", "transfer", "discharge"],
+  })
+    .notNull()
+    .default("placement"),
   assignedBy: text("assigned_by").notNull(),
   assignedById: text("assigned_by_id"),
   assignmentRationale: text("assignment_rationale"),
@@ -2317,26 +3900,35 @@ export const stageAssignments = sqliteTable("stage_assignments", {
   bedAssignment: text("bed_assignment"), // references bedCensusV2.bedLabel
   // Outcome
   completedDate: text("completed_date"),
-  completionOutcome: text("completion_outcome", { enum: ["progressed", "regressed", "discharged", "transferred", "ongoing"] }),
+  completionOutcome: text("completion_outcome", {
+    enum: ["completed", "discharged", "transferred", "ongoing"],
+  }),
   // System
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
 });
 
-// ─── Stage Progression Criteria ──────────────────────────────
+// ─── Campus Readiness Criteria ───────────────────────────────
 
-export const stageProgressionCriteria = sqliteTable("stage_progression_criteria", {
-  id: text("id").primaryKey(),
-  stageId: text("stage_id").notNull(),
-  criterionNumber: integer("criterion_number").notNull(),
-  criterionName: text("criterion_name").notNull(),
-  description: text("description").notNull(),
-  requiredForProgression: integer("required_for_progression", { mode: "boolean" }).notNull().default(true),
-  assessmentTool: text("assessment_tool"), // e.g. "CANS", "PHQ-9", "Clinical Judgment"
-  targetScore: text("target_score"), // threshold description
-  // System
-  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
-});
+export const campusReadinessCriteria = sqliteTable(
+  "stage_progression_criteria",
+  {
+    id: text("id").primaryKey(),
+    stageId: text("stage_id").notNull(),
+    criterionNumber: integer("criterion_number").notNull(),
+    criterionName: text("criterion_name").notNull(),
+    description: text("description").notNull(),
+    requiredForReadiness: integer("required_for_progression", {
+      mode: "boolean",
+    })
+      .notNull()
+      .default(true),
+    evidenceSource: text("assessment_tool"),
+    targetState: text("target_score"),
+    // System
+    createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+  },
+);
 
 // ─── Census Alerts ───────────────────────────────────────────
 
@@ -2344,8 +3936,19 @@ export const censusAlerts = sqliteTable("census_alerts", {
   id: text("id").primaryKey(),
   facilityId: text("facility_id").notNull(),
   stageId: text("stage_id").notNull(),
-  alertType: text("alert_type", { enum: ["capacity_warning", "capacity_critical", "staffing_shortfall", "admission_ready", "discharge_ready", "overage"] }).notNull(),
-  severity: text("severity", { enum: ["low", "moderate", "high", "critical"] }).notNull(),
+  alertType: text("alert_type", {
+    enum: [
+      "capacity_warning",
+      "capacity_critical",
+      "staffing_shortfall",
+      "admission_ready",
+      "discharge_ready",
+      "overage",
+    ],
+  }).notNull(),
+  severity: text("severity", {
+    enum: ["low", "moderate", "high", "critical"],
+  }).notNull(),
   message: text("message").notNull(),
   currentCensus: integer("current_census").notNull(),
   capacityLimit: integer("capacity_limit").notNull(),
@@ -2354,7 +3957,9 @@ export const censusAlerts = sqliteTable("census_alerts", {
   acknowledgedBy: text("acknowledged_by"),
   acknowledgedAt: text("acknowledged_at"),
   resolvedAt: text("resolved_at"),
-  autoResolved: integer("auto_resolved", { mode: "boolean" }).notNull().default(false),
+  autoResolved: integer("auto_resolved", { mode: "boolean" })
+    .notNull()
+    .default(false),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
 });
 
@@ -2391,18 +3996,33 @@ export const documentTemplates = sqliteTable("document_templates", {
   templateName: text("template_name").notNull(),
   templateCode: text("template_code").notNull().unique(), // e.g. "treatment-plan", "incident-report"
   description: text("description"),
-  documentType: text("document_type", { enum: ["clinical", "compliance", "administrative", "financial", "hr", "executive"] }).notNull(),
+  documentType: text("document_type", {
+    enum: [
+      "clinical",
+      "compliance",
+      "administrative",
+      "financial",
+      "hr",
+      "executive",
+    ],
+  }).notNull(),
   // Division scope
   applicableDivisions: text("applicable_divisions").notNull().default("all"), // JSON array: ["GRO","BHC","EO","GAD"]
   // Template configuration
-  coverPageRequired: integer("cover_page_required", { mode: "boolean" }).notNull().default(true),
-  tocRequired: integer("toc_required", { mode: "boolean" }).notNull().default(false),
+  coverPageRequired: integer("cover_page_required", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  tocRequired: integer("toc_required", { mode: "boolean" })
+    .notNull()
+    .default(false),
   signatureBlocks: integer("signature_blocks").notNull().default(0),
   // Swiss Style config
   primaryColor: text("primary_color").notNull().default("#245C5A"),
   accentColor: text("accent_color"),
   // Status
-  status: text("status", { enum: ["draft", "active", "deprecated"] }).notNull().default("draft"),
+  status: text("status", { enum: ["draft", "active", "deprecated"] })
+    .notNull()
+    .default("draft"),
   // System
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
@@ -2421,7 +4041,11 @@ export const generatedDocuments = sqliteTable("generated_documents", {
   generatedById: text("generated_by_id"),
   division: text("division"),
   // Status
-  status: text("status", { enum: ["queued", "generating", "completed", "failed"] }).notNull().default("queued"),
+  status: text("status", {
+    enum: ["queued", "generating", "completed", "failed"],
+  })
+    .notNull()
+    .default("queued"),
   // Output
   filePath: text("file_path"),
   fileSize: integer("file_size"),
@@ -2444,8 +4068,23 @@ export const mgmaDomains = sqliteTable("mgma_domains", {
   domainDescription: text("domain_description").notNull(),
   amosOpsModule: text("amos_ops_module").notNull(),
   moduleRoute: text("module_route").notNull(),
-  responsibleDivision: text("responsible_division", { enum: ["EO", "GAD", "GRO", "BHC"] }).notNull(),
-  status: text("status", { enum: ["planned", "configured", "active", "under_review"] }).notNull().default("planned"),
+  workflowIdsJson: text("workflow_ids_json").notNull().default("[]"),
+  accountableOwner: text("accountable_owner").notNull().default("Unassigned"),
+  sourceDataJson: text("source_data_json").notNull().default("[]"),
+  corporateOfficeSponsor: text("corporate_office_sponsor", {
+    enum: ["EO", "GAD"],
+  })
+    .notNull()
+    .default("EO"),
+  consumingScopesJson: text("consuming_scopes_json").notNull().default("[]"),
+  responsibleDivision: text("responsible_division", {
+    enum: ["EO", "GAD", "GRO", "BHC"],
+  }).notNull(),
+  status: text("status", {
+    enum: ["planned", "configured", "active", "under_review"],
+  })
+    .notNull()
+    .default("planned"),
   configuredAt: text("configured_at"),
   configuredBy: text("configured_by"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -2459,12 +4098,59 @@ export const mgmaKpiTargets = sqliteTable("mgma_kpi_targets", {
   kpiDescription: text("kpi_description").notNull(),
   targetValue: text("target_value").notNull(),
   targetUnit: text("target_unit").notNull(),
-  comparisonOperator: text("comparison_operator", { enum: ["less_than", "greater_than", "equal_to", "between"] }).notNull().default("less_than"),
-  benchmarkSource: text("benchmark_source").notNull().default("MGMA 2024"),
+  comparisonOperator: text("comparison_operator", {
+    enum: [
+      "less_than",
+      "less_than_or_equal",
+      "greater_than",
+      "greater_than_or_equal",
+      "equal_to",
+      "between",
+    ],
+  })
+    .notNull()
+    .default("less_than_or_equal"),
+  benchmarkSource: text("benchmark_source")
+    .notNull()
+    .default("AMOS-OPS controlled internal prototype target"),
+  formula: text("formula").notNull().default("Controlled formula pending"),
+  numeratorDefinition: text("numerator_definition")
+    .notNull()
+    .default("Not applicable"),
+  denominatorDefinition: text("denominator_definition")
+    .notNull()
+    .default("Not applicable"),
+  sourceSystem: text("source_system")
+    .notNull()
+    .default("Controlled source pending"),
+  sourceFieldsJson: text("source_fields_json").notNull().default("[]"),
+  ownerRole: text("owner_role").notNull().default("Unassigned"),
+  drillDownPath: text("drill_down_path").notNull().default("/executive/mgma"),
+  targetBasis: text("target_basis")
+    .notNull()
+    .default("AMOS-OPS controlled internal prototype target"),
+  targetApprovalStatus: text("target_approval_status", {
+    enum: ["prototype-reviewed", "pending-owner-review", "owner-approved"],
+  })
+    .notNull()
+    .default("pending-owner-review"),
+  staleAfterHours: integer("stale_after_hours").notNull().default(744),
+  scopeIdsJson: text("scope_ids_json").notNull().default("[]"),
+  isChecklistTarget: integer("is_checklist_target", { mode: "boolean" })
+    .notNull()
+    .default(false),
   currentValue: text("current_value"),
   lastMeasuredAt: text("last_measured_at"),
-  measurementFrequency: text("measurement_frequency", { enum: ["daily", "weekly", "monthly", "quarterly", "annually"] }).notNull().default("monthly"),
-  status: text("status", { enum: ["on_target", "at_risk", "off_target", "not_measured"] }).notNull().default("not_measured"),
+  measurementFrequency: text("measurement_frequency", {
+    enum: ["daily", "weekly", "monthly", "quarterly", "annually"],
+  })
+    .notNull()
+    .default("monthly"),
+  status: text("status", {
+    enum: ["on_target", "at_risk", "off_target", "not_measured"],
+  })
+    .notNull()
+    .default("not_measured"),
   alertThreshold: text("alert_threshold"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
@@ -2473,6 +4159,24 @@ export const mgmaKpiTargets = sqliteTable("mgma_kpi_targets", {
 export const mgmaScorecards = sqliteTable("mgma_scorecards", {
   id: text("id").primaryKey(),
   division: text("division", { enum: ["EO", "GAD", "GRO", "BHC"] }).notNull(),
+  scopeType: text("scope_type", { enum: ["profit_center", "corporate_office"] })
+    .notNull()
+    .default("profit_center"),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  })
+    .notNull()
+    .default("synthetic_demo"),
+  baselineStatus: text("baseline_status", {
+    enum: ["not_measured", "measured"],
+  })
+    .notNull()
+    .default("not_measured"),
+  dataQualityStatus: text("data_quality_status", {
+    enum: ["not_run", "pass", "fail"],
+  })
+    .notNull()
+    .default("not_run"),
   scorecardDate: text("scorecard_date").notNull(),
   overallScore: integer("overall_score"),
   kpisOnTarget: integer("kpis_on_target").notNull().default(0),
@@ -2486,6 +4190,118 @@ export const mgmaScorecards = sqliteTable("mgma_scorecards", {
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
 });
 
+export const mgmaMeasurements = sqliteTable("mgma_measurements", {
+  id: text("id").primaryKey(),
+  kpiId: text("kpi_id")
+    .notNull()
+    .references(() => mgmaKpiTargets.id, { onDelete: "restrict" }),
+  scopeType: text("scope_type", {
+    enum: ["profit_center", "corporate_office"],
+  }).notNull(),
+  scopeId: text("scope_id", { enum: ["EO", "GAD", "GRO", "BHC"] }).notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  periodStart: text("period_start").notNull(),
+  periodEnd: text("period_end").notNull(),
+  numeratorValue: text("numerator_value"),
+  denominatorValue: text("denominator_value"),
+  calculatedValue: text("calculated_value").notNull(),
+  sourceReference: text("source_reference").notNull(),
+  sourceRecordIdsJson: text("source_record_ids_json").notNull().default("[]"),
+  sourceRecordCount: integer("source_record_count").notNull().default(0),
+  collectedAt: text("collected_at").notNull(),
+  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+});
+
+export const mgmaDataQualityResults = sqliteTable("mgma_data_quality_results", {
+  id: text("id").primaryKey(),
+  measurementId: text("measurement_id").references(() => mgmaMeasurements.id, {
+    onDelete: "cascade",
+  }),
+  kpiId: text("kpi_id")
+    .notNull()
+    .references(() => mgmaKpiTargets.id, { onDelete: "restrict" }),
+  scopeId: text("scope_id", { enum: ["EO", "GAD", "GRO", "BHC"] }).notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  checkType: text("check_type", {
+    enum: [
+      "completeness",
+      "timeliness",
+      "duplication",
+      "denominator_validity",
+      "stale_data",
+    ],
+  }).notNull(),
+  checkStatus: text("check_status", {
+    enum: ["pass", "fail", "not_run"],
+  }).notNull(),
+  reasonCode: text("reason_code").notNull(),
+  details: text("details").notNull(),
+  evaluatedAt: text("evaluated_at").notNull(),
+});
+
+export const mgmaDashboardGovernance = sqliteTable(
+  "mgma_dashboard_governance",
+  {
+    id: text("id").primaryKey(),
+    baselinePeriodStart: text("baseline_period_start").notNull(),
+    baselinePeriodEnd: text("baseline_period_end").notNull(),
+    dashboardCadence: text("dashboard_cadence", {
+      enum: ["monthly", "quarterly"],
+    })
+      .notNull()
+      .default("monthly"),
+    closeRule: text("close_rule").notNull(),
+    status: text("status", {
+      enum: [
+        "prototype-reviewed",
+        "pending-owner-acceptance",
+        "owner-approved",
+      ],
+    })
+      .notNull()
+      .default("prototype-reviewed"),
+    ownerRole: text("owner_role").notNull(),
+    reviewerLabel: text("reviewer_label").notNull(),
+    reviewClass: text("review_class", {
+      enum: ["synthetic_prototype", "human"],
+    })
+      .notNull()
+      .default("synthetic_prototype"),
+    reviewedAt: text("reviewed_at").notNull(),
+    note: text("note").notNull(),
+  },
+);
+
+export const mgmaOwnerApprovals = sqliteTable("mgma_owner_approvals", {
+  id: text("id").primaryKey(),
+  kpiId: text("kpi_id")
+    .notNull()
+    .references(() => mgmaKpiTargets.id, { onDelete: "cascade" }),
+  ownerRole: text("owner_role").notNull(),
+  formulaStatus: text("formula_status", {
+    enum: ["prototype-reviewed", "pending-owner-review", "owner-approved"],
+  }).notNull(),
+  targetStatus: text("target_status", {
+    enum: ["prototype-reviewed", "pending-owner-review", "owner-approved"],
+  }).notNull(),
+  sourceStatus: text("source_status", {
+    enum: ["prototype-reviewed", "pending-owner-review", "owner-approved"],
+  }).notNull(),
+  cadenceStatus: text("cadence_status", {
+    enum: ["prototype-reviewed", "pending-owner-review", "owner-approved"],
+  }).notNull(),
+  reviewerLabel: text("reviewer_label").notNull(),
+  reviewClass: text("review_class", { enum: ["synthetic_prototype", "human"] })
+    .notNull()
+    .default("synthetic_prototype"),
+  reviewedAt: text("reviewed_at").notNull(),
+  note: text("note").notNull(),
+});
+
 // ═══════════════════════════════════════════════════════════════
 // M7: GAD — General Administration
 // ═══════════════════════════════════════════════════════════════
@@ -2497,7 +4313,19 @@ export const procurementRequests = sqliteTable("procurement_requests", {
   requestNumber: text("request_number").notNull().unique(),
   title: text("title").notNull(),
   description: text("description"),
-  category: text("category", { enum: ["equipment", "supplies", "services", "furniture", "technology", "safety", "other"] }).notNull().default("supplies"),
+  category: text("category", {
+    enum: [
+      "equipment",
+      "supplies",
+      "services",
+      "furniture",
+      "technology",
+      "safety",
+      "other",
+    ],
+  })
+    .notNull()
+    .default("supplies"),
   quantity: integer("quantity").notNull().default(1),
   estimatedUnitCost: integer("estimated_unit_cost"), // cents
   estimatedTotalCost: integer("estimated_total_cost"), // cents
@@ -2509,8 +4337,23 @@ export const procurementRequests = sqliteTable("procurement_requests", {
   requestedById: text("requested_by_id"),
   approvedBy: text("approved_by"),
   approvedAt: text("approved_at"),
-  status: text("status", { enum: ["draft", "submitted", "under_review", "approved", "rejected", "ordered", "received", "cancelled"] }).notNull().default("draft"),
-  priority: text("priority", { enum: ["low", "medium", "high", "urgent"] }).notNull().default("medium"),
+  status: text("status", {
+    enum: [
+      "draft",
+      "submitted",
+      "under_review",
+      "approved",
+      "rejected",
+      "ordered",
+      "received",
+      "cancelled",
+    ],
+  })
+    .notNull()
+    .default("draft"),
+  priority: text("priority", { enum: ["low", "medium", "high", "urgent"] })
+    .notNull()
+    .default("medium"),
   justification: text("justification"),
   rejectionReason: text("rejection_reason"),
   poNumber: text("po_number"),
@@ -2528,18 +4371,41 @@ export const safetyInspections = sqliteTable("safety_inspections", {
   inspectionNumber: text("inspection_number").notNull().unique(),
   facilityId: text("facility_id").notNull(),
   facilityName: text("facility_name").notNull(),
-  inspectionType: text("inspection_type", { enum: ["fire_safety", "sprinkler", "emergency_lighting", "generator", "extinguisher", "hvac", "electrical", "plumbing", "security", "grounds", "food_service", "general"] }).notNull(),
+  inspectionType: text("inspection_type", {
+    enum: [
+      "fire_safety",
+      "sprinkler",
+      "emergency_lighting",
+      "generator",
+      "extinguisher",
+      "hvac",
+      "electrical",
+      "plumbing",
+      "security",
+      "grounds",
+      "food_service",
+      "general",
+    ],
+  }).notNull(),
   inspectedBy: text("inspected_by").notNull(),
   inspectedById: text("inspected_by_id"),
   inspectionDate: text("inspection_date").notNull(),
   nextDueDate: text("next_due_date"),
   frequencyDays: integer("frequency_days").notNull().default(90),
-  status: text("status", { enum: ["passed", "passed_with_notes", "failed", "pending", "overdue"] }).notNull().default("pending"),
+  status: text("status", {
+    enum: ["passed", "passed_with_notes", "failed", "pending", "overdue"],
+  })
+    .notNull()
+    .default("pending"),
   score: integer("score"), // 0-100
   checklistJson: text("checklist_json").notNull().default("[]"),
   findings: text("findings"),
   correctiveActions: text("corrective_actions"),
-  correctiveActionsCompleted: integer("corrective_actions_completed", { mode: "boolean" }).notNull().default(false),
+  correctiveActionsCompleted: integer("corrective_actions_completed", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   correctiveActionsCompletedAt: text("corrective_actions_completed_at"),
   photosJson: text("photos_json"),
   reviewedBy: text("reviewed_by"),
@@ -2555,15 +4421,40 @@ export const vendorContracts = sqliteTable("vendor_contracts", {
   id: text("id").primaryKey(),
   vendorId: text("vendor_id").notNull(),
   contractNumber: text("contract_number").notNull().unique(),
-  contractType: text("contract_type", { enum: ["service_agreement", "purchase_order", "maintenance", "warranty", "insurance", "lease", "other"] }).notNull().default("service_agreement"),
+  contractType: text("contract_type", {
+    enum: [
+      "service_agreement",
+      "purchase_order",
+      "maintenance",
+      "warranty",
+      "insurance",
+      "lease",
+      "other",
+    ],
+  })
+    .notNull()
+    .default("service_agreement"),
   startDate: text("start_date").notNull(),
   endDate: text("end_date").notNull(),
   value: integer("value"), // cents
   paymentTerms: text("payment_terms"),
-  autoRenew: integer("auto_renew", { mode: "boolean" }).notNull().default(false),
+  autoRenew: integer("auto_renew", { mode: "boolean" })
+    .notNull()
+    .default(false),
   renewalTerms: text("renewal_terms"),
   terminationNoticeDays: integer("termination_notice_days").default(30),
-  status: text("status", { enum: ["draft", "active", "expiring", "expired", "terminated", "pending_renewal"] }).notNull().default("active"),
+  status: text("status", {
+    enum: [
+      "draft",
+      "active",
+      "expiring",
+      "expired",
+      "terminated",
+      "pending_renewal",
+    ],
+  })
+    .notNull()
+    .default("active"),
   scopeOfWork: text("scope_of_work"),
   documentsJson: text("documents_json"),
   primaryContactName: text("primary_contact_name"),
@@ -2577,7 +4468,6 @@ export const vendorContracts = sqliteTable("vendor_contracts", {
 // ═══════════════════════════════════════════════════════════════
 // M21: Agent Persona Registry
 // ═══════════════════════════════════════════════════════════════
-
 
 // ═══════════════════════════════════════════════════════════════
 // D005: Workflow Engine Tables (v2)
@@ -2645,11 +4535,22 @@ export const phiAccessLog = sqliteTable("phi_access_log", {
   patientId: text("patient_id").notNull(),
   recordType: text("record_type", {
     enum: [
-      "demographics", "clinical_assessment", "treatment_plan",
-      "medication", "diagnosis", "progress_note", "lab_result",
-      "insurance", "appointment", "contact_info", "emergency_contact",
-      "discharge_summary", "case_note", "cans_assessment",
-      "incident_report", "billing_record",
+      "demographics",
+      "clinical_assessment",
+      "treatment_plan",
+      "medication",
+      "diagnosis",
+      "progress_note",
+      "lab_result",
+      "insurance",
+      "appointment",
+      "contact_info",
+      "emergency_contact",
+      "discharge_summary",
+      "case_note",
+      "cans_assessment",
+      "incident_report",
+      "billing_record",
     ],
   }).notNull(),
   endpoint: text("endpoint").notNull(),
@@ -2657,7 +4558,9 @@ export const phiAccessLog = sqliteTable("phi_access_log", {
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
   accessedAt: text("accessed_at").$defaultFn(() => new Date().toISOString()),
-  outcome: text("outcome", { enum: ["allowed", "denied", "blocked"] }).notNull().default("allowed"),
+  outcome: text("outcome", { enum: ["allowed", "denied", "blocked"] })
+    .notNull()
+    .default("allowed"),
   denialReason: text("denial_reason"),
 });
 
@@ -2666,7 +4569,9 @@ export const phiAccessLog = sqliteTable("phi_access_log", {
 export const complianceQueue = sqliteTable("compliance_queue", {
   id: text("id").primaryKey(),
   findingType: text("finding_type").notNull(),
-  severity: text("severity", { enum: ["low", "medium", "high", "critical"] }).notNull(),
+  severity: text("severity", {
+    enum: ["low", "medium", "high", "critical"],
+  }).notNull(),
   description: text("description").notNull(),
   clientId: text("client_id"),
   programId: text("program_id"),
@@ -2674,8 +4579,16 @@ export const complianceQueue = sqliteTable("compliance_queue", {
   reportedBy: text("reported_by").notNull(),
   qaOfficerId: text("qa_officer_id"),
   status: text("status", {
-    enum: ["pending_review", "under_review", "approved", "rejected", "escalated"],
-  }).notNull().default("pending_review"),
+    enum: [
+      "pending_review",
+      "under_review",
+      "approved",
+      "rejected",
+      "escalated",
+    ],
+  })
+    .notNull()
+    .default("pending_review"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   reviewedAt: text("reviewed_at"),
   resolutionNotes: text("resolution_notes"),
@@ -2691,10 +4604,43 @@ export const evidenceMatrix = sqliteTable("evidence_matrix", {
   title: text("title").notNull(),
   description: text("description"),
   // Classification
-  category: text("category", { enum: ["policy", "procedure", "training_record", "audit_report", "incident_report", "credential", "risk_assessment", "other"] }).notNull(),
-  complianceArea: text("compliance_area", { enum: ["hipaa_privacy", "hipaa_security", "cfr42_part2", "state_licensure", "staff_credentials", "incident_reporting", "medication_management", "youth_rights", "other"] }).notNull(),
+  category: text("category", {
+    enum: [
+      "policy",
+      "procedure",
+      "training_record",
+      "audit_report",
+      "incident_report",
+      "credential",
+      "risk_assessment",
+      "other",
+    ],
+  }).notNull(),
+  complianceArea: text("compliance_area", {
+    enum: [
+      "hipaa_privacy",
+      "hipaa_security",
+      "cfr42_part2",
+      "state_licensure",
+      "staff_credentials",
+      "incident_reporting",
+      "medication_management",
+      "youth_rights",
+      "other",
+    ],
+  }).notNull(),
   // Source
-  sourceType: text("source_type", { enum: ["document", "system_log", "interview", "observation", "external_report", "photo", "other"] }).notNull(),
+  sourceType: text("source_type", {
+    enum: [
+      "document",
+      "system_log",
+      "interview",
+      "observation",
+      "external_report",
+      "photo",
+      "other",
+    ],
+  }).notNull(),
   sourceReference: text("source_reference"), // document ID, file path, etc.
   // Location
   department: text("department"),
@@ -2708,7 +4654,11 @@ export const evidenceMatrix = sqliteTable("evidence_matrix", {
   reviewedById: text("reviewed_by_id"),
   reviewNotes: text("review_notes"),
   // Status
-  status: text("status", { enum: ["active", "under_review", "expired", "superseded", "archived"] }).notNull().default("active"),
+  status: text("status", {
+    enum: ["active", "under_review", "expired", "superseded", "archived"],
+  })
+    .notNull()
+    .default("active"),
   supersededById: text("superseded_by_id"),
   // Relation to audit
   relatedAuditId: text("related_audit_id"),
@@ -2756,10 +4706,27 @@ export const complianceMemos = sqliteTable("compliance_memos", {
   relatedCapNumber: text("related_cap_number"),
   // Memo metadata
   memoDate: text("memo_date").notNull(),
-  priority: text("priority", { enum: ["routine", "urgent", "emergency"] }).notNull().default("routine"),
-  classification: text("classification", { enum: ["internal", "restricted", "confidential"] }).notNull().default("internal"),
+  priority: text("priority", { enum: ["routine", "urgent", "emergency"] })
+    .notNull()
+    .default("routine"),
+  classification: text("classification", {
+    enum: ["internal", "restricted", "confidential"],
+  })
+    .notNull()
+    .default("internal"),
   // Status lifecycle
-  status: text("status", { enum: ["draft", "pending_review", "approved", "issued", "acknowledged", "superseded"] }).notNull().default("draft"),
+  status: text("status", {
+    enum: [
+      "draft",
+      "pending_review",
+      "approved",
+      "issued",
+      "acknowledged",
+      "superseded",
+    ],
+  })
+    .notNull()
+    .default("draft"),
   reviewedBy: text("reviewed_by"),
   reviewedById: text("reviewed_by_id"),
   reviewedAt: text("reviewed_at"),
@@ -2787,11 +4754,39 @@ export const deficiencyTracking = sqliteTable("deficiency_tracking", {
   title: text("title").notNull(),
   description: text("description").notNull(),
   // Classification
-  category: text("category", { enum: ["clinical_documentation", "safety", "staffing", "training", "facilities", "medication", "resident_rights", "infection_control", "administrative", "other"] }).notNull(),
-  severity: text("severity", { enum: ["citation", "standard", "element", "risk_only", "other"] }).notNull().default("standard"),
-  scope: text("scope", { enum: ["isolated", "widespread", "pattern"] }).notNull().default("isolated"),
+  category: text("category", {
+    enum: [
+      "clinical_documentation",
+      "safety",
+      "staffing",
+      "training",
+      "facilities",
+      "medication",
+      "resident_rights",
+      "infection_control",
+      "administrative",
+      "other",
+    ],
+  }).notNull(),
+  severity: text("severity", {
+    enum: ["citation", "standard", "element", "risk_only", "other"],
+  })
+    .notNull()
+    .default("standard"),
+  scope: text("scope", { enum: ["isolated", "widespread", "pattern"] })
+    .notNull()
+    .default("isolated"),
   // Source
-  sourceType: text("source_type", { enum: ["state_survey", "internal_audit", "complaint", "accreditation", "self_identified", "other"] }).notNull(),
+  sourceType: text("source_type", {
+    enum: [
+      "state_survey",
+      "internal_audit",
+      "complaint",
+      "accreditation",
+      "self_identified",
+      "other",
+    ],
+  }).notNull(),
   sourceReference: text("source_reference"), // survey ID, complaint ID, etc.
   surveyTag: text("survey_tag"), // e.g. "FTag-Tag number", "KTag-Tag number"
   // Regulatory reference
@@ -2813,11 +4808,31 @@ export const deficiencyTracking = sqliteTable("deficiency_tracking", {
   pocSubmittedDate: text("poc_submitted_date"),
   pocApprovedDate: text("poc_approved_date"),
   // Status
-  status: text("status", { enum: ["open", "poc_pending", "poc_approved", "in_progress", "corrected", "verified", "closed"] }).notNull().default("open"),
+  status: text("status", {
+    enum: [
+      "open",
+      "poc_pending",
+      "poc_approved",
+      "in_progress",
+      "corrected",
+      "verified",
+      "closed",
+    ],
+  })
+    .notNull()
+    .default("open"),
   // Verification
   verifiedBy: text("verified_by"),
   verifiedById: text("verified_by_id"),
-  verificationMethod: text("verification_method", { enum: ["document_review", "interview", "observation", "record_review", "other"] }),
+  verificationMethod: text("verification_method", {
+    enum: [
+      "document_review",
+      "interview",
+      "observation",
+      "record_review",
+      "other",
+    ],
+  }),
   verificationNotes: text("verification_notes"),
   // Related entities
   relatedAuditId: text("related_audit_id"),
@@ -2849,7 +4864,9 @@ export const boundaryViolations = sqliteTable("boundary_violations", {
       "unlogged_phi_access",
     ],
   }).notNull(),
-  severity: text("severity", { enum: ["info", "warning", "critical", "emergency"] }).notNull(),
+  severity: text("severity", {
+    enum: ["info", "warning", "critical", "emergency"],
+  }).notNull(),
   endpoint: text("endpoint").notNull(),
   actorId: text("actor_id").notNull(),
   actorEmail: text("actor_email").notNull(),
@@ -2869,7 +4886,9 @@ export const boundaryViolations = sqliteTable("boundary_violations", {
 export const shiftLogs = sqliteTable("shift_logs", {
   id: text("id").primaryKey(),
   shiftDate: text("shift_date").notNull(),
-  shiftType: text("shift_type", { enum: ["day", "evening", "night", "overnight"] }).notNull(),
+  shiftType: text("shift_type", {
+    enum: ["day", "evening", "night", "overnight"],
+  }).notNull(),
   staffName: text("staff_name").notNull(),
   staffId: text("staff_id"),
   supervisorName: text("supervisor_name"),
@@ -2879,12 +4898,18 @@ export const shiftLogs = sqliteTable("shift_logs", {
   // Shift entries (JSON array of {time, category, note})
   entriesJson: text("entries_json").default("[]"),
   // Categories covered
-  safetyRoundsCompleted: integer("safety_rounds_completed").notNull().default(0),
+  safetyRoundsCompleted: integer("safety_rounds_completed")
+    .notNull()
+    .default(0),
   careLogsCompleted: integer("care_logs_completed").notNull().default(0),
   incidentsReported: integer("incidents_reported").notNull().default(0),
-  medicationsAdministered: integer("medications_administered").notNull().default(0),
+  medicationsAdministered: integer("medications_administered")
+    .notNull()
+    .default(0),
   // Status
-  status: text("status", { enum: ["active", "completed", "no_show", "absent"] }).notNull().default("active"),
+  status: text("status", { enum: ["active", "completed", "no_show", "absent"] })
+    .notNull()
+    .default("active"),
   notes: text("notes"),
   // System
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
@@ -2897,27 +4922,53 @@ export const safetyRounds = sqliteTable("safety_rounds", {
   id: text("id").primaryKey(),
   shiftId: text("shift_id"),
   shiftDate: text("shift_date").notNull(),
-  shiftType: text("shift_type", { enum: ["day", "evening", "night", "overnight"] }).notNull(),
+  shiftType: text("shift_type", {
+    enum: ["day", "evening", "night", "overnight"],
+  }).notNull(),
   // Area inspected
   area: text("area").notNull(),
   areaOrder: integer("area_order").notNull().default(0),
   // Checklist items
-  item1NoHazards: integer("item1_no_hazards", { mode: "boolean" }).notNull().default(false),
-  item2LightingWorking: integer("item2_lighting_working", { mode: "boolean" }).notNull().default(false),
-  item3EmergencyExitsClear: integer("item3_emergency_exits_clear", { mode: "boolean" }).notNull().default(false),
-  item4FireExtinguishersOk: integer("item4_fire_extinguishers_ok", { mode: "boolean" }).notNull().default(false),
-  item5NoContraband: integer("item5_no_contraband", { mode: "boolean" }).notNull().default(false),
-  item6CleanSanitary: integer("item6_clean_sanitary", { mode: "boolean" }).notNull().default(false),
-  item7EquipmentSecure: integer("item7_equipment_secure", { mode: "boolean" }).notNull().default(false),
-  item8YouthAreasSafe: integer("item8_youth_areas_safe", { mode: "boolean" }).notNull().default(false),
+  item1NoHazards: integer("item1_no_hazards", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  item2LightingWorking: integer("item2_lighting_working", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  item3EmergencyExitsClear: integer("item3_emergency_exits_clear", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  item4FireExtinguishersOk: integer("item4_fire_extinguishers_ok", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  item5NoContraband: integer("item5_no_contraband", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  item6CleanSanitary: integer("item6_clean_sanitary", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  item7EquipmentSecure: integer("item7_equipment_secure", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  item8YouthAreasSafe: integer("item8_youth_areas_safe", { mode: "boolean" })
+    .notNull()
+    .default(false),
   // Overall result
-  allItemsPassed: integer("all_items_passed", { mode: "boolean" }).notNull().default(false),
+  allItemsPassed: integer("all_items_passed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   itemsPassed: integer("items_passed").notNull().default(0),
   itemsTotal: integer("items_total").notNull().default(8),
   // Issues
   hazardsFound: text("hazards_found"),
   correctiveAction: text("corrective_action"),
-  requiresFollowUp: integer("requires_follow_up", { mode: "boolean" }).notNull().default(false),
+  requiresFollowUp: integer("requires_follow_up", { mode: "boolean" })
+    .notNull()
+    .default(false),
   followUpNotes: text("follow_up_notes"),
   // Staff
   completedBy: text("completed_by").notNull(),
@@ -2938,16 +4989,30 @@ export const youthCareLogs = sqliteTable("youth_care_logs", {
   mrn: text("mrn").notNull(),
   shiftId: text("shift_id"),
   logDate: text("log_date").notNull(),
-  shiftType: text("shift_type", { enum: ["day", "evening", "night", "overnight"] }).notNull(),
+  shiftType: text("shift_type", {
+    enum: ["day", "evening", "night", "overnight"],
+  }).notNull(),
   // Care type
-  careType: text("care_type", { enum: ["daily_living", "behavioral", "medical", "educational", "recreational", "emotional_support", "crisis_intervention"] }).notNull(),
+  careType: text("care_type", {
+    enum: [
+      "daily_living",
+      "behavioral",
+      "medical",
+      "educational",
+      "recreational",
+      "emotional_support",
+      "crisis_intervention",
+    ],
+  }).notNull(),
   // Details
   description: text("description").notNull(),
   observations: text("observations"),
   youthResponse: text("youth_response"),
   // Outcome
   outcome: text("outcome"),
-  followUpNeeded: integer("follow_up_needed", { mode: "boolean" }).notNull().default(false),
+  followUpNeeded: integer("follow_up_needed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   followUpActions: text("follow_up_actions"),
   // Goals addressed (JSON array)
   goalsAddressedJson: text("goals_addressed_json"),
@@ -2967,9 +5032,29 @@ export const incidentReports = sqliteTable("incident_reports", {
   id: text("id").primaryKey(),
   incidentNumber: text("incident_number").notNull().unique(),
   // Classification
-  incidentType: text("incident_type", { enum: ["behavioral", "safety", "medication", "injury", "elopement", "self_harm", "aggression", "property_damage", "seclusion", "restraint", "other"] }).notNull(),
-  severity: text("severity", { enum: ["low", "medium", "high", "critical"] }).notNull(),
-  status: text("status", { enum: ["open", "under_review", "pending_supervisor", "resolved", "closed"] }).notNull().default("open"),
+  incidentType: text("incident_type", {
+    enum: [
+      "behavioral",
+      "safety",
+      "medication",
+      "injury",
+      "elopement",
+      "self_harm",
+      "aggression",
+      "property_damage",
+      "seclusion",
+      "restraint",
+      "other",
+    ],
+  }).notNull(),
+  severity: text("severity", {
+    enum: ["low", "medium", "high", "critical"],
+  }).notNull(),
+  status: text("status", {
+    enum: ["open", "under_review", "pending_supervisor", "resolved", "closed"],
+  })
+    .notNull()
+    .default("open"),
   // Youth involved
   youthId: text("youth_id"),
   youthName: text("youth_name"),
@@ -2987,13 +5072,21 @@ export const incidentReports = sqliteTable("incident_reports", {
   staffInjuries: text("staff_injuries"),
   propertyDamage: text("property_damage"),
   // Medical
-  medicalAttentionRequired: integer("medical_attention_required", { mode: "boolean" }).notNull().default(false),
+  medicalAttentionRequired: integer("medical_attention_required", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   medicalAttentionProvided: text("medical_attention_provided"),
   // Notifications
-  guardianNotified: integer("guardian_notified", { mode: "boolean" }).notNull().default(false),
+  guardianNotified: integer("guardian_notified", { mode: "boolean" })
+    .notNull()
+    .default(false),
   guardianNotifiedAt: text("guardian_notified_at"),
   guardianNotifiedBy: text("guardian_notified_by"),
-  supervisorNotified: integer("supervisor_notified", { mode: "boolean" }).notNull().default(false),
+  supervisorNotified: integer("supervisor_notified", { mode: "boolean" })
+    .notNull()
+    .default(false),
   supervisorNotifiedAt: text("supervisor_notified_at"),
   supervisorNotifiedBy: text("supervisor_notified_by"),
   // Staff involved
@@ -3021,7 +5114,16 @@ export const supervisionNotes = sqliteTable("supervision_notes", {
   id: text("id").primaryKey(),
   // Supervision session
   supervisionDate: text("supervision_date").notNull(),
-  supervisionType: text("supervision_type", { enum: ["individual", "group", "crisis_debrief", "incident_review", "training", "observation"] }).notNull(),
+  supervisionType: text("supervision_type", {
+    enum: [
+      "individual",
+      "group",
+      "crisis_debrief",
+      "incident_review",
+      "training",
+      "observation",
+    ],
+  }).notNull(),
   // Staff involved
   supervisorName: text("supervisor_name").notNull(),
   supervisorId: text("supervisor_id"),
@@ -3035,11 +5137,17 @@ export const supervisionNotes = sqliteTable("supervision_notes", {
   goalsSet: text("goals_set"),
   actionItems: text("action_items"), // JSON array
   // Follow-up
-  followUpRequired: integer("follow_up_required", { mode: "boolean" }).notNull().default(false),
+  followUpRequired: integer("follow_up_required", { mode: "boolean" })
+    .notNull()
+    .default(false),
   followUpDate: text("follow_up_date"),
   followUpTopics: text("follow_up_topics"),
   // Review
-  superviseeAcknowledged: integer("supervisee_acknowledged", { mode: "boolean" }).notNull().default(false),
+  superviseeAcknowledged: integer("supervisee_acknowledged", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
   superviseeAcknowledgedAt: text("supervisee_acknowledged_at"),
   // Related incidents/care logs
   relatedIncidentId: text("related_incident_id"),
@@ -3048,4 +5156,937 @@ export const supervisionNotes = sqliteTable("supervision_notes", {
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
   createdBy: text("created_by"),
+});
+
+// ═══════════════════════════════════════════════════════════════
+// PHASE 2 INTEGRATED CONTROL PLANE — M2.2 / M2.3 / M2.4
+// Synthetic prototype only. Program detail remains in domain modules;
+// these tables provide one cross-milestone identity, work, alert,
+// handoff, audit, billing-gate, snapshot, and scenario control layer.
+// ═══════════════════════════════════════════════════════════════
+
+export const phase2CareEpisodes = sqliteTable("phase2_care_episodes", {
+  id: text("id").primaryKey(),
+  caseId: text("case_id").notNull().unique(),
+  referralId: text("referral_id").notNull().unique(),
+  youthId: text("youth_id").notNull(),
+  youthDisplayLabel: text("youth_display_label").notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  status: text("status", {
+    enum: ["active", "discharging", "discharged", "closed"],
+  })
+    .notNull()
+    .default("active"),
+  cansAssessmentId: text("cans_assessment_id"),
+  cansVersion: integer("cans_version"),
+  mhtcmPlanId: text("mhtcm_plan_id"),
+  mhrsPlanId: text("mhrs_plan_id"),
+  groPlacementId: text("gro_placement_id"),
+  version: integer("version").notNull().default(1),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const phase2CareLinks = sqliteTable("phase2_care_links", {
+  id: text("id").primaryKey(),
+  episodeId: text("episode_id")
+    .notNull()
+    .references(() => phase2CareEpisodes.id, { onDelete: "restrict" }),
+  caseId: text("case_id").notNull(),
+  sourceDomain: text("source_domain", {
+    enum: ["SHARED", "MHTCM", "MHRS", "GRO"],
+  }).notNull(),
+  sourceType: text("source_type").notNull(),
+  sourceId: text("source_id").notNull(),
+  sourceVersion: integer("source_version").notNull(),
+  targetDomain: text("target_domain", {
+    enum: ["SHARED", "MHTCM", "MHRS", "GRO"],
+  }).notNull(),
+  targetType: text("target_type").notNull(),
+  targetId: text("target_id").notNull(),
+  targetVersion: integer("target_version").notNull(),
+  relation: text("relation", {
+    enum: [
+      "derived_from",
+      "fulfills",
+      "coordinates_with",
+      "transitions_to",
+      "read_only_reference",
+    ],
+  }).notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const phase2WorkItems = sqliteTable("phase2_work_items", {
+  id: text("id").primaryKey(),
+  episodeId: text("episode_id")
+    .notNull()
+    .references(() => phase2CareEpisodes.id, { onDelete: "restrict" }),
+  domain: text("domain", {
+    enum: ["SHARED", "MHTCM", "MHRS", "GRO"],
+  }).notNull(),
+  title: text("title").notNull(),
+  sourceType: text("source_type").notNull(),
+  sourceId: text("source_id").notNull(),
+  status: text("status", {
+    enum: [
+      "pending",
+      "in_progress",
+      "blocked",
+      "awaiting_approval",
+      "completed",
+      "cancelled",
+    ],
+  }).notNull(),
+  priority: text("priority", {
+    enum: ["routine", "urgent", "critical"],
+  }).notNull(),
+  assignedRole: text("assigned_role").notNull(),
+  assignedTo: text("assigned_to"),
+  dueAt: text("due_at").notNull(),
+  escalationLevel: text("escalation_level", {
+    enum: ["none", "supervisor", "director", "executive"],
+  })
+    .notNull()
+    .default("none"),
+  escalatedAt: text("escalated_at"),
+  escalationReason: text("escalation_reason"),
+  exceptionCode: text("exception_code"),
+  exceptionReason: text("exception_reason"),
+  version: integer("version").notNull().default(1),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const phase2Alerts = sqliteTable("phase2_alerts", {
+  id: text("id").primaryKey(),
+  episodeId: text("episode_id")
+    .notNull()
+    .references(() => phase2CareEpisodes.id, { onDelete: "restrict" }),
+  domain: text("domain", {
+    enum: ["SHARED", "MHTCM", "MHRS", "GRO"],
+  }).notNull(),
+  alertType: text("alert_type").notNull(),
+  sourceType: text("source_type").notNull(),
+  sourceId: text("source_id").notNull(),
+  title: text("title").notNull(),
+  status: text("status", {
+    enum: ["open", "acknowledged", "resolved", "expired"],
+  }).notNull(),
+  priority: text("priority", {
+    enum: ["routine", "urgent", "critical"],
+  }).notNull(),
+  dueAt: text("due_at").notNull(),
+  assignedRole: text("assigned_role").notNull(),
+  assignedTo: text("assigned_to"),
+  escalationLevel: text("escalation_level", {
+    enum: ["none", "supervisor", "director", "executive"],
+  })
+    .notNull()
+    .default("none"),
+  acknowledgedAt: text("acknowledged_at"),
+  resolvedAt: text("resolved_at"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const phase2Handoffs = sqliteTable("phase2_handoffs", {
+  id: text("id").primaryKey(),
+  episodeId: text("episode_id")
+    .notNull()
+    .references(() => phase2CareEpisodes.id, { onDelete: "restrict" }),
+  fromDomain: text("from_domain", {
+    enum: ["SHARED", "MHTCM", "MHRS", "GRO"],
+  }).notNull(),
+  toDomain: text("to_domain", {
+    enum: ["SHARED", "MHTCM", "MHRS", "GRO"],
+  }).notNull(),
+  status: text("status", {
+    enum: ["initiated", "accepted", "rejected", "returned", "completed"],
+  }).notNull(),
+  reason: text("reason").notNull(),
+  payloadJson: text("payload_json").notNull().default("{}"),
+  initiatedBy: text("initiated_by").notNull(),
+  initiatedAt: text("initiated_at").notNull(),
+  dueAt: text("due_at").notNull(),
+  acceptedBy: text("accepted_by"),
+  acceptedAt: text("accepted_at"),
+  completedAt: text("completed_at"),
+  version: integer("version").notNull().default(1),
+});
+
+export const phase2AuditEvents = sqliteTable("phase2_audit_events", {
+  id: text("id").primaryKey(),
+  episodeId: text("episode_id").references(() => phase2CareEpisodes.id, {
+    onDelete: "restrict",
+  }),
+  domain: text("domain", {
+    enum: ["SHARED", "MHTCM", "MHRS", "GRO"],
+  }).notNull(),
+  eventType: text("event_type", {
+    enum: [
+      "access",
+      "assignment",
+      "approval",
+      "handoff",
+      "material_change",
+      "gate_decision",
+      "scenario",
+    ],
+  }).notNull(),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(),
+  actorId: text("actor_id").notNull(),
+  actorRole: text("actor_role").notNull(),
+  reason: text("reason").notNull(),
+  beforeJson: text("before_json"),
+  afterJson: text("after_json"),
+  changedFieldsJson: text("changed_fields_json").notNull().default("[]"),
+  correlationId: text("correlation_id").notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  occurredAt: text("occurred_at").notNull(),
+});
+
+export const phase2ClaimHandoffs = sqliteTable("phase2_claim_handoffs", {
+  id: text("id").primaryKey(),
+  episodeId: text("episode_id")
+    .notNull()
+    .references(() => phase2CareEpisodes.id, { onDelete: "restrict" }),
+  program: text("program", { enum: ["MHTCM", "MHRS"] }).notNull(),
+  encounterId: text("encounter_id").notNull(),
+  procedureCode: text("procedure_code", {
+    enum: ["T1017", "H2014", "H2017"],
+  }).notNull(),
+  status: text("status", {
+    enum: ["blocked", "ready", "handed_off", "returned"],
+  }).notNull(),
+  findingsJson: text("findings_json").notNull().default("[]"),
+  evaluatorVersion: text("evaluator_version").notNull(),
+  decidedAt: text("decided_at").notNull(),
+  handedOffAt: text("handed_off_at"),
+  correlationId: text("correlation_id").notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+});
+
+export const phase2ProgramSnapshots = sqliteTable("phase2_program_snapshots", {
+  id: text("id").primaryKey(),
+  episodeId: text("episode_id")
+    .notNull()
+    .references(() => phase2CareEpisodes.id, { onDelete: "restrict" }),
+  domain: text("domain", {
+    enum: ["SHARED", "MHTCM", "MHRS", "GRO"],
+  }).notNull(),
+  aggregateType: text("aggregate_type").notNull(),
+  aggregateId: text("aggregate_id").notNull(),
+  aggregateVersion: integer("aggregate_version").notNull(),
+  payloadJson: text("payload_json").notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  isCurrent: integer("is_current", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(),
+});
+
+export const phase2ScenarioRuns = sqliteTable("phase2_scenario_runs", {
+  id: text("id").primaryKey(),
+  milestone: text("milestone", {
+    enum: ["M2.2", "M2.3", "M2.4", "PHASE2_EXIT"],
+  }).notNull(),
+  scenarioType: text("scenario_type").notNull(),
+  status: text("status", {
+    enum: ["not_started", "running", "passed", "failed"],
+  }).notNull(),
+  episodeId: text("episode_id")
+    .notNull()
+    .references(() => phase2CareEpisodes.id, { onDelete: "restrict" }),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  assertionsPassed: integer("assertions_passed").notNull().default(0),
+  assertionsFailed: integer("assertions_failed").notNull().default(0),
+  evidenceJson: text("evidence_json").notNull().default("{}"),
+});
+
+// ═══════════════════════════════════════════════════════════════
+// PHASE 3 INTEGRATED CONTROL PLANE — M3.1 / M3.2 / M3.3 / M3.4
+// Corporate Office functions support the accepted Phase 2 care episode.
+// Milestone-specific records remain in their domain modules; these tables
+// preserve shared support lineage, work, immutable audit, evidence snapshots,
+// deterministic scenario runs, and the production-blocking demo boundary.
+// ═══════════════════════════════════════════════════════════════
+
+export const phase3SupportCases = sqliteTable("phase3_support_cases", {
+  id: text("id").primaryKey(),
+  sourceEpisodeId: text("source_episode_id")
+    .notNull()
+    .references(() => phase2CareEpisodes.id, { onDelete: "restrict" }),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  status: text("status", { enum: ["active", "completed", "closed"] })
+    .notNull()
+    .default("active"),
+  version: integer("version").notNull().default(1),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const phase3SupportLinks = sqliteTable("phase3_support_links", {
+  id: text("id").primaryKey(),
+  supportCaseId: text("support_case_id")
+    .notNull()
+    .references(() => phase3SupportCases.id, { onDelete: "restrict" }),
+  domain: text("domain", {
+    enum: ["COMPLIANCE", "REVENUE", "WORKFORCE", "GAD"],
+  }).notNull(),
+  sourceDivision: text("source_division", {
+    enum: ["BHC", "GRO", "EO", "GAD"],
+  }).notNull(),
+  sourceType: text("source_type").notNull(),
+  sourceId: text("source_id").notNull(),
+  targetType: text("target_type").notNull(),
+  targetId: text("target_id").notNull(),
+  relation: text("relation", {
+    enum: ["enables", "assures", "funds", "staffs", "maintains"],
+  }).notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const phase3WorkItems = sqliteTable("phase3_work_items", {
+  id: text("id").primaryKey(),
+  supportCaseId: text("support_case_id")
+    .notNull()
+    .references(() => phase3SupportCases.id, { onDelete: "restrict" }),
+  domain: text("domain", {
+    enum: ["COMPLIANCE", "REVENUE", "WORKFORCE", "GAD"],
+  }).notNull(),
+  title: text("title").notNull(),
+  sourceType: text("source_type").notNull(),
+  sourceId: text("source_id").notNull(),
+  status: text("status", {
+    enum: [
+      "pending",
+      "in_progress",
+      "awaiting_review",
+      "completed",
+      "cancelled",
+    ],
+  }).notNull(),
+  priority: text("priority", {
+    enum: ["routine", "urgent", "critical"],
+  }).notNull(),
+  assignedRole: text("assigned_role").notNull(),
+  assignedTo: text("assigned_to"),
+  dueAt: text("due_at").notNull(),
+  completedAt: text("completed_at"),
+  evidenceIdsJson: text("evidence_ids_json").notNull().default("[]"),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const phase3AuditEvents = sqliteTable("phase3_audit_events", {
+  id: text("id").primaryKey(),
+  supportCaseId: text("support_case_id")
+    .notNull()
+    .references(() => phase3SupportCases.id, { onDelete: "restrict" }),
+  domain: text("domain", {
+    enum: ["COMPLIANCE", "REVENUE", "WORKFORCE", "GAD"],
+  }).notNull(),
+  action: text("action", {
+    enum: [
+      "access",
+      "change",
+      "approval",
+      "disclosure",
+      "export",
+      "administrative_action",
+      "routing",
+      "gate_decision",
+      "scenario",
+    ],
+  }).notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(),
+  actorId: text("actor_id").notNull(),
+  actorRole: text("actor_role").notNull(),
+  reason: text("reason").notNull(),
+  correlationId: text("correlation_id").notNull(),
+  beforeJson: text("before_json"),
+  afterJson: text("after_json"),
+  changedFieldsJson: text("changed_fields_json").notNull().default("[]"),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  occurredAt: text("occurred_at").notNull(),
+});
+
+export const phase3ModuleSnapshots = sqliteTable("phase3_module_snapshots", {
+  id: text("id").primaryKey(),
+  supportCaseId: text("support_case_id")
+    .notNull()
+    .references(() => phase3SupportCases.id, { onDelete: "restrict" }),
+  milestone: text("milestone", {
+    enum: ["M3.1", "M3.2", "M3.3", "M3.4"],
+  }).notNull(),
+  aggregateType: text("aggregate_type").notNull(),
+  aggregateId: text("aggregate_id").notNull(),
+  aggregateVersion: integer("aggregate_version").notNull(),
+  payloadJson: text("payload_json").notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo", "production"],
+  }).notNull(),
+  isCurrent: integer("is_current", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(),
+});
+
+export const phase3ScenarioRuns = sqliteTable("phase3_scenario_runs", {
+  id: text("id").primaryKey(),
+  milestone: text("milestone", {
+    enum: ["M3.1", "M3.2", "M3.3", "M3.4", "PHASE3_EXIT"],
+  }).notNull(),
+  scenarioType: text("scenario_type").notNull(),
+  status: text("status", {
+    enum: ["not_started", "running", "passed", "failed"],
+  }).notNull(),
+  supportCaseId: text("support_case_id")
+    .notNull()
+    .references(() => phase3SupportCases.id, { onDelete: "restrict" }),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  assertionsPassed: integer("assertions_passed").notNull().default(0),
+  assertionsFailed: integer("assertions_failed").notNull().default(0),
+  evidenceJson: text("evidence_json").notNull().default("{}"),
+  isCurrent: integer("is_current", { mode: "boolean" }).notNull().default(true),
+});
+
+export const phase3DemoControls = sqliteTable("phase3_demo_controls", {
+  id: text("id").primaryKey(),
+  environmentId: text("environment_id").notNull().unique(),
+  environmentLabel: text("environment_label").notNull(),
+  dataStoreLabel: text("data_store_label").notNull(),
+  resetToken: text("reset_token").notNull(),
+  killSwitchEnabled: integer("kill_switch_enabled", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  productionWritesBlocked: integer("production_writes_blocked", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(true),
+  dataExpiresAt: text("data_expires_at").notNull(),
+  accessReviewedAt: text("access_reviewed_at").notNull(),
+  accessReviewedBy: text("access_reviewed_by").notNull(),
+  lastResetAt: text("last_reset_at"),
+  updatedAt: text("updated_at").notNull(),
+});
+
+// ─── M4.1A Executive Decision Intelligence ─────────────────
+
+export const m41aScenarioRuns = sqliteTable("m41a_scenario_runs", {
+  id: text("id").primaryKey(),
+  scenarioId: text("scenario_id").notNull(),
+  milestone: text("milestone", { enum: ["M4.1A"] })
+    .notNull()
+    .default("M4.1A"),
+  status: text("status", {
+    enum: ["running", "passed", "failed", "reset"],
+  }).notNull(),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  assertionsPassed: integer("assertions_passed").notNull().default(0),
+  assertionsFailed: integer("assertions_failed").notNull().default(0),
+  evidenceJson: text("evidence_json").notNull().default("{}"),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo"],
+  })
+    .notNull()
+    .default("synthetic_demo"),
+  isCurrent: integer("is_current", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(),
+});
+
+export const m41aDashboardSnapshots = sqliteTable("m41a_dashboard_snapshots", {
+  id: text("id").primaryKey(),
+  runId: text("run_id")
+    .notNull()
+    .references(() => m41aScenarioRuns.id, { onDelete: "restrict" }),
+  scope: text("scope", {
+    enum: ["ENTERPRISE", "BHC", "GRO", "EO", "GAD"],
+  }).notNull(),
+  snapshotVersion: integer("snapshot_version").notNull(),
+  payloadJson: text("payload_json").notNull(),
+  sourceHashesJson: text("source_hashes_json").notNull().default("[]"),
+  reconciliationStatus: text("reconciliation_status", {
+    enum: ["reconciled", "exception"],
+  }).notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo"],
+  })
+    .notNull()
+    .default("synthetic_demo"),
+  isCurrent: integer("is_current", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(),
+});
+
+export const m41aDecisionEvents = sqliteTable("m41a_decision_events", {
+  id: text("id").primaryKey(),
+  aggregateId: text("aggregate_id").notNull(),
+  aggregateType: text("aggregate_type", {
+    enum: ["alert", "decision", "follow_up_evidence", "evaluation"],
+  }).notNull(),
+  sequence: integer("sequence").notNull(),
+  eventType: text("event_type", {
+    enum: [
+      "alert_triggered",
+      "alert_acknowledged",
+      "alert_assigned",
+      "decision_recorded",
+      "follow_up_evidence_added",
+      "alert_resolved",
+      "evaluation_reset",
+    ],
+  }).notNull(),
+  scope: text("scope", {
+    enum: ["ENTERPRISE", "BHC", "GRO", "EO", "GAD"],
+  }).notNull(),
+  metricId: text("metric_id"),
+  actorId: text("actor_id").notNull(),
+  actorRole: text("actor_role").notNull(),
+  payloadJson: text("payload_json").notNull(),
+  correlationId: text("correlation_id").notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo"],
+  })
+    .notNull()
+    .default("synthetic_demo"),
+  occurredAt: text("occurred_at").notNull(),
+});
+
+// ─── M4.1B Executive Intelligence Assistant and Workplans ──
+
+export const m41bScenarioRuns = sqliteTable("m41b_scenario_runs", {
+  id: text("id").primaryKey(),
+  scenarioId: text("scenario_id").notNull(),
+  milestone: text("milestone", { enum: ["M4.1B"] })
+    .notNull()
+    .default("M4.1B"),
+  status: text("status", {
+    enum: ["running", "passed", "failed", "reset"],
+  }).notNull(),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  assertionsPassed: integer("assertions_passed").notNull().default(0),
+  assertionsFailed: integer("assertions_failed").notNull().default(0),
+  evidenceJson: text("evidence_json").notNull().default("{}"),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo"],
+  })
+    .notNull()
+    .default("synthetic_demo"),
+  isCurrent: integer("is_current", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(),
+});
+
+export const m41bWorkplanSnapshots = sqliteTable("m41b_workplan_snapshots", {
+  id: text("id").primaryKey(),
+  runId: text("run_id")
+    .notNull()
+    .references(() => m41bScenarioRuns.id, { onDelete: "restrict" }),
+  userId: text("user_id").notNull(),
+  role: text("role").notNull(),
+  tier: text("tier", { enum: ["T1", "T2", "T3", "T4"] }).notNull(),
+  division: text("division", { enum: ["eo", "gad", "bhc", "gro"] }).notNull(),
+  snapshotVersion: integer("snapshot_version").notNull(),
+  payloadJson: text("payload_json").notNull(),
+  sourceIdsJson: text("source_ids_json").notNull().default("[]"),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo"],
+  })
+    .notNull()
+    .default("synthetic_demo"),
+  isCurrent: integer("is_current", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(),
+});
+
+export const m41bInteractionEvents = sqliteTable("m41b_interaction_events", {
+  id: text("id").primaryKey(),
+  runId: text("run_id")
+    .notNull()
+    .references(() => m41bScenarioRuns.id, { onDelete: "restrict" }),
+  aggregateId: text("aggregate_id").notNull(),
+  aggregateType: text("aggregate_type", {
+    enum: [
+      "guidance",
+      "recommendation",
+      "decision",
+      "workplan_item",
+      "evidence",
+      "evaluation",
+    ],
+  }).notNull(),
+  sequence: integer("sequence").notNull(),
+  eventType: text("event_type", {
+    enum: [
+      "prompt_received",
+      "source_retrieved",
+      "guidance_issued",
+      "guidance_refused",
+      "human_disposition_recorded",
+      "task_created",
+      "task_escalated",
+      "completion_evidence_added",
+      "task_completed",
+      "evaluation_reset",
+    ],
+  }).notNull(),
+  actorId: text("actor_id").notNull(),
+  actorRole: text("actor_role").notNull(),
+  division: text("division", { enum: ["eo", "gad", "bhc", "gro"] }).notNull(),
+  payloadJson: text("payload_json").notNull(),
+  sourceIdsJson: text("source_ids_json").notNull().default("[]"),
+  correlationId: text("correlation_id").notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_demo"],
+  })
+    .notNull()
+    .default("synthetic_demo"),
+  occurredAt: text("occurred_at").notNull(),
+});
+
+// ─── M4.1C Clinical Intelligence Fabric ───────────────────
+// Synthetic clinical-evaluation records are append-only. The milestone does
+// not expose a production evidence class or production activation state.
+
+export const m41cScenarioRuns = sqliteTable("m41c_scenario_runs", {
+  id: text("id").primaryKey(),
+  scenarioId: text("scenario_id").notNull(),
+  milestone: text("milestone", { enum: ["M4.1C"] })
+    .notNull()
+    .default("M4.1C"),
+  status: text("status", {
+    enum: ["running", "passed", "failed", "reset"],
+  }).notNull(),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  assertionsPassed: integer("assertions_passed").notNull().default(0),
+  assertionsFailed: integer("assertions_failed").notNull().default(0),
+  evidenceJson: text("evidence_json").notNull().default("{}"),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_clinical_demo"],
+  })
+    .notNull()
+    .default("synthetic_clinical_demo"),
+  productionRows: integer("production_rows").notNull().default(0),
+  liveWrites: integer("live_writes").notNull().default(0),
+  isCurrent: integer("is_current", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(),
+});
+
+export const m41cGovernanceDecisions = sqliteTable(
+  "m41c_governance_decisions",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id")
+      .notNull()
+      .references(() => m41cScenarioRuns.id, { onDelete: "restrict" }),
+    subjectType: text("subject_type", {
+      enum: ["source", "instrument_profile", "pathway", "knowledge_pack"],
+    }).notNull(),
+    subjectId: text("subject_id").notNull(),
+    subjectVersion: text("subject_version").notNull(),
+    decisionType: text("decision_type", {
+      enum: [
+        "approve_demo",
+        "reject",
+        "exception",
+        "supersede",
+        "emergency_withdraw",
+      ],
+    }).notNull(),
+    decisionStatus: text("decision_status", {
+      enum: ["pending", "signed", "withdrawn"],
+    }).notNull(),
+    approverRolesJson: text("approver_roles_json").notNull().default("[]"),
+    signaturesJson: text("signatures_json").notNull().default("[]"),
+    rationale: text("rationale").notNull(),
+    effectiveAt: text("effective_at").notNull(),
+    reviewDueAt: text("review_due_at").notNull(),
+    correlationId: text("correlation_id").notNull(),
+    evidenceClass: text("evidence_class", {
+      enum: ["synthetic_clinical_demo"],
+    })
+      .notNull()
+      .default("synthetic_clinical_demo"),
+    createdAt: text("created_at").notNull(),
+  },
+);
+
+export const m41cKnowledgeVersions = sqliteTable("m41c_knowledge_versions", {
+  id: text("id").primaryKey(),
+  runId: text("run_id")
+    .notNull()
+    .references(() => m41cScenarioRuns.id, { onDelete: "restrict" }),
+  knowledgeId: text("knowledge_id").notNull(),
+  version: text("version").notNull(),
+  activationState: text("activation_state", {
+    enum: ["draft", "validation_pending", "quarantined", "demo_approved"],
+  }).notNull(),
+  sourceId: text("source_id").notNull(),
+  ownerRole: text("owner_role").notNull(),
+  populationJson: text("population_json").notNull(),
+  licenseState: text("license_state").notNull(),
+  effectiveAt: text("effective_at"),
+  reviewDueAt: text("review_due_at").notNull(),
+  contentHash: text("content_hash"),
+  validationJson: text("validation_json").notNull().default("{}"),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_clinical_demo"],
+  })
+    .notNull()
+    .default("synthetic_clinical_demo"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const m41cInstrumentProfiles = sqliteTable("m41c_instrument_profiles", {
+  id: text("id").primaryKey(),
+  runId: text("run_id")
+    .notNull()
+    .references(() => m41cScenarioRuns.id, { onDelete: "restrict" }),
+  profileKey: text("profile_key").notNull(),
+  profileVersion: text("profile_version").notNull(),
+  program: text("program").notNull(),
+  activationState: text("activation_state", {
+    enum: ["draft", "validation_pending", "quarantined", "demo_approved"],
+  }).notNull(),
+  sourceId: text("source_id").notNull(),
+  licenseState: text("license_state").notNull(),
+  contentHash: text("content_hash"),
+  qualificationIdsJson: text("qualification_ids_json").notNull().default("[]"),
+  reassessmentCadence: text("reassessment_cadence").notNull(),
+  externalMappingsJson: text("external_mappings_json").notNull().default("[]"),
+  validationJson: text("validation_json").notNull().default("{}"),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_clinical_demo"],
+  })
+    .notNull()
+    .default("synthetic_clinical_demo"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const m41cQuarantineEntries = sqliteTable("m41c_quarantine_entries", {
+  id: text("id").primaryKey(),
+  runId: text("run_id")
+    .notNull()
+    .references(() => m41cScenarioRuns.id, { onDelete: "restrict" }),
+  artifactType: text("artifact_type").notNull(),
+  artifactId: text("artifact_id").notNull(),
+  sourcePath: text("source_path").notNull(),
+  reasonCodesJson: text("reason_codes_json").notNull(),
+  enforcement: text("enforcement", {
+    enum: ["non_executable", "read_only_label"],
+  }).notNull(),
+  productionUseBlocked: integer("production_use_blocked", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  demoRecommendationBlocked: integer("demo_recommendation_blocked", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(true),
+  reviewedByRole: text("reviewed_by_role").notNull(),
+  reviewedAt: text("reviewed_at").notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_clinical_demo"],
+  })
+    .notNull()
+    .default("synthetic_clinical_demo"),
+});
+
+export const m41cPathwayDefinitions = sqliteTable("m41c_pathway_definitions", {
+  id: text("id").primaryKey(),
+  runId: text("run_id")
+    .notNull()
+    .references(() => m41cScenarioRuns.id, { onDelete: "restrict" }),
+  pathwayKey: text("pathway_key").notNull(),
+  pathwayVersion: text("pathway_version").notNull(),
+  activationState: text("activation_state", {
+    enum: ["draft", "validation_pending", "quarantined", "demo_approved"],
+  }).notNull(),
+  sourceIdsJson: text("source_ids_json").notNull().default("[]"),
+  requiredApproverRolesJson: text("required_approver_roles_json")
+    .notNull()
+    .default("[]"),
+  requiredCompetencyIdsJson: text("required_competency_ids_json")
+    .notNull()
+    .default("[]"),
+  stepsJson: text("steps_json").notNull(),
+  validationRecordId: text("validation_record_id"),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_clinical_demo"],
+  })
+    .notNull()
+    .default("synthetic_clinical_demo"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const m41cLongitudinalEvents = sqliteTable("m41c_longitudinal_events", {
+  id: text("id").primaryKey(),
+  runId: text("run_id")
+    .notNull()
+    .references(() => m41cScenarioRuns.id, { onDelete: "restrict" }),
+  episodeId: text("episode_id").notNull(),
+  subjectId: text("subject_id").notNull(),
+  sequence: integer("sequence").notNull(),
+  eventType: text("event_type").notNull(),
+  stage: text("stage").notNull(),
+  sourceIdsJson: text("source_ids_json").notNull().default("[]"),
+  payloadJson: text("payload_json").notNull(),
+  correlationId: text("correlation_id").notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_clinical_demo"],
+  })
+    .notNull()
+    .default("synthetic_clinical_demo"),
+  occurredAt: text("occurred_at").notNull(),
+});
+
+export const m41cRecommendations = sqliteTable("m41c_recommendations", {
+  id: text("id").primaryKey(),
+  runId: text("run_id")
+    .notNull()
+    .references(() => m41cScenarioRuns.id, { onDelete: "restrict" }),
+  episodeId: text("episode_id").notNull(),
+  pathwayId: text("pathway_id").notNull(),
+  pathwayVersion: text("pathway_version").notNull(),
+  sourceIdsJson: text("source_ids_json").notNull().default("[]"),
+  recommendationJson: text("recommendation_json").notNull(),
+  humanGateJson: text("human_gate_json").notNull(),
+  status: text("status", {
+    enum: ["proposed", "approved_for_demo", "modified_for_demo", "rejected"],
+  }).notNull(),
+  productionActionBlocked: integer("production_action_blocked", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(true),
+  createdAt: text("created_at").notNull(),
+});
+
+export const m41cExternalProjections = sqliteTable(
+  "m41c_external_projections",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id")
+      .notNull()
+      .references(() => m41cScenarioRuns.id, { onDelete: "restrict" }),
+    episodeId: text("episode_id").notNull(),
+    targetSystem: text("target_system", {
+      enum: ["CMBHS_SIMULATOR", "FHIR_R4_INTERNAL"],
+    }).notNull(),
+    resourceType: text("resource_type").notNull(),
+    mappingVersion: text("mapping_version").notNull(),
+    direction: text("direction", {
+      enum: ["internal_projection", "reconciliation_read"],
+    }).notNull(),
+    payloadJson: text("payload_json").notNull(),
+    reconciliationStatus: text("reconciliation_status").notNull(),
+    externalWriteBlocked: integer("external_write_blocked", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    evidenceClass: text("evidence_class", {
+      enum: ["synthetic_clinical_demo"],
+    })
+      .notNull()
+      .default("synthetic_clinical_demo"),
+    createdAt: text("created_at").notNull(),
+  },
+);
+
+export const m41cCompetencyBindings = sqliteTable("m41c_competency_bindings", {
+  id: text("id").primaryKey(),
+  runId: text("run_id")
+    .notNull()
+    .references(() => m41cScenarioRuns.id, { onDelete: "restrict" }),
+  actorId: text("actor_id").notNull(),
+  actorRole: text("actor_role").notNull(),
+  competencyId: text("competency_id").notNull(),
+  subjectType: text("subject_type", {
+    enum: ["instrument_profile", "pathway"],
+  }).notNull(),
+  subjectId: text("subject_id").notNull(),
+  status: text("status", {
+    enum: ["current", "expired", "supervised_only", "missing"],
+  }).notNull(),
+  validFrom: text("valid_from"),
+  expiresAt: text("expires_at"),
+  supervisorRole: text("supervisor_role"),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_clinical_demo"],
+  })
+    .notNull()
+    .default("synthetic_clinical_demo"),
+});
+
+export const m41cMonitoringSignals = sqliteTable("m41c_monitoring_signals", {
+  id: text("id").primaryKey(),
+  runId: text("run_id")
+    .notNull()
+    .references(() => m41cScenarioRuns.id, { onDelete: "restrict" }),
+  pathwayId: text("pathway_id").notNull(),
+  signalType: text("signal_type").notNull(),
+  cadence: text("cadence", {
+    enum: ["daily", "weekly", "monthly", "quarterly", "annual"],
+  }).notNull(),
+  numerator: integer("numerator").notNull(),
+  denominator: integer("denominator").notNull(),
+  thresholdJson: text("threshold_json").notNull(),
+  status: text("status", {
+    enum: ["within_limit", "review_required", "withdrawal_required"],
+  }).notNull(),
+  workplanItemId: text("workplan_item_id"),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_clinical_demo"],
+  })
+    .notNull()
+    .default("synthetic_clinical_demo"),
+  measuredAt: text("measured_at").notNull(),
+});
+
+export const m41cAuditEvents = sqliteTable("m41c_audit_events", {
+  id: text("id").primaryKey(),
+  runId: text("run_id")
+    .notNull()
+    .references(() => m41cScenarioRuns.id, { onDelete: "restrict" }),
+  aggregateId: text("aggregate_id").notNull(),
+  sequence: integer("sequence").notNull(),
+  eventType: text("event_type").notNull(),
+  actorId: text("actor_id").notNull(),
+  actorRole: text("actor_role").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(),
+  sourceIdsJson: text("source_ids_json").notNull().default("[]"),
+  beforeJson: text("before_json"),
+  afterJson: text("after_json"),
+  rationale: text("rationale"),
+  correlationId: text("correlation_id").notNull(),
+  evidenceClass: text("evidence_class", {
+    enum: ["synthetic_clinical_demo"],
+  })
+    .notNull()
+    .default("synthetic_clinical_demo"),
+  occurredAt: text("occurred_at").notNull(),
 });

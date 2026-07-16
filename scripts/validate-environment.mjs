@@ -1,0 +1,201 @@
+import "dotenv/config";
+import path from "node:path";
+
+const environments = new Set(["development", "demo", "staging", "production"]);
+const appEnvironment =
+  process.env.APP_ENV ||
+  (process.env.NODE_ENV === "production" ? "production" : "development");
+const runtimeMode =
+  process.env.AMOS_RUNTIME_MODE ||
+  (appEnvironment === "demo" ? "demo" : "production");
+const databasePath =
+  process.env.DATABASE_PATH || path.join("data", appEnvironment, "amos-ops.db");
+const uploadPath =
+  process.env.UPLOAD_PATH || path.join("uploads", appEnvironment);
+const credentialNamespace =
+  process.env.CREDENTIAL_NAMESPACE || `amos-ops/${appEnvironment}`;
+const evaluationMode = runtimeMode === "demo";
+const productionReleaseAuthorized = /^(?:1|true|yes|on)$/i.test(
+  process.env.AMOS_PRODUCTION_RELEASE_AUTHORIZED || "",
+);
+const productionReleaseId =
+  process.env.AMOS_PRODUCTION_RELEASE_ID?.trim() || "";
+const reviewDeployment = /^(?:1|true|yes|on)$/i.test(
+  process.env.AMOS_REVIEW_DEPLOYMENT || "",
+);
+const controlled =
+  appEnvironment === "staging" || appEnvironment === "production";
+const errors = [];
+
+function isExactHttpOrigin(value) {
+  try {
+    const parsed = new URL(value);
+    return (
+      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+      parsed.origin === value
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isPlaceholder(value) {
+  return /^(?:change|replace|example|placeholder|your[-_])/i.test(
+    value.trim(),
+  );
+}
+
+if (!environments.has(appEnvironment))
+  errors.push(`APP_ENV is invalid: ${appEnvironment}`);
+if (!new Set(["demo", "production"]).has(runtimeMode))
+  errors.push(`AMOS_RUNTIME_MODE is invalid: ${runtimeMode}`);
+if (runtimeMode === "demo" && appEnvironment !== "demo")
+  errors.push("AMOS_RUNTIME_MODE=demo requires APP_ENV=demo.");
+if (appEnvironment === "demo" && runtimeMode !== "demo")
+  errors.push("APP_ENV=demo requires AMOS_RUNTIME_MODE=demo.");
+if (appEnvironment === "production" && runtimeMode !== "production")
+  errors.push("APP_ENV=production requires AMOS_RUNTIME_MODE=production.");
+if (process.env.VITE_AMOS_EVALUATION_MODE !== undefined)
+  errors.push(
+    "VITE_AMOS_EVALUATION_MODE is retired; set AMOS_RUNTIME_MODE at startup.",
+  );
+if (appEnvironment === "production" && process.env.NODE_ENV !== "production")
+  errors.push("Production requires NODE_ENV=production.");
+if (controlled && !databasePath.includes(appEnvironment))
+  errors.push(`DATABASE_PATH must include ${appEnvironment}.`);
+if (controlled && !uploadPath.includes(appEnvironment))
+  errors.push(`UPLOAD_PATH must include ${appEnvironment}.`);
+if (controlled && !credentialNamespace.toLowerCase().includes(appEnvironment))
+  errors.push(`CREDENTIAL_NAMESPACE must include ${appEnvironment}.`);
+
+if (controlled) {
+  for (const name of ["APP_SECRET", "JWT_SECRET"]) {
+    const value = process.env[name] || "";
+    if (
+      value.length < 32 ||
+      isPlaceholder(value)
+    ) {
+      errors.push(
+        `${name} must be a non-placeholder secret of at least 32 characters.`,
+      );
+    }
+  }
+  for (const name of [
+    "DEPLOYMENT_APPROVAL_ID",
+    "DEPLOYMENT_CHANGE_REFERENCE",
+  ]) {
+    if (!process.env[name])
+      errors.push(`${name} is required for a controlled deployment.`);
+  }
+  const origins = (process.env.AMOS_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!origins.length || origins.some((origin) => !isExactHttpOrigin(origin)))
+    errors.push(
+      "AMOS_ALLOWED_ORIGINS must contain exact http(s) origins without paths, queries, fragments, or wildcards.",
+    );
+}
+
+if (appEnvironment === "production") {
+  if (/^(?:1|true|yes|on)$/i.test(process.env.ALLOW_SELF_REGISTRATION || ""))
+    errors.push("Production requires ALLOW_SELF_REGISTRATION=false.");
+  if ((process.env.MFA_POLICY || "required-privileged") !== "required-all")
+    errors.push("Production requires MFA_POLICY=required-all.");
+  if (
+    !productionReleaseAuthorized ||
+    !productionReleaseId ||
+    isPlaceholder(productionReleaseId)
+  )
+    errors.push(
+      "Production is locked until explicit release authorization and a non-placeholder release ID are supplied.",
+    );
+} else if (productionReleaseAuthorized || productionReleaseId) {
+  errors.push(
+    "Production release authorization may be supplied only for APP_ENV=production.",
+  );
+}
+
+if (reviewDeployment) {
+  const ownerEmail =
+    process.env.AMOS_FINAL_GATE_OWNER_EMAIL?.trim().toLowerCase() || "";
+  const candidateId =
+    process.env.AMOS_FINAL_GATE_CANDIDATE_ID?.trim() || "";
+  const buildId = process.env.AMOS_BUILD_ID?.trim() || "";
+  const sourceDigest =
+    process.env.AMOS_SOURCE_DIGEST?.trim().toLowerCase() || "";
+  const passwordHash =
+    process.env.AMOS_REVIEW_OWNER_PASSWORD_HASH?.trim() || "";
+  const mfaCode = process.env.AMOS_REVIEW_OWNER_MFA_CODE?.trim() || "";
+  if (appEnvironment !== "staging" || runtimeMode !== "production")
+    errors.push(
+      "AMOS_REVIEW_DEPLOYMENT=true requires APP_ENV=staging and AMOS_RUNTIME_MODE=production.",
+    );
+  if (/^(?:1|true|yes|on)$/i.test(process.env.ALLOW_SELF_REGISTRATION || ""))
+    errors.push("Release review requires ALLOW_SELF_REGISTRATION=false.");
+  if ((process.env.MFA_POLICY || "required-privileged") !== "required-all")
+    errors.push("Release review requires MFA_POLICY=required-all.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail))
+    errors.push("AMOS_FINAL_GATE_OWNER_EMAIL must be a valid email address.");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$/.test(candidateId))
+    errors.push("AMOS_FINAL_GATE_CANDIDATE_ID is invalid.");
+  if (!buildId || isPlaceholder(buildId))
+    errors.push("AMOS_BUILD_ID must be a non-placeholder build identifier.");
+  if (!/^[a-f0-9]{64}$/.test(sourceDigest))
+    errors.push("AMOS_SOURCE_DIGEST must be a lowercase SHA-256 digest.");
+  if (!/^\$2[aby]\$\d{2}\$.{53}$/.test(passwordHash))
+    errors.push("AMOS_REVIEW_OWNER_PASSWORD_HASH must be a bcrypt hash.");
+  if (
+    !/^\d{6}$/.test(mfaCode) ||
+    new Set(["000000", "111111", "123456", "654321"]).has(mfaCode)
+  )
+    errors.push("AMOS_REVIEW_OWNER_MFA_CODE must be a non-trivial six-digit code.");
+} else if (
+  [
+    "AMOS_FINAL_GATE_OWNER_EMAIL",
+    "AMOS_FINAL_GATE_CANDIDATE_ID",
+    "AMOS_SOURCE_DIGEST",
+    "AMOS_REVIEW_OWNER_PASSWORD_HASH",
+    "AMOS_REVIEW_OWNER_MFA_CODE",
+  ].some((name) => Boolean(process.env[name]))
+) {
+  errors.push(
+    "Final-gate owner and review bootstrap variables require AMOS_REVIEW_DEPLOYMENT=true.",
+  );
+}
+
+if (errors.length) {
+  console.error(
+    JSON.stringify(
+      { status: "invalid", appEnvironment, runtimeMode, errors },
+      null,
+      2,
+    ),
+  );
+  process.exit(1);
+}
+
+console.log(
+  JSON.stringify(
+    {
+      status: "valid",
+      appEnvironment,
+      runtimeMode,
+      environmentId:
+        process.env.AMOS_ENVIRONMENT_ID || `amos-ops-${appEnvironment}`,
+      credentialNamespace,
+      databasePath,
+      uploadPath,
+      evaluationMode,
+      productionReleaseAuthorized,
+      productionReleaseId: productionReleaseId || null,
+      reviewDeployment,
+      deploymentApprovalRecorded: Boolean(process.env.DEPLOYMENT_APPROVAL_ID),
+      deploymentChangeRecorded: Boolean(
+        process.env.DEPLOYMENT_CHANGE_REFERENCE,
+      ),
+    },
+    null,
+    2,
+  ),
+);

@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {  useQueryClient } from "@tanstack/react-query";
 import { trpc } from "@/providers/trpc";
 import {
-  Pill, CheckCircle2, XCircle, Pause, Clock, Shield,
+  Pill, CheckCircle2, XCircle, Pause, Shield,
   ChevronLeft, ChevronRight, User, RotateCcw, Timer,
-  TabletSmartphone, TrendingUp,
+  TabletSmartphone,
 } from "lucide-react";
 
 const STATUS_ACTIONS = [
@@ -52,16 +52,13 @@ export function MobileMARPage() {
   const fmtTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
   // Youth list
-  const youthList = medications ?? [];
+  const youthList = useMemo(() => medications ?? [], [medications]);
   const currentYouth = youthList[youthIndex];
 
   // Progress
   const totalMeds = useMemo(() => youthList.reduce((s, y) => s + y.medications.length, 0), [youthList]);
   const completedMeds = useMemo(() => Object.values(roundState).filter(r => r.status === "administered" || r.status === "refused" || r.status === "held").length, [roundState]);
   const progressPct = totalMeds > 0 ? (completedMeds / totalMeds) * 100 : 0;
-
-  // Remaining in round
-  const remainingYouth = youthList.filter((y, i) => i > youthIndex).length;
 
   const handleAction = (medId: string, medName: string, isControlled: boolean, action: string) => {
     if (isControlled && action === "administered") {
@@ -206,7 +203,7 @@ export function MobileMARPage() {
 
       {/* ─── Medication Cards ──────────────────────────── */}
       <div className="px-4 space-y-3">
-        {currentYouth?.medications.map((med: any) => {
+        {currentYouth?.medications.map((med) => {
           const roundEntry = roundState[med.id];
           const isDone = !!roundEntry?.status;
           const actionConfig = STATUS_ACTIONS.find(a => a.key === roundEntry?.status);

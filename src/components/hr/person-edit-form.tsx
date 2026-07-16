@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useHR } from "@/context/hr-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,9 +66,8 @@ export function PersonEditForm({ personId }: Props) {
   const [errors, setErrors] = useState<string[]>([]);
   const [showDeactivate, setShowDeactivate] = useState(false);
 
-  // Sync form state when person data loads
-  useEffect(() => {
-    if (person && open) {
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (person && nextOpen) {
       setFirstName(person.firstName);
       setLastName(person.lastName);
       setEmployeeId(person.employeeId);
@@ -80,8 +79,10 @@ export function PersonEditForm({ personId }: Props) {
       setIsEmployee(person.isEmployee);
       setIsActive(person.isActive);
       setShowDeactivate(false);
+      setErrors([]);
     }
-  }, [person, open]);
+    setOpen(nextOpen);
+  };
 
   if (!person) return null;
 
@@ -119,7 +120,7 @@ export function PersonEditForm({ personId }: Props) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button
           variant="outline"

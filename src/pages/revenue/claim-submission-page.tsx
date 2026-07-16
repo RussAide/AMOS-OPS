@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
-import { Send, ArrowLeft, CheckCircle, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
+import { Send, ArrowLeft, CheckCircle, ChevronDown, ChevronUp } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "#6B7280", pending: "#D97706", submitted: "#2563EB",
@@ -74,7 +74,7 @@ export function ClaimSubmissionPage() {
             <span className="text-[13px] font-mono" style={{ color: "var(--topbar-subtitle)" }}>Total: ${(totalAmount / 100).toFixed(2)}</span>
           </div>
           <div className="flex items-center gap-2">
-            <select value={submissionMethod} onChange={(e) => setSubmissionMethod(e.target.value as any)} className="rounded-lg border px-3 py-2 text-[12px] outline-none" style={{ borderColor: "var(--card-border)" }}>
+            <select value={submissionMethod} onChange={(e) => setSubmissionMethod(e.target.value as typeof submissionMethod)} className="rounded-lg border px-3 py-2 text-[12px] outline-none" style={{ borderColor: "var(--card-border)" }}>
               <option value="portal">Provider Portal</option>
               <option value="fax">Fax</option>
               <option value="email">Email</option>
@@ -139,7 +139,7 @@ export function ClaimSubmissionPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <input type="text" placeholder="Add submission notes..." value={submitNotes} onChange={(e) => setSubmitNotes(e.target.value)} className="flex-1 rounded-lg border px-3 py-2 text-[12px] outline-none" style={{ borderColor: "var(--card-border)" }} />
-                  <select value={submissionMethod} onChange={(e) => setSubmissionMethod(e.target.value as any)} className="rounded-lg border px-2 py-2 text-[12px] outline-none" style={{ borderColor: "var(--card-border)" }}>
+                  <select value={submissionMethod} onChange={(e) => setSubmissionMethod(e.target.value as typeof submissionMethod)} className="rounded-lg border px-2 py-2 text-[12px] outline-none" style={{ borderColor: "var(--card-border)" }}>
                     <option value="portal">Portal</option>
                     <option value="fax">Fax</option>
                     <option value="email">Email</option>

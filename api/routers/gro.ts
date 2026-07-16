@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { createRouter, publicQuery, authedQuery, adminQuery } from "../middleware";
-import { getDb, sqlite } from "../queries/connection";
+import { createRouter, authedQuery, adminQuery } from "../middleware";
+import { getDb } from "../queries/connection";
 import { randomUUID } from "crypto";
 import {
   shiftLogs,
@@ -10,7 +10,7 @@ import {
   supervisionNotes,
   shiftHandoffs,
 } from "@db/schema";
-import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
+import { eq, desc, and, gte, lte, type InferInsertModel } from "drizzle-orm";
 
 // ═══════════════════════════════════════════════════════════════
 // GRO Residential Operations Router (D008-02)
@@ -38,16 +38,16 @@ export const groRouter = createRouter({
 
   listShiftLogs: authedQuery
     .input(z.object({
-      shiftType: z.string().optional(),
-      status: z.string().optional(),
+      shiftType: z.enum(["day", "evening", "night", "overnight"]).optional(),
+      status: z.enum(["active", "completed", "no_show", "absent"]).optional(),
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
-      if (input?.shiftType) conditions.push(eq(shiftLogs.shiftType, input.shiftType as any));
-      if (input?.status) conditions.push(eq(shiftLogs.status, input.status as any));
+      const conditions = [];
+      if (input?.shiftType) conditions.push(eq(shiftLogs.shiftType, input.shiftType));
+      if (input?.status) conditions.push(eq(shiftLogs.status, input.status));
       if (input?.dateFrom) conditions.push(gte(shiftLogs.shiftDate, input.dateFrom));
       if (input?.dateTo) conditions.push(lte(shiftLogs.shiftDate, input.dateTo));
 
@@ -151,7 +151,7 @@ export const groRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...updates } = input;
-      const updateData: any = { updatedAt: nowIso() };
+      const updateData: Partial<InferInsertModel<typeof shiftLogs>> = { updatedAt: nowIso() };
       if (updates.status) updateData.status = updates.status;
       if (updates.notes !== undefined) updateData.notes = updates.notes;
       await db.update(shiftLogs).set(updateData).where(eq(shiftLogs.id, id));
@@ -173,16 +173,16 @@ export const groRouter = createRouter({
   listSafetyRounds: authedQuery
     .input(z.object({
       area: z.string().optional(),
-      shiftType: z.string().optional(),
+      shiftType: z.enum(["day", "evening", "night", "overnight"]).optional(),
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),
       requiresFollowUp: z.boolean().optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.area) conditions.push(eq(safetyRounds.area, input.area));
-      if (input?.shiftType) conditions.push(eq(safetyRounds.shiftType, input.shiftType as any));
+      if (input?.shiftType) conditions.push(eq(safetyRounds.shiftType, input.shiftType));
       if (input?.dateFrom) conditions.push(gte(safetyRounds.shiftDate, input.dateFrom));
       if (input?.dateTo) conditions.push(lte(safetyRounds.shiftDate, input.dateTo));
 
@@ -323,7 +323,7 @@ export const groRouter = createRouter({
       ];
       const passed = items.filter(Boolean).length;
 
-      const updateData: any = {
+      const updateData: Partial<InferInsertModel<typeof safetyRounds>> = {
         updatedAt: nowIso(),
         itemsPassed: passed,
         allItemsPassed: passed === 8,
@@ -387,16 +387,16 @@ export const groRouter = createRouter({
   listYouthCareLogs: authedQuery
     .input(z.object({
       youthId: z.string().optional(),
-      careType: z.string().optional(),
+      careType: z.enum(["daily_living", "behavioral", "medical", "educational", "recreational", "emotional_support", "crisis_intervention"]).optional(),
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),
       followUpNeeded: z.boolean().optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.youthId) conditions.push(eq(youthCareLogs.youthId, input.youthId));
-      if (input?.careType) conditions.push(eq(youthCareLogs.careType, input.careType as any));
+      if (input?.careType) conditions.push(eq(youthCareLogs.careType, input.careType));
       if (input?.dateFrom) conditions.push(gte(youthCareLogs.logDate, input.dateFrom));
       if (input?.dateTo) conditions.push(lte(youthCareLogs.logDate, input.dateTo));
 
@@ -490,7 +490,7 @@ export const groRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...updates } = input;
-      const updateData: any = { updatedAt: nowIso() };
+      const updateData: Partial<InferInsertModel<typeof youthCareLogs>> = { updatedAt: nowIso() };
       if (updates.description !== undefined) updateData.description = updates.description;
       if (updates.observations !== undefined) updateData.observations = updates.observations;
       if (updates.youthResponse !== undefined) updateData.youthResponse = updates.youthResponse;
@@ -517,19 +517,19 @@ export const groRouter = createRouter({
 
   listIncidentReports: authedQuery
     .input(z.object({
-      status: z.string().optional(),
-      incidentType: z.string().optional(),
-      severity: z.string().optional(),
+      status: z.enum(["open", "under_review", "pending_supervisor", "resolved", "closed"]).optional(),
+      incidentType: z.enum(["behavioral", "safety", "medication", "injury", "elopement", "self_harm", "aggression", "property_damage", "seclusion", "restraint", "other"]).optional(),
+      severity: z.enum(["low", "medium", "high", "critical"]).optional(),
       youthId: z.string().optional(),
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
-      if (input?.status) conditions.push(eq(incidentReports.status, input.status as any));
-      if (input?.incidentType) conditions.push(eq(incidentReports.incidentType, input.incidentType as any));
-      if (input?.severity) conditions.push(eq(incidentReports.severity, input.severity as any));
+      const conditions = [];
+      if (input?.status) conditions.push(eq(incidentReports.status, input.status));
+      if (input?.incidentType) conditions.push(eq(incidentReports.incidentType, input.incidentType));
+      if (input?.severity) conditions.push(eq(incidentReports.severity, input.severity));
       if (input?.youthId) conditions.push(eq(incidentReports.youthId, input.youthId));
       if (input?.dateFrom) conditions.push(gte(incidentReports.occurredAt, input.dateFrom));
       if (input?.dateTo) conditions.push(lte(incidentReports.occurredAt, input.dateTo));
@@ -639,7 +639,7 @@ export const groRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...updates } = input;
-      const updateData: any = { updatedAt: nowIso() };
+      const updateData: Partial<InferInsertModel<typeof incidentReports>> = { updatedAt: nowIso() };
 
       if (updates.status !== undefined) updateData.status = updates.status;
       if (updates.description !== undefined) updateData.description = updates.description;
@@ -757,16 +757,16 @@ export const groRouter = createRouter({
   listSupervisionNotes: authedQuery
     .input(z.object({
       superviseeId: z.string().optional(),
-      supervisionType: z.string().optional(),
+      supervisionType: z.enum(["individual", "group", "crisis_debrief", "incident_review", "training", "observation"]).optional(),
       followUpRequired: z.boolean().optional(),
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.superviseeId) conditions.push(eq(supervisionNotes.superviseeId, input.superviseeId));
-      if (input?.supervisionType) conditions.push(eq(supervisionNotes.supervisionType, input.supervisionType as any));
+      if (input?.supervisionType) conditions.push(eq(supervisionNotes.supervisionType, input.supervisionType));
       if (input?.dateFrom) conditions.push(gte(supervisionNotes.supervisionDate, input.dateFrom));
       if (input?.dateTo) conditions.push(lte(supervisionNotes.supervisionDate, input.dateTo));
 
@@ -856,7 +856,7 @@ export const groRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...updates } = input;
-      const updateData: any = { updatedAt: nowIso() };
+      const updateData: Partial<InferInsertModel<typeof supervisionNotes>> = { updatedAt: nowIso() };
       if (updates.topicsDiscussed !== undefined) updateData.topicsDiscussed = updates.topicsDiscussed;
       if (updates.staffConcerns !== undefined) updateData.staffConcerns = updates.staffConcerns;
       if (updates.performanceObservations !== undefined) updateData.performanceObservations = updates.performanceObservations;
@@ -899,14 +899,14 @@ export const groRouter = createRouter({
 
   listShiftHandoffs: authedQuery
     .input(z.object({
-      status: z.string().optional(),
+      status: z.enum(["pending", "in_progress", "completed"]).optional(),
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
-      if (input?.status) conditions.push(eq(shiftHandoffs.status, input.status as any));
+      const conditions = [];
+      if (input?.status) conditions.push(eq(shiftHandoffs.status, input.status));
       if (input?.dateFrom) conditions.push(gte(shiftHandoffs.handoffDate, input.dateFrom));
       if (input?.dateTo) conditions.push(lte(shiftHandoffs.handoffDate, input.dateTo));
 
@@ -997,7 +997,7 @@ export const groRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...updates } = input;
-      const updateData: any = { updatedAt: nowIso() };
+      const updateData: Partial<InferInsertModel<typeof shiftHandoffs>> = { updatedAt: nowIso() };
       if (updates.youthStatusJson !== undefined) updateData.youthStatusJson = updates.youthStatusJson;
       if (updates.pendingItems !== undefined) updateData.pendingItems = updates.pendingItems;
       if (updates.medicationUpdates !== undefined) updateData.medicationUpdates = updates.medicationUpdates;
@@ -1080,7 +1080,7 @@ export const groRouter = createRouter({
       id: shiftId,
       shiftDate: today,
       shiftType: "day",
-      staffName: "Sarah Johnson",
+      staffName: "Synthetic Staff 01",
       staffId: "user-rcs-001",
       supervisorName: "Michael Roberts",
       clockInAt: `${today}T07:00:00Z`,
@@ -1124,7 +1124,7 @@ export const groRouter = createRouter({
         hazardsFound: null,
         correctiveAction: null,
         requiresFollowUp: false,
-        completedBy: "Sarah Johnson",
+        completedBy: "Synthetic Staff 01",
         completedById: "user-rcs-001",
         createdAt: now,
         updatedAt: now,
@@ -1133,9 +1133,9 @@ export const groRouter = createRouter({
 
     // Seed youth care logs
     const careLogsData = [
-      { youthId: "youth-001", youthName: "Marcus Johnson", mrn: "MRN-2026-001", careType: "daily_living" as const, description: "Assisted with morning hygiene routine. Youth cooperative and in good mood." },
-      { youthId: "youth-002", youthName: "Aaliyah Williams", mrn: "MRN-2026-002", careType: "educational" as const, description: "Completed math homework with tutoring support. Engaged well with material." },
-      { youthId: "youth-003", youthName: "Ethan Brown", mrn: "MRN-2026-003", careType: "behavioral" as const, description: "Participated in coping skills group. Practiced breathing exercises." },
+      { youthId: "youth-001", youthName: "Synthetic Youth 001", mrn: "SYNTH-REC-001", careType: "daily_living" as const, description: "Assisted with morning hygiene routine. Youth cooperative and in good mood." },
+      { youthId: "youth-002", youthName: "Synthetic Youth 005", mrn: "SYNTH-REC-002", careType: "educational" as const, description: "Completed math homework with tutoring support. Engaged well with material." },
+      { youthId: "youth-003", youthName: "Synthetic Youth 014", mrn: "SYNTH-REC-003", careType: "behavioral" as const, description: "Participated in coping skills group. Practiced breathing exercises." },
     ];
     for (const cl of careLogsData) {
       await db.insert(youthCareLogs).values({
@@ -1152,7 +1152,7 @@ export const groRouter = createRouter({
         youthResponse: "Positive engagement",
         outcome: "Goal progress noted",
         followUpNeeded: false,
-        recordedBy: "Sarah Johnson",
+        recordedBy: "Synthetic Staff 01",
         recordedById: "user-rcs-001",
         createdAt: now,
         updatedAt: now,
@@ -1168,14 +1168,14 @@ export const groRouter = createRouter({
       severity: "medium",
       status: "open",
       youthId: "youth-003",
-      youthName: "Ethan Brown",
-      mrn: "MRN-2026-003",
+      youthName: "Synthetic Youth 014",
+      mrn: "SYNTH-REC-003",
       occurredAt: `${today}T14:30:00Z`,
       occurredLocation: "Common Area - East Wing",
       description: "Youth became frustrated during group activity and knocked over a chair. De-escalated within 5 minutes using verbal redirection. No injuries.",
       immediateAction: "Removed youth to quiet room. Provided space and time. Checked in after 10 minutes.",
       factors: "Transition from high-energy activity to seated group time.",
-      reportedBy: "David Park",
+      reportedBy: "Synthetic Staff 04",
       reportedById: "user-rcs-002",
       createdAt: now,
       updatedAt: now,
@@ -1188,7 +1188,7 @@ export const groRouter = createRouter({
       supervisionType: "individual",
       supervisorName: "Michael Roberts",
       supervisorId: "user-super-001",
-      superviseeName: "Sarah Johnson",
+      superviseeName: "Synthetic Staff 01",
       superviseeId: "user-rcs-001",
       topicsDiscussed: "Reviewed crisis intervention techniques. Discussed strategies for supporting youth with trauma history.",
       staffConcerns: "Feeling overwhelmed with new youth admissions.",
@@ -1210,17 +1210,17 @@ export const groRouter = createRouter({
       id: randomUUID(),
       fromShiftId: shiftId,
       handoffDate: today,
-      fromStaffName: "Sarah Johnson",
-      toStaffName: "David Park",
+      fromStaffName: "Synthetic Staff 01",
+      toStaffName: "Synthetic Staff 04",
       youthStatusJson: JSON.stringify([
-        { youthId: "youth-001", name: "Marcus Johnson", status: "stable", concerns: "None" },
-        { youthId: "youth-002", name: "Aaliyah Williams", status: "stable", concerns: "Guardian visit scheduled tomorrow" },
-        { youthId: "youth-003", name: "Ethan Brown", status: "monitoring", concerns: "Behavioral incident at 14:30 - follow up recommended" },
+        { youthId: "youth-001", name: "Synthetic Youth 001", status: "stable", concerns: "None" },
+        { youthId: "youth-002", name: "Synthetic Youth 005", status: "stable", concerns: "Guardian visit scheduled tomorrow" },
+        { youthId: "youth-003", name: "Synthetic Youth 014", status: "monitoring", concerns: "Behavioral incident at 14:30 - follow up recommended" },
       ]),
-      pendingItems: "Guardian visit for Aaliyah tomorrow 10am; Ethan behavioral follow-up; Med pass log review",
+      pendingItems: "Guardian visit for Synthetic-Person-005 tomorrow 10am; Synthetic-Person-014 behavioral follow-up; Med pass log review",
       medicationUpdates: "All meds administered on time. No issues.",
-      appointmentReminders: "Aaliyah guardian visit 7/6 at 10am",
-      highPriorityAlerts: "Ethan Brown - behavioral incident requires follow-up in evening shift",
+      appointmentReminders: "Synthetic-Person-005 guardian visit 7/6 at 10am",
+      highPriorityAlerts: "Synthetic Youth 014 - behavioral incident requires follow-up in evening shift",
       safetyAlerts: "None",
       generalNotes: "Quiet day overall. All safety rounds completed. 3 care logs entered.",
       status: "completed",

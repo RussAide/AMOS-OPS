@@ -2,8 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, FileText, Search, Send, CheckCircle, Clock,
-  AlertTriangle, Lock, Eye, PenLine,
+  ArrowLeft, FileText, Search, CheckCircle, Lock, Eye, PenLine,
 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -21,16 +20,33 @@ const PRIORITY_COLORS: Record<string, string> = {
   emergency: "#DC2626",
 };
 
-const CLASSIFICATION_ICONS: Record<string, any> = {
+const CLASSIFICATION_ICONS: Record<string, typeof Eye> = {
   internal: Eye,
   restricted: Lock,
   confidential: Lock,
 };
 
+function formatMemoRecipients(value: string): string {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return value;
+
+    const names: string[] = [];
+    for (const item of parsed) {
+      if (typeof item === "object" && item !== null && "name" in item && typeof item.name === "string") {
+        names.push(item.name);
+      }
+    }
+    return names.length > 0 ? names.join(", ") : value;
+  } catch {
+    return value;
+  }
+}
+
 export function ComplianceMemoPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"" | "draft" | "approved" | "superseded" | "acknowledged" | "pending_review" | "issued">("");
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   // Create form state
@@ -81,7 +97,7 @@ export function ComplianceMemoPage() {
       approved: "issued",
     };
     const next = flow[currentStatus];
-    if (next) updateMemo.mutate({ id, status: next as any });
+    if (next) updateMemo.mutate({ id, status: next as Parameters<typeof updateMemo.mutate>[0]["status"] });
   };
 
   return (
@@ -150,7 +166,7 @@ export function ComplianceMemoPage() {
             <div className="flex gap-2">
               <select
                 value={formPriority}
-                onChange={(e) => setFormPriority(e.target.value as any)}
+                  onChange={(e) => setFormPriority(e.target.value as typeof formPriority)}
                 className="rounded-lg border px-3 py-2 text-[13px] outline-none flex-1"
                 style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}
               >
@@ -160,7 +176,7 @@ export function ComplianceMemoPage() {
               </select>
               <select
                 value={formClassification}
-                onChange={(e) => setFormClassification(e.target.value as any)}
+                  onChange={(e) => setFormClassification(e.target.value as typeof formClassification)}
                 className="rounded-lg border px-3 py-2 text-[13px] outline-none flex-1"
                 style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}
               >
@@ -206,7 +222,7 @@ export function ComplianceMemoPage() {
         </div>
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
           className="rounded-lg border px-3 py-2 text-[13px] outline-none"
           style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)", color: "var(--topbar-title)" }}
         >
@@ -251,7 +267,7 @@ export function ComplianceMemoPage() {
               {/* Action Bar */}
               <div className="flex items-center gap-2 mt-3 pt-3" style={{ borderTop: "1px solid var(--card-border)" }}>
                 <span className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>
-                  To: {(() => { try { return JSON.parse(memo.toRecipients).map((r: any) => r.name).join(", "); } catch { return memo.toRecipients; } })()}
+                  To: {formatMemoRecipients(memo.toRecipients)}
                 </span>
                 <div className="flex-1" />
                 {memo.status === "draft" && (

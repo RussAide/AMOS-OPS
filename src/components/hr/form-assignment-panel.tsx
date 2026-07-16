@@ -23,6 +23,20 @@ interface Props {
   personRole: string;
 }
 
+type FormInstanceStatus =
+  | "draft"
+  | "assigned"
+  | "in-progress"
+  | "submitted"
+  | "under-review"
+  | "returned-for-correction"
+  | "approved"
+  | "locked"
+  | "filed-to-dms"
+  | "expired"
+  | "waived"
+  | "superseded";
+
 const STATUS_COLORS: Record<string, { bg: string; color: string; label: string }> = {
   draft: { bg: "#F3F4F6", color: "#6B7280", label: "Draft" },
   assigned: { bg: "#F0FDFA", color: "#245C5A", label: "Assigned" },
@@ -72,10 +86,10 @@ export function FormAssignmentPanel({ personId, personRole }: Props) {
     utils.forms.listInstances.invalidate({ personId });
   };
 
-  const handleStatusChange = async (instanceId: string, status: string) => {
+  const handleStatusChange = async (instanceId: string, status: FormInstanceStatus) => {
     await updateMutation.mutateAsync({
       id: instanceId,
-      status: status as any,
+      status,
     });
     utils.forms.listInstances.invalidate({ personId });
   };
@@ -215,7 +229,7 @@ export function FormAssignmentPanel({ personId, personRole }: Props) {
 
 function renderInstance(
   inst: Record<string, unknown>,
-  onStatusChange: (id: string, status: string) => void
+  onStatusChange: (id: string, status: FormInstanceStatus) => void
 ): ReactNode {
   const style = STATUS_COLORS[String(inst.status)] || { bg: "#F3F4F6", color: "#6B7280", label: String(inst.status) };
   const isPending = ["assigned", "in-progress"].includes(String(inst.status));

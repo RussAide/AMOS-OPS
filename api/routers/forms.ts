@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "../middleware";
+import { adminQuery, authedQuery, createRouter } from "../middleware";
 import { getDb } from "../queries/connection";
 import {
   formTemplates,
@@ -16,7 +16,7 @@ import { randomUUID } from "crypto";
 export const formsRouter = createRouter({
   // ─── Templates ─────────────────────────────────────────────
 
-  listTemplates: publicQuery
+  listTemplates: authedQuery
     .input(
       z.object({
         binderArea: z.string().optional(),
@@ -47,7 +47,7 @@ export const formsRouter = createRouter({
       return query.orderBy(asc(formTemplates.sortOrder)).all();
     }),
 
-  getTemplate: publicQuery
+  getTemplate: authedQuery
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -70,7 +70,7 @@ export const formsRouter = createRouter({
       return { ...template, fields, bindings };
     }),
 
-  createTemplate: publicQuery
+  createTemplate: adminQuery
     .input(
       z.object({
         formCode: z.string().min(1),
@@ -150,7 +150,7 @@ export const formsRouter = createRouter({
       return db.select().from(formTemplates).where(eq(formTemplates.id, id)).get();
     }),
 
-  updateTemplate: publicQuery
+  updateTemplate: adminQuery
     .input(
       z.object({
         id: z.string(),
@@ -178,7 +178,7 @@ export const formsRouter = createRouter({
       return db.select().from(formTemplates).where(eq(formTemplates.id, id)).get();
     }),
 
-  deleteTemplate: publicQuery
+  deleteTemplate: adminQuery
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input }) => {
       const db = getDb();
@@ -195,7 +195,7 @@ export const formsRouter = createRouter({
 
   // ─── Role Bindings ─────────────────────────────────────────
 
-  listRoleBindings: publicQuery
+  listRoleBindings: authedQuery
     .input(z.object({ templateId: z.string().optional(), role: z.string().optional() }).optional())
     .query(async ({ input }) => {
       const db = getDb();
@@ -209,7 +209,7 @@ export const formsRouter = createRouter({
       return query.all();
     }),
 
-  setRoleBinding: publicQuery
+  setRoleBinding: adminQuery
     .input(
       z.object({
         templateId: z.string(),
@@ -258,12 +258,16 @@ export const formsRouter = createRouter({
 
   // ─── Instances ─────────────────────────────────────────────
 
-  listInstances: publicQuery
+  listInstances: authedQuery
     .input(
       z.object({
         personId: z.string().optional(),
         templateId: z.string().optional(),
-        status: z.string().optional(),
+        status: z.enum([
+          "draft", "assigned", "in-progress", "submitted", "under-review",
+          "returned-for-correction", "approved", "locked", "filed-to-dms",
+          "expired", "waived", "superseded",
+        ]).optional(),
         moduleId: z.string().optional(),
       }).optional(),
     )
@@ -273,7 +277,7 @@ export const formsRouter = createRouter({
       const conditions = [];
       if (input?.personId) conditions.push(eq(formInstances.personId, input.personId));
       if (input?.templateId) conditions.push(eq(formInstances.templateId, input.templateId));
-      if (input?.status) conditions.push(eq(formInstances.status, input.status as any));
+      if (input?.status) conditions.push(eq(formInstances.status, input.status));
       if (input?.moduleId) conditions.push(eq(formInstances.moduleId, input.moduleId));
       if (conditions.length > 0) {
         query = query.where(and(...conditions)) as typeof query;
@@ -281,14 +285,14 @@ export const formsRouter = createRouter({
       return query.orderBy(desc(formInstances.createdAt)).all();
     }),
 
-  getInstance: publicQuery
+  getInstance: authedQuery
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
       const db = getDb();
       return db.select().from(formInstances).where(eq(formInstances.id, input.id)).get();
     }),
 
-  createInstance: publicQuery
+  createInstance: adminQuery
     .input(
       z.object({
         templateId: z.string(),
@@ -319,7 +323,7 @@ export const formsRouter = createRouter({
       return db.select().from(formInstances).where(eq(formInstances.id, id)).get();
     }),
 
-  updateInstanceStatus: publicQuery
+  updateInstanceStatus: adminQuery
     .input(
       z.object({
         id: z.string(),
@@ -354,21 +358,27 @@ export const formsRouter = createRouter({
 
   // ─── Packets ───────────────────────────────────────────────
 
-  listPackets: publicQuery
-    .input(z.object({ personId: z.string().optional(), status: z.string().optional() }).optional())
+  listPackets: authedQuery
+    .input(z.object({
+      personId: z.string().optional(),
+      status: z.enum([
+        "packet-not-started", "packet-building", "packet-incomplete",
+        "packet-ready-for-review", "packet-approved", "packet-locked", "packet-filed",
+      ]).optional(),
+    }).optional())
     .query(async ({ input }) => {
       const db = getDb();
       let query = db.select().from(formPackets);
       const conditions = [];
       if (input?.personId) conditions.push(eq(formPackets.personId, input.personId));
-      if (input?.status) conditions.push(eq(formPackets.status, input.status as any));
+      if (input?.status) conditions.push(eq(formPackets.status, input.status));
       if (conditions.length > 0) {
         query = query.where(and(...conditions)) as typeof query;
       }
       return query.orderBy(desc(formPackets.createdAt)).all();
     }),
 
-  createPacket: publicQuery
+  createPacket: adminQuery
     .input(
       z.object({
         personId: z.string(),
@@ -395,7 +405,7 @@ export const formsRouter = createRouter({
       return db.select().from(formPackets).where(eq(formPackets.id, id)).get();
     }),
 
-  updatePacket: publicQuery
+  updatePacket: adminQuery
     .input(
       z.object({
         id: z.string(),
@@ -422,7 +432,7 @@ export const formsRouter = createRouter({
 
   // ─── Dashboard / Summary ───────────────────────────────────
 
-  dashboard: publicQuery.query(async () => {
+  dashboard: authedQuery.query(async () => {
     const db = getDb();
     const templates = await db.select().from(formTemplates).all();
     const instances = await db.select().from(formInstances).all();
@@ -455,7 +465,7 @@ export const formsRouter = createRouter({
     };
   }),
 
-  missingFormsReport: publicQuery.query(async () => {
+  missingFormsReport: authedQuery.query(async () => {
     const db = getDb();
     const templates = await db.select().from(formTemplates).all();
     const packets = await db.select().from(formPackets).all();
@@ -494,7 +504,7 @@ export const formsRouter = createRouter({
 
   // ─── Auto-assign forms to person ───────────────────────────
 
-  autoAssign: publicQuery
+  autoAssign: adminQuery
     .input(
       z.object({
         personId: z.string(),

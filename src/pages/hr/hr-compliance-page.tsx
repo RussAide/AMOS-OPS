@@ -1,13 +1,11 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
-  Search,
+  
   Shield,
   AlertTriangle,
   CheckCircle,
   Clock,
   FileText,
-  UserCheck,
-  ChevronDown,
   Send,
   Eye,
   GraduationCap,
@@ -57,7 +55,7 @@ const trainingData: TrainingRecord[] = [
   },
   {
     id: 2,
-    employee: "Marcus Johnson",
+    employee: "Synthetic Youth 001",
     position: "Youth Support Specialist",
     overdueModule: "HIPAA Compliance Refresher",
     dueDate: "2025-05-20",
@@ -305,8 +303,8 @@ const CircularScore = ({ score }: { score: number }) => {
 };
 
 export default function HrCompliancePage() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [trainingFilter, setTrainingFilter] = useState("All");
+  const [searchQuery] = useState("");
+  const [trainingFilter] = useState("All");
 
   const filteredTraining = trainingData.filter((record) => {
     const matchesSearch =

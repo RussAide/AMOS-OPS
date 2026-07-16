@@ -19,8 +19,36 @@ import { randomUUID } from "crypto";
 // ═══════════════════════════════════════════════════════════════
 
 // ─── Row mapper: DB row → API shape ───────────────────────────
-function mapPersonaRow(row: any) {
-  if (!row) return null;
+interface PersonaRow {
+  id: string;
+  key: string;
+  name: string;
+  code: string;
+  description: string;
+  scope: string | null;
+  boundaries_json: string | null;
+  status: "active" | "pilot" | "deferred";
+  wave: string | null;
+  category: string | null;
+  color: string | null;
+  icon: string | null;
+  permissions: string | null;
+  outputs: string | null;
+  activated_at: string | null;
+  sort_order: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+  trigger_conditions: string | null;
+}
+
+interface TriggerCondition {
+  type: "keyword" | "module";
+  pattern: string;
+}
+
+function mapPersonaRow(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const row = value as PersonaRow;
   return {
     id: row.id,
     key: row.key,
@@ -102,7 +130,7 @@ export const personaRouter = createRouter({
         .get(input.key);
       if (!row) throw new Error(`Persona '${input.key}' not found`);
 
-      const currentStatus = (row as any).status;
+      const currentStatus = (row as PersonaRow).status;
       if (currentStatus === "pilot" || currentStatus === "active") {
         throw new Error(
           `Persona '${input.key}' is already ${currentStatus}; cannot activate`
@@ -138,7 +166,7 @@ export const personaRouter = createRouter({
         .get(input.key);
       if (!row) throw new Error(`Persona '${input.key}' not found`);
 
-      const currentStatus = (row as any).status;
+      const currentStatus = (row as PersonaRow).status;
       if (currentStatus === "deferred") {
         throw new Error(
           `Persona '${input.key}' is already deferred; cannot deactivate`
@@ -210,12 +238,12 @@ export const personaRouter = createRouter({
       const query = input.queryText.toLowerCase();
       const path = input.currentPath ?? "";
 
-      return (personas as any[])
-        .filter((p: any) => {
+      return (personas as PersonaRow[])
+        .filter((p) => {
           if (!p.trigger_conditions) return false;
           try {
-            const triggers = JSON.parse(p.trigger_conditions);
-            return triggers.some((t: any) => {
+            const triggers = JSON.parse(p.trigger_conditions) as TriggerCondition[];
+            return triggers.some((t) => {
               if (t.type === "keyword")
                 return new RegExp(t.pattern, "i").test(query);
               if (t.type === "module")
@@ -255,7 +283,7 @@ export const personaRouter = createRouter({
           id,
           input.personaId,
           input.queryText,
-          `Response from ${(persona as any).name}: Processing your request about "${input.queryText}"...`,
+          `Response from ${(persona as PersonaRow).name}: Processing your request about "${input.queryText}"...`,
           input.contextData ?? null
         );
 

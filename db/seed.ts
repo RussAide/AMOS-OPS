@@ -12,6 +12,9 @@ import {
   notifications,
 } from "./schema";
 import { randomUUID } from "crypto";
+import { assertSyntheticSeedAllowed } from "./seed-guard";
+
+assertSyntheticSeedAllowed({ scriptName: "db/seed.ts" });
 
 // Create tables if they don't exist
 function initTables() {
@@ -22,7 +25,7 @@ function initTables() {
       password_hash TEXT NOT NULL,
       first_name TEXT NOT NULL,
       last_name TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'gro-staff',
+      role TEXT NOT NULL DEFAULT 'rcs-day',
       department TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -151,7 +154,7 @@ async function seed() {
   await db.insert(users).values([
     {
       id: adminId,
-      email: "admin@adolbi.com",
+      email: "admin@amos-ops.invalid",
       passwordHash: "$2a$12$K0ByB.6YI2/OYrB4fQOYLe6QdRg6XnYlYqYqYqYqYqYqYqYqYqYqYq",
       firstName: "System",
       lastName: "Administrator",
@@ -161,7 +164,7 @@ async function seed() {
     },
     {
       id: hrId,
-      email: "hr@adolbi.com",
+      email: "hr@amos-ops.invalid",
       passwordHash: "$2a$12$K0ByB.6YI2/OYrB4fQOYLe6QdRg6XnYlYqYqYqYqYqYqYqYqYqYqYq",
       firstName: "HR",
       lastName: "Director",
@@ -175,7 +178,7 @@ async function seed() {
   console.log("[Seed] Creating HR people...");
 
   const activationPeople = [
-    { firstName: "Marcus", lastName: "Johnson", role: "GRO Specialist", department: "Field Operations", lane: "activation" as const, isEmployee: true, employeeId: "E-1045" },
+    { firstName: "Synthetic", lastName: "Person-001", role: "GRO Specialist", department: "Field Operations", lane: "activation" as const, isEmployee: true, employeeId: "E-1045" },
     { firstName: "Sarah", lastName: "Chen", role: "GRO Associate", department: "Field Operations", lane: "activation" as const, isEmployee: true, employeeId: "E-1046" },
     { firstName: "David", lastName: "Rodriguez", role: "GRO Specialist", department: "Field Operations", lane: "activation" as const, isEmployee: true, employeeId: "E-1047" },
     { firstName: "Aisha", lastName: "Patel", role: "GRO Trainee", department: "Field Operations", lane: "activation" as const, isEmployee: false },
@@ -259,7 +262,7 @@ async function seed() {
     {
       id: randomUUID(),
       personId: peopleIds[0],
-      personName: "Marcus Johnson",
+      personName: "Synthetic Youth 001",
       moduleId: "recruitment",
       moduleName: "Recruitment",
       fromStatus: "pending",
@@ -270,7 +273,7 @@ async function seed() {
     {
       id: randomUUID(),
       personId: peopleIds[1],
-      personName: "Sarah Chen",
+      personName: "Synthetic Youth 035",
       moduleId: "screening",
       moduleName: "Screening",
       fromStatus: "pending",
@@ -342,9 +345,9 @@ async function seed() {
       id: randomUUID(),
       userId: adminId,
       type: "status-change" as const,
-      title: "Status Change: Marcus Johnson",
-      message: "Marcus Johnson moved from Pending to In Progress in Recruitment",
-      personName: "Marcus Johnson",
+      title: "Status Change: Synthetic Youth 001",
+      message: "Synthetic Youth 001 moved from Pending to In Progress in Recruitment",
+      personName: "Synthetic Youth 001",
       moduleName: "Recruitment",
       isRead: false,
     },
@@ -353,8 +356,8 @@ async function seed() {
       userId: adminId,
       type: "document" as const,
       title: "Document Uploaded",
-      message: "New document uploaded for Sarah Chen in Screening",
-      personName: "Sarah Chen",
+      message: "New document uploaded for Synthetic Youth 035 in Screening",
+      personName: "Synthetic Youth 035",
       moduleName: "Screening",
       isRead: false,
     },

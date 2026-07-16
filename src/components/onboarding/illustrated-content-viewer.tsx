@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { getModuleById, getQuizForModule, hasQuiz } from "@/data/onboardingData";
 import { QuizEngine } from "./quiz-engine";
+import { createElement } from "react";
 
 // ─── Principle Icons Registry ─────────────────────────────────
 const PRINCIPLE_ICONS: Record<string, typeof Shield> = {
@@ -128,7 +129,7 @@ function parseContent(content: string): ParsedSection[] {
       startSection("rules", "Key Rules & Core Expectations");
     } else if (lower === "do:" || lower.includes("do list") || (lower.includes("do:") && !lower.includes("do not"))) {
       startSection("do", "DO");
-    } else if (lower === "do not:" || lower.includes("do not") || lower.includes("dont") || lower.includes("don\'t")) {
+    } else if (lower === "do not:" || lower.includes("do not") || lower.includes("dont") || lower.includes("don't")) {
       startSection("dont", "DO NOT");
     } else if (lower.includes("red flags") || lower.includes("redflags")) {
       startSection("redflags", "Red Flags");
@@ -168,7 +169,6 @@ function parseContent(content: string): ParsedSection[] {
 // ─── Visual Components ───────────────────────────────────────
 
 function PrincipleCard({ text, color }: { text: string; color: string }) {
-  const Icon = getIconForText(text);
   const parts = text.split(":");
   const title = parts[0];
   const desc = parts.slice(1).join(":").trim();
@@ -182,7 +182,7 @@ function PrincipleCard({ text, color }: { text: string; color: string }) {
         className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
         style={{ backgroundColor: color + "18" }}
       >
-        <Icon size={20} style={{ color }} />
+        {createElement(getIconForText(text), { size: 20, style: { color } })}
       </div>
       <div>
         <p className="text-[13px] font-bold" style={{ color }}>{title}</p>
@@ -698,7 +698,6 @@ function IllustratedQuizSection({
           onComplete={(_score: number, _total: number, passed: boolean) => {
             if (passed) onComplete();
           }}
-          onCancel={() => {}}
         />
       )}
     </div>

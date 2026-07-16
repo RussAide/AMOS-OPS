@@ -1,8 +1,7 @@
 import { useState, useMemo } from "react";
 import {
   ClipboardCheck, Calendar, CheckCircle2, AlertTriangle, XCircle,
-  Clock, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, Eye,
-  ShieldCheck, Building2, User, X, Star, ChevronRight,
+  Clock, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, Eye, User, X, ChevronRight,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────
@@ -60,6 +59,15 @@ const DEMO_REVIEWS: SiteReview[] = [
 type SortField = "reviewDate" | "inspector" | "category" | "finding" | "status" | "dueDate";
 type SortDir = "asc" | "desc";
 
+function renderSortIcon(field: SortField, activeField: SortField, direction: SortDir) {
+  if (activeField !== field) {
+    return <ArrowUpDown size={12} className="ml-1" style={{ color: "#9CA3AF" }} />;
+  }
+  return direction === "asc"
+    ? <ArrowUp size={12} className="ml-1" style={{ color: "#245C5A" }} />
+    : <ArrowDown size={12} className="ml-1" style={{ color: "#245C5A" }} />;
+}
+
 export default function SiteReviewPage() {
   const [reviews] = useState<SiteReview[]>(DEMO_REVIEWS);
   const [searchQuery, setSearchQuery] = useState("");
@@ -115,13 +123,6 @@ export default function SiteReviewPage() {
     openItems: reviews.filter((r) => r.status === "open" || r.status === "in_progress").length,
     overdueItems: reviews.filter((r) => r.status === "overdue").length,
   }), [reviews]);
-
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return <ArrowUpDown size={12} className="ml-1" style={{ color: "#9CA3AF" }} />;
-    return sortDir === "asc"
-      ? <ArrowUp size={12} className="ml-1" style={{ color: "#245C5A" }} />
-      : <ArrowDown size={12} className="ml-1" style={{ color: "#245C5A" }} />;
-  };
 
   const categories = [...new Set(reviews.map((r) => r.category))];
   const hasFilters = searchQuery || statusFilter !== "all" || categoryFilter !== "all" || severityFilter !== "all";
@@ -211,20 +212,20 @@ export default function SiteReviewPage() {
             <thead>
               <tr style={{ borderBottom: "2px solid var(--card-border)", backgroundColor: "rgba(36,92,90,0.03)" }}>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("reviewDate")}>
-                  <span className="flex items-center">Review Date <SortIcon field="reviewDate" /></span>
+                  <span className="flex items-center">Review Date {renderSortIcon("reviewDate", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("inspector")}>
-                  <span className="flex items-center">Inspector <SortIcon field="inspector" /></span>
+                  <span className="flex items-center">Inspector {renderSortIcon("inspector", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("category")}>
-                  <span className="flex items-center">Category <SortIcon field="category" /></span>
+                  <span className="flex items-center">Category {renderSortIcon("category", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold" style={{ color: "var(--topbar-subtitle)" }}>Finding</th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("status")}>
-                  <span className="flex items-center">Status <SortIcon field="status" /></span>
+                  <span className="flex items-center">Status {renderSortIcon("status", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("dueDate")}>
-                  <span className="flex items-center">Due Date <SortIcon field="dueDate" /></span>
+                  <span className="flex items-center">Due Date {renderSortIcon("dueDate", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold" style={{ color: "var(--topbar-subtitle)" }}>Actions</th>
               </tr>
@@ -233,7 +234,6 @@ export default function SiteReviewPage() {
               {filtered.map((r) => {
                 const stCfg = STATUS_CONFIG[r.status];
                 const StatusIcon = stCfg.icon;
-                const sevCfg = SEVERITY_CONFIG[r.severity];
                 const catCfg = CATEGORY_CONFIG[r.category] || { color: "#6B7280", bg: "#F3F4F6" };
                 return (
                   <tr key={r.id} className="border-b hover:bg-black/[0.02] transition-colors" style={{ borderColor: "var(--card-border)" }}>

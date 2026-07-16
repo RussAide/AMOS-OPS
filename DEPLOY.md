@@ -1,201 +1,69 @@
-# AMOS-OPS Deployment Guide
-## Sprint Complete — 143 Tasks Done
-## Date: 2026-07-05
+# AMOS-OPS controlled environment runbook
 
----
+This M1.1 runbook supersedes every earlier deployment instruction in this source package. The controlling architecture is [config/environments/README.md](config/environments/README.md).
 
-## What You Need
+## Supported profiles
 
-| Requirement | Version |
-|-------------|---------|
-| Node.js | 20+ |
-| npm | 10+ |
-| SQLite | 3+ (embedded, no separate install needed) |
+AMOS-OPS has exactly four isolated profiles: `development`, `demo`, `staging`, and `production`. Each profile uses a distinct environment ID, database, upload path, credential namespace, origin allowlist, and deployment control record.
 
----
+All profiles use one immutable build. `AMOS_RUNTIME_MODE=demo|production` is
+selected only at process startup; see
+[docs/SINGLE-BUILD-RUNTIME-MODES.md](docs/SINGLE-BUILD-RUNTIME-MODES.md).
 
-## Step 1: Install Dependencies
+Never copy a database, upload directory, token, secret, or `.env` file between profiles.
 
-```bash
-cd codebase/
-npm install
-```
+## Local development
 
-> If you get peer dependency warnings, use: `npm install --legacy-peer-deps`
+1. Install the lockfile exactly: `npm ci`.
+2. Copy `.env.development.example` to a local `.env` that remains outside source control.
+3. Run `npm run env:validate`.
+4. Run `npm run verify`.
+5. Start the local application with `npm run dev`.
 
----
+The default development stores are `data/development/amos-ops.db` and `uploads/development/`.
 
-## Step 2: Set Environment Variables
+## Fictional demo evaluation
 
-```bash
-cp .env.example .env
-```
+The demo profile is the only profile permitted to enable fictional evaluation mode.
 
-Edit `.env` and set at least these:
+1. Use `.env.demo.example` as the local profile.
+2. Use only fictional `@amos-ops.invalid` identities and synthetic records.
+3. Run `npm run env:validate` and `npm run verify`.
+4. Build/start the isolated demo container with `docker compose up --build` when container evaluation is desired.
+5. Register a fictional account with a 12+ character password.
+6. Complete the guided synthetic MFA challenge. Demo MFA/recovery disclosures are never emitted in staging or production.
 
-```env
-# REQUIRED: Strong JWT secret (min 32 chars, random generated)
-# Generate with: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
-JWT_SECRET=your-strong-generated-secret-here-min-32-chars
+Demo stores are `data/demo/amos-ops.db` and `uploads/demo/`. There are no hard-coded default credentials.
 
-# Database (SQLite — embedded, no separate server)
-DATABASE_URL=file:./amos-ops.db
+## Staging and production
 
-# App URL
-APP_URL=http://localhost:5173
+Staging and production are manual, protected workflow targets. A controlled dispatch must provide:
 
-# Microsoft Graph (optional — can run without MS integration)
-MS_GRAPH_TENANT_ID=your-tenant-id
-MS_GRAPH_CLIENT_ID=your-client-id
-MS_GRAPH_CLIENT_SECRET=your-client-secret
-```
+- the explicit target environment;
+- an environment-scoped host token and service/site identifier;
+- distinct `APP_SECRET` and `JWT_SECRET` values from that target's credential namespace;
+- exact `AMOS_ALLOWED_ORIGINS` values;
+- an approval ID and change reference; and
+- the exact verified image digest being promoted.
 
-> The app will **refuse to start** with a weak JWT_SECRET in production mode.
+Production additionally requires `MFA_POLICY=required-all`, disabled
+self-registration, and the RG.1-approved release authorization variables. The
+workflow runs `npm ci`, `npm run env:validate`, and `npm run verify` before
+invoking the protected Node/container host.
 
----
+No deployment is performed by this prototype milestone build.
 
-## Step 3: Initialize Database
+## Identity behavior
 
-```bash
-npm run db:push
-# or
-npx drizzle-kit push
-```
+- Self-registration defaults on only in development/demo.
+- Passwords require 12+ characters with upper/lowercase, numeric, and special characters.
+- Five failed passwords cause a 15-minute lockout.
+- Sessions are server-revocable, environment-bound, and limited by idle and absolute timeouts.
+- MFA is mandatory for every Production account; other controlled profiles may apply a stricter policy.
+- Password recovery is single-use and revokes prior sessions.
+- Account removal is a retained-evidence deactivation, not a hard delete.
+- Access reviews are recorded and may retain, modify, or revoke access.
 
-This creates all tables defined in `db/schema.ts`.
+## Generated state
 
----
-
-## Step 4: Seed Data (Optional but Recommended)
-
-```bash
-npm run db:seed
-```
-
-This seeds:
-- 8 workflow definitions (WF-001 through WF-008)
-- 21 workflow instances (3 pilot cases + 18 sample)
-- 13 agent personas (6 pilot + 7 deferred)
-- 36 KPI baseline data
-- Sample patients, clinical sessions, HR data
-
----
-
-## Step 5: Build for Production
-
-```bash
-npm run build
-```
-
-This produces:
-- `dist/` — Frontend (React app)
-- `dist-server/` — Backend (Hono API server)
-
----
-
-## Step 6: Start the Application
-
-### Development Mode (hot reload)
-```bash
-npm run dev
-```
-
-### Production Mode
-```bash
-npm start
-```
-
-The app will be available at `http://localhost:5173`
-
----
-
-## Default Login
-
-After seeding, use these credentials:
-
-| Role | Username | Password |
-|------|----------|----------|
-| Super Admin | admin | Admin123! |
-| Clinical Director | clinical | Clinical123! |
-| GRO Administrator | gro-admin | GroAdmin123! |
-| QA Coordinator | qa | QA123! |
-| HR Director | hr-director | HRDirector123! |
-
-> **IMPORTANT:** Change default passwords immediately after first login.
-
----
-
-## What Was Built (Sprint Summary)
-
-| Stage | Tasks | Key Deliverables |
-|-------|-------|-----------------|
-| Stage 0 | Inventory | 9 files audited, 6 routers secured |
-| Stage 1 | Cleanup | Route fixes, nav rewrite, auth security |
-| Stage 2A | Foundation | 7-section sidebar, 28 routes, role-based access |
-| Stage 2B | Work Queue + DMS | MyWorkToday workspace, document lifecycle |
-| Stage 2C | Workflows | 8 workflows, 64 endpoints, 21 instances |
-| Stage 2D | Personas + Workspaces | Clinical + GRO frontline workspaces |
-| Stage 3 | Departments | 7 departments, 50+ features, 36 KPIs |
-| Stage 4 | Security | Password complexity, PHI enforcement, encryption strategy |
-| Stage 5 | ICR + RC | 5 ICR entries, 15 RC decisions |
-
-**Total: 143 tasks completed. Zero remaining.**
-
----
-
-## Troubleshooting
-
-### Build fails with "Cannot find module"
-```bash
-rm -rf node_modules package-lock.json
-npm install --legacy-peer-deps
-```
-
-### Database errors
-```bash
-rm -f amos-ops.db
-npm run db:push
-npm run db:seed
-```
-
-### Port already in use
-```bash
-# Kill process on port 5173
-lsof -ti:5173 | xargs kill -9
-# Or change port in .env
-```
-
-### Weak JWT_SECRET error in production
-Generate a strong secret:
-```bash
-node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
-```
-
----
-
-## File Manifest (Key Files)
-
-| File | Purpose |
-|------|---------|
-| `src/pages/DashboardPage.tsx` | Main dashboard with 36 KPIs |
-| `src/pages/clinical/ClinicalWorkspacePage.tsx` | BHC clinical frontline workspace |
-| `src/pages/gro/GROWorkspacePage.tsx` | GRO residential frontline workspace |
-| `src/pages/workflows/MyWorkTodayPage.tsx` | Work queue workspace |
-| `src/data/navData.ts` | 7-section sidebar navigation |
-| `api/router.ts` | tRPC router registration |
-| `api/middleware.ts` | Auth + PHI + boundary enforcement |
-| `db/schema.ts` | Database schema (all tables) |
-| `docs/icr/ICR-REGISTRY.md` | Interface Contract Registry |
-| `docs/RC-DECISION-LOG.md` | RC integration decisions |
-| `ENCRYPTION.md` | Encryption at rest strategy |
-| `TASK_REGISTRY.md` | Complete task registry (all DONE) |
-
----
-
-## Support
-
-For issues or questions, reference:
-- `TASK_REGISTRY.md` — full task list with acceptance criteria
-- `ENCRYPTION.md` — security implementation guide
-- `docs/icr/ICR-REGISTRY.md` — API contracts
-- `docs/RC-DECISION-LOG.md` — integration decisions
+Do not package `.env` files, databases, upload contents, logs, build output, or dependency directories. They are runtime state, not accepted source.

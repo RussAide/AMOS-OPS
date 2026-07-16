@@ -20,10 +20,15 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
-  BookOpen, Plus, Search, UserCheck, Calendar, Clock, AlertTriangle,
-  CheckCircle2, XCircle, ChevronRight, RefreshCw, Users, Target, Lightbulb
+  BookOpen, Plus, Search, UserCheck, AlertTriangle,
+  CheckCircle2, XCircle, ChevronRight, RefreshCw, Target, Lightbulb
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+interface SupervisionActionItem {
+  task: string;
+  due?: string;
+}
 
 const SUPERVISION_TYPES = [
   { value: "individual", label: "Individual" },
@@ -32,12 +37,13 @@ const SUPERVISION_TYPES = [
   { value: "incident_review", label: "Incident Review" },
   { value: "training", label: "Training" },
   { value: "observation", label: "Observation" },
-];
+] as const;
+type SupervisionType = typeof SUPERVISION_TYPES[number]["value"];
 
 export default function SupervisionNotesPage() {
   const utils = trpc.useUtils();
   const [search, setSearch] = useState("");
-  const [filterType, setFilterType] = useState("");
+  const [filterType, setFilterType] = useState<"" | SupervisionType>("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
@@ -73,11 +79,6 @@ export default function SupervisionNotesPage() {
       toast.success("Supervision note created");
       resetForm(); setShowCreate(false);
     },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const updateNote = trpc.groResidential.updateSupervisionNote.useMutation({
-    onSuccess: () => { utils.groResidential.listSupervisionNotes.invalidate(); utils.groResidential.getSupervisionNote.invalidate(); toast.success("Updated"); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -140,7 +141,7 @@ export default function SupervisionNotesPage() {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input placeholder="Search supervision notes..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
-          <Select value={filterType} onValueChange={setFilterType}>
+          <Select value={filterType} onValueChange={(value) => setFilterType(value as typeof filterType)}>
             <SelectTrigger className="w-[160px]"><SelectValue placeholder="All Types" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="">All Types</SelectItem>
@@ -254,7 +255,7 @@ export default function SupervisionNotesPage() {
               <Button
                 onClick={() => createNote.mutate({
                   supervisionDate: formDate,
-                  supervisionType: formType as any,
+                  supervisionType: formType as Parameters<typeof createNote.mutate>[0]["supervisionType"],
                   supervisorName: formSupervisor,
                   superviseeName: formSupervisee,
                   topicsDiscussed: formTopics,
@@ -309,7 +310,7 @@ export default function SupervisionNotesPage() {
                   <div>
                     <Label className="text-xs text-gray-500">Action Items</Label>
                     <div className="mt-1 space-y-1">
-                      {Array.isArray(JSON.parse(detail.actionItems)) ? (JSON.parse(detail.actionItems) as any[]).map((item: any, i: number) => (
+                      {Array.isArray(JSON.parse(detail.actionItems)) ? (JSON.parse(detail.actionItems) as SupervisionActionItem[]).map((item, i: number) => (
                         <div key={i} className="text-xs p-2 border rounded flex justify-between">
                           <span>{item.task}</span>
                           {item.due && <Badge variant="outline" className="text-[9px]">Due: {item.due}</Badge>}

@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { createRouter, publicQuery, authedQuery, adminQuery, auditLog } from "../middleware";
+import { createRouter, publicQuery, auditLog } from "../middleware";
 import { getDb } from "../queries/connection";
 import { nilEntities, nilRelationships } from "@db/schema";
-import { eq, like, and, desc, sql } from "drizzle-orm";
+import { eq, like, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 // ─── M9: NIL Knowledge Graph ───────────────────────────────
@@ -98,7 +98,7 @@ export const m9Router = createRouter({
       }
 
       // For each connected entity, find their connections
-      const recommendationScores: Record<string, { entity: any; sharedConnections: number }> = {};
+      const recommendationScores: Record<string, { entity: typeof nilEntities.$inferSelect; sharedConnections: number }> = {};
 
       for (const cid of targetConnectedIds) {
         const secondDegreeRels = await db.select().from(nilRelationships)
@@ -142,7 +142,7 @@ export const m9Router = createRouter({
         const current = queue.shift()!;
         if (current.id === input.toEntityId) {
           // Fetch entities in path
-          const pathEntities: any[] = [];
+          const pathEntities: (typeof nilEntities.$inferSelect)[] = [];
           for (const pid of current.path) {
             const e = await db.select().from(nilEntities).where(eq(nilEntities.id, pid)).get();
             if (e) pathEntities.push(e);
@@ -178,8 +178,8 @@ export const m9Router = createRouter({
     await db.delete(nilRelationships);
     await db.delete(nilEntities);
 
-    const entities: any[] = [];
-    const relationships: any[] = [];
+    const entities: (typeof nilEntities.$inferInsert)[] = [];
+    const relationships: (typeof nilRelationships.$inferInsert)[] = [];
     const now = new Date().toISOString();
 
     function addEntity(id: string, type: string, name: string, module: string, description?: string, sourceId?: string, sourceTable?: string) {
@@ -190,42 +190,42 @@ export const m9Router = createRouter({
     }
 
     // ─── Clinical entities ───────────────────────────────────
-    addEntity("ne-p1", "patient", "Marcus Johnson", "clinical", "15yo male, depression/anxiety", "p1", "patients");
-    addEntity("ne-p2", "patient", "Aaliyah Williams", "clinical", "16yo female, trauma/self-harm", "p2", "patients");
-    addEntity("ne-p3", "patient", "Carlos Martinez", "clinical", "15yo male, conduct disorder", "p3", "patients");
-    addEntity("ne-p4", "patient", "Jada Thompson", "clinical", "17yo female, on hold", "p4", "patients");
-    addEntity("ne-p5", "patient", "Ethan Davis", "clinical", "15yo male, discharged", "p5", "patients");
+    addEntity("ne-p1", "patient", "Synthetic Youth 001", "clinical", "15yo male, depression/anxiety", "p1", "patients");
+    addEntity("ne-p2", "patient", "Synthetic Youth 005", "clinical", "16yo female, trauma/self-harm", "p2", "patients");
+    addEntity("ne-p3", "patient", "Synthetic Youth 007", "clinical", "15yo male, conduct disorder", "p3", "patients");
+    addEntity("ne-p4", "patient", "Synthetic Youth 002", "clinical", "17yo female, on hold", "p4", "patients");
+    addEntity("ne-p5", "patient", "Synthetic-Person-014 Davis", "clinical", "15yo male, discharged", "p5", "patients");
 
-    addEntity("ne-dr-hall", "person", "Dr. Hall", "clinical", "Clinical Director, Psychiatrist", "u2", "users");
-    addEntity("ne-lilian", "person", "Lilian Ike", "clinical", "Case Manager, RCS Night", "u3", "users");
-    addEntity("ne-russ", "person", "E. Russ Aideyan", "executive", "CEO/Founder", "u1", "users");
+    addEntity("ne-clinical-director", "person", "Demo Clinical Director", "clinical", "Clinical Director, Psychiatrist", "u2", "users");
+    addEntity("ne-clinical-lead", "person", "Demo Clinical Lead", "clinical", "Case Manager, RCS Night", "u3", "users");
+    addEntity("ne-russ", "person", "Demo Executive", "executive", "CEO/Founder", "u1", "users");
 
-    addEntity("ne-tp1", "treatment_plan", "TP-2026-1001 — MDD/GAD", "clinical", "Active treatment plan for Marcus Johnson", "tp1", "treatment_plans");
+    addEntity("ne-tp1", "treatment_plan", "TP-2026-1001 — MDD/GAD", "clinical", "Active treatment plan for Synthetic Youth 001", "tp1", "treatment_plans");
     addEntity("ne-tp2", "treatment_plan", "TP-2026-1002 — Conduct Disorder", "clinical", "Completed treatment plan for behavioral outbursts", "tp2", "treatment_plans");
 
     addEntity("ne-cs1", "session", "Session 2026-06-28", "clinical", "Individual therapy — trauma processing", "cs1", "clinical_sessions");
 
     // Clinical relationships
-    addRel("ne-p1", "ne-dr-hall", "treated_by", 100);
-    addRel("ne-p2", "ne-lilian", "treated_by", 100);
-    addRel("ne-p3", "ne-dr-hall", "treated_by", 100);
-    addRel("ne-p4", "ne-lilian", "treated_by", 100);
+    addRel("ne-p1", "ne-clinical-director", "treated_by", 100);
+    addRel("ne-p2", "ne-clinical-lead", "treated_by", 100);
+    addRel("ne-p3", "ne-clinical-director", "treated_by", 100);
+    addRel("ne-p4", "ne-clinical-lead", "treated_by", 100);
     addRel("ne-p1", "ne-tp1", "has_plan", 100);
     addRel("ne-p1", "ne-tp2", "had_plan", 80);
     addRel("ne-p1", "ne-cs1", "has_session", 100);
-    addRel("ne-cs1", "ne-dr-hall", "conducted_by", 100);
+    addRel("ne-cs1", "ne-clinical-director", "conducted_by", 100);
 
     // ─── HR entities ─────────────────────────────────────────
-    addEntity("ne-h-jg", "person", "Jonthan Guidry", "hr", "LPC, Case Manager", "h4", "people");
+    addEntity("ne-demo-case-manager", "person", "Demo Case Manager", "hr", "LPC, Case Manager", "h4", "people");
     addEntity("ne-h-rl", "person", "RCS Lead", "hr", "Residential Care Supervisor", "h5", "people");
 
-    addEntity("ne-hr-ref", "form", "REF-2026-001 — K. Williams", "hr", "Reference check form", null, null);
-    addEntity("ne-hr-app", "form", "APP-2026-001 — J. Guidry", "hr", "Application form", null, null);
+    addEntity("ne-hr-ref", "form", "REF-2026-001 — K. Williams", "hr", "Reference check form");
+    addEntity("ne-hr-app", "form", "APP-2026-001 — Demo Case Manager", "hr", "Application form");
 
-    addRel("ne-h-jg", "ne-dr-hall", "reports_to", 90);
+    addRel("ne-demo-case-manager", "ne-clinical-director", "reports_to", 90);
     addRel("ne-h-rl", "ne-russ", "reports_to", 90);
-    addRel("ne-h-jg", "ne-hr-ref", "has_reference", 70);
-    addRel("ne-h-jg", "ne-hr-app", "submitted", 100);
+    addRel("ne-demo-case-manager", "ne-hr-ref", "has_reference", 70);
+    addRel("ne-demo-case-manager", "ne-hr-app", "submitted", 100);
 
     // ─── Revenue entities ────────────────────────────────────
     addEntity("ne-c1", "claim", "CLM-2026-001 — TX Medicaid", "revenue", "Paid claim, $12,500", "c1", "claims");
@@ -237,7 +237,7 @@ export const m9Router = createRouter({
     addEntity("ne-a1", "audit", "AUD-2026-001 — Q2 Clinical", "qa", "Completed audit, score 94%", "a1", "audits_qa");
     addEntity("ne-ca1", "form", "CAPA-2026-001", "qa", "Dual-signature medication check", "ca1", "corrective_actions");
     addRel("ne-a1", "ne-ca1", "generated_capa", 100);
-    addRel("ne-a1", "ne-dr-hall", "audited_by", 90);
+    addRel("ne-a1", "ne-clinical-director", "audited_by", 90);
 
     // ─── GAD entities ────────────────────────────────────────
     addEntity("ne-wo1", "work_order", "WO-2026-001 — HVAC", "gad", "HVAC repair Wing B", "wo1", "work_orders");

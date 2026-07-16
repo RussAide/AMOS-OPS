@@ -10,18 +10,12 @@ import {
   CheckCircle2,
   PauseCircle,
   CircleDot,
-  Rocket,
   Save,
-  AlertTriangle,
   Eye,
   ThumbsUp,
   Lightbulb,
   Code2,
   FlaskConical,
-  Check,
-  Calendar,
-  User,
-  Tag,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────
@@ -75,7 +69,7 @@ const DEMO_REQUESTS: EnhancementRequest[] = [
     id: "ER-001", title: "Mobile Medication MAR",
     description: "Touch-friendly Mobile MAR for medication administration with offline sync capability for nursing staff.",
     category: "Clinical", priority: "P0", status: "in-progress",
-    requestedBy: "Lilian Ike", requesterRole: "Nurse Manager",
+    requestedBy: "Demo Clinical Lead", requesterRole: "Nurse Manager",
     targetDate: "2026-08-15", votes: 8, createdAt: "2026-05-20",
     tags: ["MAR", "mobile", "nursing"],
   },
@@ -83,7 +77,7 @@ const DEMO_REQUESTS: EnhancementRequest[] = [
     id: "ER-002", title: "CANS Auto-Scoring",
     description: "Automated CANS assessment scoring with change flagging between assessments and narrative summary generation.",
     category: "Clinical", priority: "P0", status: "ready-for-test",
-    requestedBy: "Dr. Sarah Chen", requesterRole: "Clinical Director",
+    requestedBy: "Dr. Synthetic Youth 035", requesterRole: "Clinical Director",
     targetDate: "2026-07-20", votes: 12, createdAt: "2026-04-10",
     tags: ["CANS", "clinical", "assessment"],
   },
@@ -99,7 +93,7 @@ const DEMO_REQUESTS: EnhancementRequest[] = [
     id: "ER-004", title: "AI Documentation Assistant",
     description: "AI-powered clinical documentation helper that suggests narrative text based on CANS scores and treatment notes.",
     category: "Technical", priority: "P1", status: "proposed",
-    requestedBy: "Dr. Sarah Chen", requesterRole: "Clinical Director",
+    requestedBy: "Dr. Synthetic Youth 035", requesterRole: "Clinical Director",
     targetDate: "2026-10-15", votes: 15, createdAt: "2026-07-01",
     tags: ["AI", "documentation", "clinical"],
   },
@@ -107,7 +101,7 @@ const DEMO_REQUESTS: EnhancementRequest[] = [
     id: "ER-005", title: "Family Portal",
     description: "Secure web portal for families to view visit schedules, youth progress updates, and communicate with the treatment team.",
     category: "Portal", priority: "P2", status: "proposed",
-    requestedBy: "Marcus Williams", requesterRole: "Program Director",
+    requestedBy: "Synthetic-Person-001 Williams", requesterRole: "Program Director",
     targetDate: "2026-11-01", votes: 10, createdAt: "2026-06-15",
     tags: ["family", "portal", "communication"],
   },
@@ -139,7 +133,7 @@ const DEMO_REQUESTS: EnhancementRequest[] = [
     id: "ER-009", title: "MGMA KPI Dashboard",
     description: "Executive dashboard with MGMA benchmarking KPIs: cost per case, LOS, readmission rates, and staffing ratios.",
     category: "Analytics", priority: "P1", status: "deployed",
-    requestedBy: "Marcus Williams", requesterRole: "Program Director",
+    requestedBy: "Synthetic-Person-001 Williams", requesterRole: "Program Director",
     targetDate: "2026-04-01", votes: 4, createdAt: "2026-01-10",
     tags: ["MGMA", "KPI", "dashboard"],
   },
@@ -163,7 +157,7 @@ const DEMO_REQUESTS: EnhancementRequest[] = [
     id: "ER-012", title: "Campus Census Forecasting",
     description: "Predictive analytics for campus census with admission/discharge forecasting and bed utilization optimization.",
     category: "Analytics", priority: "P2", status: "proposed",
-    requestedBy: "Marcus Williams", requesterRole: "Program Director",
+    requestedBy: "Synthetic-Person-001 Williams", requesterRole: "Program Director",
     targetDate: "2026-12-01", votes: 3, createdAt: "2026-06-25",
     tags: ["campus", "forecasting", "census"],
   },
@@ -172,6 +166,15 @@ const DEMO_REQUESTS: EnhancementRequest[] = [
 // ─── Sort ──────────────────────────────────────────────────────
 type SortField = "priority" | "status" | "targetDate" | "createdAt" | "requestedBy" | "category";
 type SortDir = "asc" | "desc";
+
+function renderSortIcon(field: SortField, activeField: SortField, direction: SortDir) {
+  if (activeField !== field) {
+    return <ArrowUpDown size={12} className="ml-1" style={{ color: "#9CA3AF" }} />;
+  }
+  return direction === "asc"
+    ? <ArrowUp size={12} className="ml-1" style={{ color: "#245C5A" }} />
+    : <ArrowDown size={12} className="ml-1" style={{ color: "#245C5A" }} />;
+}
 
 export default function EnhancementRegisterPage() {
   const [requests, setRequests] = useState<EnhancementRequest[]>(DEMO_REQUESTS);
@@ -264,14 +267,6 @@ export default function EnhancementRegisterPage() {
   // ─── Vote handler ────────────────────────────────────────────
   const handleVote = (id: string) => {
     setRequests(requests.map((r) => (r.id === id ? { ...r, votes: r.votes + 1 } : r)));
-  };
-
-  // ─── Sort icon ───────────────────────────────────────────────
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return <ArrowUpDown size={12} className="ml-1" style={{ color: "#9CA3AF" }} />;
-    return sortDir === "asc"
-      ? <ArrowUp size={12} className="ml-1" style={{ color: "#245C5A" }} />
-      : <ArrowDown size={12} className="ml-1" style={{ color: "#245C5A" }} />;
   };
 
   const hasFilters = searchQuery || statusFilter !== "all" || priorityFilter !== "all" || categoryFilter !== "all";
@@ -395,20 +390,20 @@ export default function EnhancementRegisterPage() {
             <thead>
               <tr style={{ borderBottom: "2px solid var(--card-border)", backgroundColor: "rgba(36,92,90,0.03)" }}>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("priority")}>
-                  <span className="flex items-center">Priority <SortIcon field="priority" /></span>
+                  <span className="flex items-center">Priority {renderSortIcon("priority", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold" style={{ color: "var(--topbar-subtitle)" }}>ID / Title</th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("category")}>
-                  <span className="flex items-center">Category <SortIcon field="category" /></span>
+                  <span className="flex items-center">Category {renderSortIcon("category", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("status")}>
-                  <span className="flex items-center">Status <SortIcon field="status" /></span>
+                  <span className="flex items-center">Status {renderSortIcon("status", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("requestedBy")}>
-                  <span className="flex items-center">Requested By <SortIcon field="requestedBy" /></span>
+                  <span className="flex items-center">Requested By {renderSortIcon("requestedBy", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap" style={{ color: "var(--topbar-subtitle)" }} onClick={() => handleSort("targetDate")}>
-                  <span className="flex items-center">Target Date <SortIcon field="targetDate" /></span>
+                  <span className="flex items-center">Target Date {renderSortIcon("targetDate", sortField, sortDir)}</span>
                 </th>
                 <th className="text-left py-2.5 px-3 font-semibold" style={{ color: "var(--topbar-subtitle)" }}>Actions</th>
               </tr>

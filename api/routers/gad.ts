@@ -17,7 +17,7 @@ export const gadRouter = createRouter({
     .query(async ({ input }) => {
       let sql = "SELECT * FROM work_orders";
       const conditions: string[] = [];
-      const params: any[] = [];
+      const params: string[] = [];
       if (input?.status) { conditions.push("status = ?"); params.push(input.status); }
       if (input?.priority) { conditions.push("priority = ?"); params.push(input.priority); }
       if (conditions.length > 0) sql += " WHERE " + conditions.join(" AND ");
@@ -111,11 +111,11 @@ export const gadRouter = createRouter({
 
   dashboardKPIs: publicQuery.query(async () => {
     const woResult = sqlite.prepare("SELECT status, COUNT(*) as count FROM work_orders GROUP BY status").all() ?? [];
-    const vendorResult = sqlite.prepare("SELECT COUNT(*) as count FROM vendors WHERE is_active = 1").get() as any;
-    const facilityResult = sqlite.prepare("SELECT COUNT(*) as count FROM facilities WHERE is_active = 1").get() as any;
+    const vendorResult = sqlite.prepare("SELECT COUNT(*) as count FROM vendors WHERE is_active = 1").get() as { count: number } | undefined;
+    const facilityResult = sqlite.prepare("SELECT COUNT(*) as count FROM facilities WHERE is_active = 1").get() as { count: number } | undefined;
 
     const woCounts: Record<string, number> = {};
-    for (const row of woResult as any[]) woCounts[row.status] = row.count;
+    for (const row of woResult as { status: string; count: number }[]) woCounts[row.status] = row.count;
 
     return {
       totalWorkOrders: Object.values(woCounts).reduce((a: number, b: number) => a + b, 0),

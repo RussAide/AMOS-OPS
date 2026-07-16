@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
-import { GitBranch, Play, CheckCircle, XCircle, Clock, AlertCircle, RefreshCw, Shield, FileText, Activity } from "lucide-react";
+import { GitBranch, Play, CheckCircle, XCircle, Shield, Activity } from "lucide-react";
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   pending: { bg: "#FEF3C7", text: "#D97706" },
@@ -92,7 +92,7 @@ export function WorkflowPage() {
                 <h3 className="text-[15px] font-semibold" style={{ color: "var(--topbar-title)" }}>Active Workflow Rules</h3>
                 <span className="text-[11px] px-2 py-1 rounded" style={{ backgroundColor: "#F3E8FF", color: "#7C3AED" }}>{rules?.length ?? 0} rules</span>
               </div>
-              {(rules ?? []).map((rule: any) => (
+              {(rules ?? []).map((rule) => (
                 <div key={rule.id} className="flex items-start gap-3 p-3 rounded-lg border" style={{ borderColor: "var(--card-border)" }}>
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: rule.enabled ? "#F3E8FF" : "#F3F4F6" }}>
                     <Activity size={14} style={{ color: rule.enabled ? "#7C3AED" : "#9CA3AF" }} />
@@ -106,7 +106,7 @@ export function WorkflowPage() {
                     </div>
                     <p className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>Event: {rule.event} · Actions: {rule.actions.length}</p>
                     <div className="flex gap-1 mt-1">
-                      {rule.actions.map((a: any, i: number) => (
+                      {rule.actions.map((a, i: number) => (
                         <span key={i} className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "#F3F4F6", color: "#6B7280" }}>
                           {a.type} → {a.target}
                         </span>
@@ -138,7 +138,7 @@ export function WorkflowPage() {
                   <th className="text-left py-2 px-2 font-semibold" style={{ color: "var(--topbar-subtitle)" }}>Triggered By</th>
                 </tr></thead>
                 <tbody>
-                  {(instances ?? []).map((inst: any) => (
+                  {(instances ?? []).map((inst) => (
                     <tr key={inst.id} className="border-b" style={{ borderColor: "var(--card-border)" }}>
                       <td className="py-2 px-2 font-medium" style={{ color: "var(--topbar-title)" }}>{inst.rule_name}</td>
                       <td className="py-2 px-2" style={{ color: "var(--topbar-subtitle)" }}>{inst.event_type}</td>
@@ -167,7 +167,7 @@ export function WorkflowPage() {
                 <h3 className="text-[15px] font-semibold" style={{ color: "var(--topbar-title)" }}>Pending Approvals</h3>
                 <span className="text-[11px] px-2 py-1 rounded" style={{ backgroundColor: "#FEE2E2", color: "#DC2626" }}>{approvals?.length ?? 0} pending</span>
               </div>
-              {(approvals ?? []).map((app: any) => (
+              {(approvals ?? []).map((app) => (
                 <div key={app.id} className="flex items-start gap-3 p-3 rounded-lg border" style={{ borderColor: "#FCD34D" }}>
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FEF3C7" }}>
                     <Shield size={14} style={{ color: "#D97706" }} />
@@ -207,7 +207,7 @@ export function WorkflowPage() {
                   <th className="text-left py-2 px-2 font-semibold" style={{ color: "var(--topbar-subtitle)" }}>Time</th>
                 </tr></thead>
                 <tbody>
-                  {(auditLog ?? []).map((log: any) => (
+                  {(auditLog ?? []).map((log) => (
                     <tr key={log.id} className="border-b" style={{ borderColor: "var(--card-border)" }}>
                       <td className="py-2 px-2 font-medium" style={{ color: "var(--topbar-title)" }}>{log.action}</td>
                       <td className="py-2 px-2" style={{ color: "var(--topbar-subtitle)" }}>{log.actor}</td>

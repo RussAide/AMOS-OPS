@@ -27,11 +27,14 @@ export const qaRouter = createRouter({
   // ─── Audits CRUD ───────────────────────────────────────────
 
   listAudits: publicQuery
-    .input(z.object({ status: z.string().optional(), type: z.string().optional() }).optional())
+    .input(z.object({
+      status: z.enum(["planned", "in_progress", "pending_review", "completed", "closed"]).optional(),
+      type: z.enum(["internal", "external", "regulatory", "peer_review", "random"]).optional(),
+    }).optional())
     .query(async ({ input }) => {
       const db = getDb();
       const params = input ?? {};
-      let query = db.select().from(audits);
+      const query = db.select().from(audits);
       const conditions = [];
       if (params.status) conditions.push(eq(audits.status, params.status));
       if (params.type) conditions.push(eq(audits.auditType, params.type));
@@ -98,11 +101,15 @@ export const qaRouter = createRouter({
   // ─── Incidents CRUD ────────────────────────────────────────
 
   listIncidents: publicQuery
-    .input(z.object({ status: z.string().optional(), severity: z.string().optional(), patientId: z.string().optional() }).optional())
+    .input(z.object({
+      status: z.enum(["open", "under_investigation", "resolved", "closed"]).optional(),
+      severity: z.enum(["low", "moderate", "high", "critical"]).optional(),
+      patientId: z.string().optional(),
+    }).optional())
     .query(async ({ input }) => {
       const db = getDb();
       const params = input ?? {};
-      let query = db.select().from(incidents);
+      const query = db.select().from(incidents);
       const conditions = [];
       if (params.status) conditions.push(eq(incidents.status, params.status));
       if (params.severity) conditions.push(eq(incidents.severity, params.severity));
@@ -173,11 +180,15 @@ export const qaRouter = createRouter({
   // ─── Corrective Actions CRUD ───────────────────────────────
 
   listCorrectiveActions: publicQuery
-    .input(z.object({ status: z.string().optional(), priority: z.string().optional(), assignedTo: z.string().optional() }).optional())
+    .input(z.object({
+      status: z.enum(["open", "in_progress", "pending_verification", "completed", "overdue"]).optional(),
+      priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+      assignedTo: z.string().optional(),
+    }).optional())
     .query(async ({ input }) => {
       const db = getDb();
       const params = input ?? {};
-      let query = db.select().from(correctiveActions);
+      const query = db.select().from(correctiveActions);
       const conditions = [];
       if (params.status) conditions.push(eq(correctiveActions.status, params.status));
       if (params.priority) conditions.push(eq(correctiveActions.priority, params.priority));

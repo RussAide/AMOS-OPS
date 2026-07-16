@@ -4,7 +4,7 @@ import { getDb } from "../queries/connection";
 import {
   sudRecords, part2Consents, qsoaAgreements, part2AuditLog, part2BreachNotifications,
 } from "@db/schema";
-import { eq, and, desc, sql, type InferInsertModel } from "drizzle-orm";
+import { eq, and, desc, type InferInsertModel } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 // ══════════════════════════════════════════════════════════════
@@ -21,16 +21,16 @@ export const part2Router = createRouter({
   listSudRecords: authedQuery
     .input(z.object({
       youthId: z.string().optional(),
-      substanceType: z.string().optional(),
-      status: z.string().optional(),
+      substanceType: z.enum(["alcohol", "cannabis", "opioids", "stimulants", "sedatives", "hallucinogens", "polysubstance", "other"]).optional(),
+      status: z.enum(["active", "in_remission", "resolved", "transferred"]).optional(),
       part2Protected: z.boolean().optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.youthId) conditions.push(eq(sudRecords.youthId, input.youthId));
-      if (input?.substanceType) conditions.push(eq(sudRecords.substanceType, input.substanceType as InferInsertModel<typeof sudRecords>["substanceType"]));
-      if (input?.status) conditions.push(eq(sudRecords.status, input.status as InferInsertModel<typeof sudRecords>["status"]));
+      if (input?.substanceType) conditions.push(eq(sudRecords.substanceType, input.substanceType));
+      if (input?.status) conditions.push(eq(sudRecords.status, input.status));
       if (input?.part2Protected !== undefined) conditions.push(eq(sudRecords.isPart2Protected, input.part2Protected));
 
       const results = conditions.length > 0
@@ -116,16 +116,16 @@ export const part2Router = createRouter({
     .input(z.object({
       youthId: z.string().optional(),
       sudRecordId: z.string().optional(),
-      status: z.string().optional(),
-      recipientType: z.string().optional(),
+      status: z.enum(["pending", "active", "expired", "revoked", "superseded"]).optional(),
+      recipientType: z.enum(["healthcare_provider", "insurance", "court", "family_member", "school", "employer", "research", "other"]).optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.youthId) conditions.push(eq(part2Consents.youthId, input.youthId));
       if (input?.sudRecordId) conditions.push(eq(part2Consents.sudRecordId, input.sudRecordId));
-      if (input?.status) conditions.push(eq(part2Consents.status, input.status as InferInsertModel<typeof part2Consents>["status"]));
-      if (input?.recipientType) conditions.push(eq(part2Consents.recipientType, input.recipientType as InferInsertModel<typeof part2Consents>["recipientType"]));
+      if (input?.status) conditions.push(eq(part2Consents.status, input.status));
+      if (input?.recipientType) conditions.push(eq(part2Consents.recipientType, input.recipientType));
 
       const results = conditions.length > 0
         ? await db.select().from(part2Consents).where(and(...conditions)).orderBy(desc(part2Consents.createdAt))
@@ -234,14 +234,14 @@ export const part2Router = createRouter({
 
   listQsoaAgreements: authedQuery
     .input(z.object({
-      status: z.string().optional(),
-      organizationType: z.string().optional(),
+      status: z.enum(["draft", "active", "expiring_soon", "expired", "terminated"]).optional(),
+      organizationType: z.enum(["laboratory", "pharmacy", "billing_service", "quality_assurance", "it_vendor", "other"]).optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
-      if (input?.status) conditions.push(eq(qsoaAgreements.status, input.status as InferInsertModel<typeof qsoaAgreements>["status"]));
-      if (input?.organizationType) conditions.push(eq(qsoaAgreements.organizationType, input.organizationType as InferInsertModel<typeof qsoaAgreements>["organizationType"]));
+      const conditions = [];
+      if (input?.status) conditions.push(eq(qsoaAgreements.status, input.status));
+      if (input?.organizationType) conditions.push(eq(qsoaAgreements.organizationType, input.organizationType));
 
       const results = conditions.length > 0
         ? await db.select().from(qsoaAgreements).where(and(...conditions)).orderBy(desc(qsoaAgreements.createdAt))
@@ -377,7 +377,7 @@ export const part2Router = createRouter({
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.youthId) conditions.push(eq(part2AuditLog.youthId, input.youthId));
       if (input?.sudRecordId) conditions.push(eq(part2AuditLog.sudRecordId, input.sudRecordId));
       if (input?.accessedBy) conditions.push(eq(part2AuditLog.accessedBy, input.accessedBy));
@@ -395,12 +395,12 @@ export const part2Router = createRouter({
 
   listBreachNotifications: authedQuery
     .input(z.object({
-      status: z.string().optional(),
+      status: z.enum(["open", "contained", "mitigated", "notified", "closed"]).optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
       if (input?.status) {
-        return db.select().from(part2BreachNotifications).where(eq(part2BreachNotifications.status, input.status as InferInsertModel<typeof part2BreachNotifications>["status"])).orderBy(desc(part2BreachNotifications.discoveredDate));
+        return db.select().from(part2BreachNotifications).where(eq(part2BreachNotifications.status, input.status)).orderBy(desc(part2BreachNotifications.discoveredDate));
       }
       return db.select().from(part2BreachNotifications).orderBy(desc(part2BreachNotifications.discoveredDate));
     }),
@@ -471,8 +471,6 @@ export const part2Router = createRouter({
 
   part2Dashboard: authedQuery.query(async () => {
     const db = getDb();
-    const now = new Date().toISOString();
-
     // SUD Records
     const allRecords = await db.select().from(sudRecords);
     const activeRecords = allRecords.filter((r) => r.status === "active").length;
@@ -497,7 +495,11 @@ export const part2Router = createRouter({
     // Audit
     const allAudit = await db.select().from(part2AuditLog);
     const unauthorizedAccess = allAudit.filter((a) => a.unauthorizedFlag).length;
-    const disclosuresThisMonth = allAudit.filter((a) => a.accessType === "disclose" && a.accessTimestamp >= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()).length;
+    const disclosuresThisMonth = allAudit.filter(
+      (a) => a.accessType === "disclose"
+        && a.accessTimestamp !== null
+        && a.accessTimestamp >= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    ).length;
 
     // Breaches
     const allBreaches = await db.select().from(part2BreachNotifications);
@@ -523,27 +525,27 @@ export const part2Router = createRouter({
     // Seed SUD record
     await db.insert(sudRecords).values([
       {
-        id: "sud-001", youthId: "youth-001", youthName: "Marcus Johnson", mrn: "MRN-2026-001",
+        id: "sud-001", youthId: "youth-001", youthName: "Synthetic Youth 001", mrn: "SYNTH-REC-001",
         substanceType: "cannabis",
         diagnosisCode: "F12.20",
         severity: "moderate",
         isPart2Protected: true,
         status: "active",
         assessmentDate: "2026-06-16",
-        assessingClinicianId: "user-003", assessingClinicianName: "Dr. Hall",
+        assessingClinicianId: "user-003", assessingClinicianName: "Demo Clinical Director",
         treatmentPlanReference: "TP-2026-0042",
         notes: "Youth reports daily cannabis use for past 6 months. Uses to manage anxiety and sleep difficulties. CAGE score: 2. MOTIVATIONAL INTERVIEWING recommended.",
         createdAt: now, updatedAt: now,
       },
       {
-        id: "sud-002", youthId: "youth-003", youthName: "Ethan Brown", mrn: "MRN-2026-003",
+        id: "sud-002", youthId: "youth-003", youthName: "Synthetic Youth 014", mrn: "SYNTH-REC-003",
         substanceType: "polysubstance",
         diagnosisCode: "F19.20",
         severity: "severe",
         isPart2Protected: true,
         status: "active",
         assessmentDate: "2026-07-04",
-        assessingClinicianId: "user-003", assessingClinicianName: "Dr. Hall",
+        assessingClinicianId: "user-003", assessingClinicianName: "Demo Clinical Director",
         treatmentPlanReference: "TP-2026-0045",
         notes: "Polysubstance use: alcohol, cannabis, and reported experimentation with prescription opioids. High-risk behaviors documented. Requires intensive SUD intervention.",
         createdAt: now, updatedAt: now,
@@ -553,10 +555,10 @@ export const part2Router = createRouter({
     // Seed consents
     await db.insert(part2Consents).values([
       {
-        id: "cons-001", youthId: "youth-001", youthName: "Marcus Johnson", mrn: "MRN-2026-001",
+        id: "cons-001", youthId: "youth-001", youthName: "Synthetic Youth 001", mrn: "SYNTH-REC-001",
         sudRecordId: "sud-001",
         consentType: "initial",
-        recipientName: "Dr. Hall", recipientOrganization: "Adolbi Care BHC",
+        recipientName: "Demo Clinical Director", recipientOrganization: "Adolbi Care BHC",
         recipientType: "healthcare_provider", recipientNpi: "1234567890",
         informationScope: "full_record",
         purpose: "Coordination of SUD treatment with primary therapist",
@@ -567,7 +569,7 @@ export const part2Router = createRouter({
         createdAt: now, updatedAt: now,
       },
       {
-        id: "cons-002", youthId: "youth-001", youthName: "Marcus Johnson", mrn: "MRN-2026-001",
+        id: "cons-002", youthId: "youth-001", youthName: "Synthetic Youth 001", mrn: "SYNTH-REC-001",
         sudRecordId: "sud-001",
         consentType: "initial",
         recipientName: "Superior Health Plan", recipientOrganization: "Superior Health Plan",
@@ -587,7 +589,7 @@ export const part2Router = createRouter({
       {
         id: "qsoa-001",
         organizationName: "Apex Laboratory Services", organizationType: "laboratory",
-        contactName: "Jennifer Walsh", contactPhone: "(512) 555-0142", contactEmail: "jwalsh@apexlabs.com",
+        contactName: "Jennifer Walsh", contactPhone: "(512) 555-0142", contactEmail: "jwalsh@example.invalid",
         agreementDate: "2026-01-15", effectiveDate: "2026-01-15", expirationDate: "2027-01-15", autoRenew: true,
         servicesProvided: "Toxicology screening for substance use monitoring",
         dataAccessScope: "limited", dataAccessDescription: "Lab results only \u2014 no clinical notes or treatment plans",
@@ -599,7 +601,7 @@ export const part2Router = createRouter({
       {
         id: "qsoa-002",
         organizationName: "SecureHealth IT", organizationType: "it_vendor",
-        contactName: "Robert Chen", contactPhone: "(512) 555-0198", contactEmail: "rchen@securehealthit.com",
+        contactName: "Robert Chen", contactPhone: "(512) 555-0198", contactEmail: "rchen@example.invalid",
         agreementDate: "2026-03-01", effectiveDate: "2026-03-01", expirationDate: "2027-03-01", autoRenew: false,
         servicesProvided: "EHR hosting and data backup services",
         dataAccessScope: "limited", dataAccessDescription: "Encrypted data storage only \u2014 no direct access to patient records",
@@ -613,23 +615,23 @@ export const part2Router = createRouter({
     // Seed audit log entries
     await db.insert(part2AuditLog).values([
       {
-        id: "audit-001", youthId: "youth-001", mrn: "MRN-2026-001", sudRecordId: "sud-001",
-        accessType: "view", accessedBy: "Dr. Hall", accessedById: "user-003", accessedByRole: "treatment-director",
+        id: "audit-001", youthId: "youth-001", mrn: "SYNTH-REC-001", sudRecordId: "sud-001",
+        accessType: "view", accessedBy: "Demo Clinical Director", accessedById: "user-003", accessedByRole: "treatment-director",
         accessTimestamp: "2026-06-16T11:00:00Z", accessContext: "treatment",
         recordTypeAccessed: "sud_assessment", fieldsAccessed: JSON.stringify(["diagnosis", "severity", "notes"]),
         unauthorizedFlag: false,
       },
       {
-        id: "audit-002", youthId: "youth-001", mrn: "MRN-2026-001", sudRecordId: "sud-001",
-        accessType: "disclose", accessedBy: "Jonthan Guidry", accessedById: "user-cm-001", accessedByRole: "case-manager",
+        id: "audit-002", youthId: "youth-001", mrn: "SYNTH-REC-001", sudRecordId: "sud-001",
+        accessType: "disclose", accessedBy: "Demo Case Manager", accessedById: "user-cm-001", accessedByRole: "case-manager",
         accessTimestamp: "2026-06-20T14:30:00Z", accessContext: "treatment",
         consentId: "cons-001",
         recordTypeAccessed: "sud_summary", fieldsAccessed: JSON.stringify(["substance_type", "severity", "treatment_plan"]),
         unauthorizedFlag: false,
       },
       {
-        id: "audit-003", youthId: "youth-001", mrn: "MRN-2026-001", sudRecordId: "sud-001",
-        accessType: "view", accessedBy: "Lilian Ike", accessedById: "user-002", accessedByRole: "clinical-director",
+        id: "audit-003", youthId: "youth-001", mrn: "SYNTH-REC-001", sudRecordId: "sud-001",
+        accessType: "view", accessedBy: "Demo Clinical Lead", accessedById: "user-002", accessedByRole: "clinical-director",
         accessTimestamp: "2026-06-25T09:15:00Z", accessContext: "treatment",
         recordTypeAccessed: "sud_assessment", fieldsAccessed: JSON.stringify(["diagnosis", "severity"]),
         unauthorizedFlag: false,

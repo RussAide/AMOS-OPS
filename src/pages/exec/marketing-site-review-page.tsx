@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import {
-  Globe2, RefreshCw, ChevronRight, AlertTriangle, CheckCircle2,
-  XCircle, ArrowUpRight, BarChart3, ShieldCheck, Search, Eye,
-  Smartphone, FileText, Zap, Accessibility, Type, Image, AlertOctagon,
+  Globe2, RefreshCw, AlertTriangle, CheckCircle2, ArrowUpRight, ShieldCheck, Search, Eye,
+  Smartphone, FileText, Zap, Accessibility, AlertOctagon,
 } from "lucide-react";
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string; bg: string; icon: typeof Eye }> = {
@@ -44,11 +43,11 @@ export function MarketingSiteReviewPage() {
   const recentIssues = reviewData?.recentIssues ?? [];
 
   const filteredIssues = categoryFilter
-    ? recentIssues.filter((i: any) => i.category === categoryFilter)
+    ? recentIssues.filter((i) => i.category === categoryFilter)
     : recentIssues;
 
-  const selectedPageData = pages.find((p: any) => p.url === selectedPage);
-  const selectedPageIssues = recentIssues.filter((i: any) => i.page === selectedPage);
+  const selectedPageData = pages.find((p) => p.url === selectedPage);
+  const selectedPageIssues = recentIssues.filter((i) => i.page === selectedPage);
 
   const overallScore = reviewData?.overallScore ?? 0;
 
@@ -94,7 +93,7 @@ export function MarketingSiteReviewPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {categories.map((cat: any) => {
+            {categories.map((cat) => {
               const cfg = CATEGORY_CONFIG[cat.name] ?? { label: cat.name, color: "#6B7280", bg: "#F3F4F6", icon: Eye };
               const Icon = cfg.icon;
               return (
@@ -119,7 +118,7 @@ export function MarketingSiteReviewPage() {
 
       {/* Category Score Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-        {categories.map((cat: any) => {
+        {categories.map((cat) => {
           const cfg = CATEGORY_CONFIG[cat.name] ?? { label: cat.name, color: "#6B7280", bg: "#F3F4F6", icon: Eye };
           const Icon = cfg.icon;
           const st = STATUS_CONFIG[cat.status] ?? { label: cat.status, color: "#6B7280" };
@@ -156,7 +155,7 @@ export function MarketingSiteReviewPage() {
             <FileText size={14} style={{ color: "#245C5A" }} /> Pages Scanned
           </h3>
           <div className="space-y-2">
-            {pages.map((page: any) => {
+            {pages.map((page) => {
               const pageColor = page.score >= 80 ? "#059669" : page.score >= 60 ? "#D97706" : "#DC2626";
               return (
                 <div
@@ -203,7 +202,7 @@ export function MarketingSiteReviewPage() {
                     <p className="text-[12px]" style={{ color: "var(--topbar-subtitle)" }}>No issues found for this page</p>
                   </div>
                 ) : (
-                  selectedPageIssues.map((issue: any) => {
+                  selectedPageIssues.map((issue) => {
                     const sev = SEVERITY_CONFIG[issue.severity] ?? SEVERITY_CONFIG.low;
                     return (
                       <div key={issue.id} className="rounded-lg border p-3" style={{ borderColor: sev.color + "30", backgroundColor: sev.bg }}>
@@ -236,7 +235,7 @@ export function MarketingSiteReviewPage() {
                 <p className="text-[12px]" style={{ color: "var(--topbar-subtitle)" }}>No issues match the selected filter</p>
               </div>
             ) : (
-              filteredIssues.map((issue: any) => {
+              filteredIssues.map((issue) => {
                 const sev = SEVERITY_CONFIG[issue.severity] ?? SEVERITY_CONFIG.low;
                 return (
                   <div key={issue.id} className="rounded-lg border p-3" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)" }}>

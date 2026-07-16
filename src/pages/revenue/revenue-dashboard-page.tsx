@@ -1,6 +1,6 @@
 import { trpc } from "@/providers/trpc";
 import { useNavigate } from "react-router-dom";
-import { DollarSign, FileText, TrendingUp, CheckCircle, Clock, Ban, Shield, Package, AlertTriangle, Calendar, ShieldCheck, Send } from "lucide-react";
+import { DollarSign, FileText, CheckCircle, Clock, Ban, Shield, Package, AlertTriangle, Calendar, ShieldCheck, Send } from "lucide-react";
 
 export function RevenueDashboardPage() {
   const navigate = useNavigate();

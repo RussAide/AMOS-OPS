@@ -7,25 +7,17 @@ import {
   BookOpen,
   Clock,
   Play,
-  ChevronRight,
   ChevronDown,
   ChevronUp,
   Award,
-  Calendar,
   UserPlus,
-  BarChart3,
-  Star,
   Shield,
   Monitor,
   Stethoscope,
   FileText,
-  AlertTriangle,
   Heart,
-  Sparkles,
   X,
   Save,
-  Plus,
-  Search,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────
@@ -69,8 +61,8 @@ const DEMO_COHORTS: Cohort[] = [
     endDate: "2026-07-15",
     status: "active",
     members: [
-      { name: "Emily Watson", position: "Residential Counselor", progress: 75, modulesCompleted: 5, totalModules: 7 },
-      { name: "Jordan Lee", position: "Case Manager", progress: 60, modulesCompleted: 4, totalModules: 7 },
+      { name: "Synthetic-Person-037 Watson", position: "Residential Counselor", progress: 75, modulesCompleted: 5, totalModules: 7 },
+      { name: "Synthetic-Person-019 Lee", position: "Case Manager", progress: 60, modulesCompleted: 4, totalModules: 7 },
     ],
   },
   {

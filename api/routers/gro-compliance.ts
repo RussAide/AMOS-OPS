@@ -8,7 +8,7 @@ import {
   recordRetention,
   campusStages,
 } from "@db/schema";
-import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 // ══════════════════════════════════════════════════════════════
@@ -30,7 +30,7 @@ export const groComplianceRouter = createRouter({
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.youthId) conditions.push(eq(youthRightsAcknowledgments.youthId, input.youthId));
       if (input?.acknowledged !== undefined) {
         conditions.push(
@@ -119,13 +119,13 @@ export const groComplianceRouter = createRouter({
   listRestraintIncidents: authedQuery
     .input(z.object({
       youthId: z.string().optional(),
-      status: z.string().optional(),
+      status: z.enum(["open", "documented", "medical_pending", "under_review", "closed"]).optional(),
       overdueDocumentation: z.boolean().optional(),
       overdueMedical: z.boolean().optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.youthId) conditions.push(eq(restraintIncidents.youthId, input.youthId));
       if (input?.status) conditions.push(eq(restraintIncidents.status, input.status));
 
@@ -354,12 +354,12 @@ export const groComplianceRouter = createRouter({
   listRecordRetention: authedQuery
     .input(z.object({
       youthId: z.string().optional(),
-      status: z.string().optional(),
+      status: z.enum(["active", "expiring_soon", "expired", "archived", "destroyed"]).optional(),
       expiringSoon: z.boolean().optional(),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      let conditions = [];
+      const conditions = [];
       if (input?.youthId) conditions.push(eq(recordRetention.youthId, input.youthId));
       if (input?.status) conditions.push(eq(recordRetention.status, input.status));
 
@@ -491,7 +491,9 @@ export const groComplianceRouter = createRouter({
     const overdueMedical = allIncidents.filter((i) =>
       i.medicalAttentionRequired && !i.medicalEvaluationCompleted && i.followUpReviewDue && i.followUpReviewDue < now
     ).length;
-    const incidents24h = allIncidents.filter((i) => i.createdAt >= twentyFourHoursAgo).length;
+    const incidents24h = allIncidents.filter(
+      (i) => i.createdAt !== null && i.createdAt >= twentyFourHoursAgo
+    ).length;
 
     // Record retention
     const allRecords = await db.select().from(recordRetention);
@@ -534,24 +536,24 @@ export const groComplianceRouter = createRouter({
     // Seed youth rights
     await db.insert(youthRightsAcknowledgments).values([
       {
-        id: "yr-001", youthId: "youth-001", youthName: "Marcus Johnson", mrn: "MRN-2026-001",
+        id: "yr-001", youthId: "youth-001", youthName: "Synthetic Youth 001", mrn: "SYNTH-REC-001",
         rightsVersion: "2024-01",
         acknowledgedByYouth: true, youthAcknowledgedAt: "2026-06-16T10:00:00Z",
         acknowledgedByGuardian: true, guardianAcknowledgedAt: "2026-06-16T10:30:00Z",
         guardianName: "Angela Johnson",
-        deliveredBy: "Sarah Martinez", deliveredById: "user-gro-001",
+        deliveredBy: "Synthetic Staff 08", deliveredById: "user-gro-001",
         deliveryMethod: "in_person", language: "English",
         interpreterUsed: false,
         notes: "Youth and guardian both present. Rights explained in detail. Questions answered.",
         createdAt: now, updatedAt: now,
       },
       {
-        id: "yr-002", youthId: "youth-002", youthName: "Aaliyah Williams", mrn: "MRN-2026-002",
+        id: "yr-002", youthId: "youth-002", youthName: "Synthetic Youth 005", mrn: "SYNTH-REC-002",
         rightsVersion: "2024-01",
         acknowledgedByYouth: true, youthAcknowledgedAt: "2026-07-02T09:00:00Z",
         acknowledgedByGuardian: false, guardianAcknowledgedAt: null,
         guardianName: null,
-        deliveredBy: "Sarah Martinez", deliveredById: "user-gro-001",
+        deliveredBy: "Synthetic Staff 08", deliveredById: "user-gro-001",
         deliveryMethod: "in_person", language: "English",
         interpreterUsed: false,
         notes: "Youth acknowledged. Guardian visit scheduled for 7/5.",
@@ -563,7 +565,7 @@ export const groComplianceRouter = createRouter({
     await db.insert(restraintIncidents).values([
       {
         id: "esi-001", incidentNumber: "ESI-2026-0042",
-        youthId: "youth-003", youthName: "Ethan Brown", mrn: "MRN-2026-003",
+        youthId: "youth-003", youthName: "Synthetic Youth 014", mrn: "SYNTH-REC-003",
         incidentDate: "2026-07-03", incidentTime: "14:30:00",
         incidentLocation: "Common Area - East Wing",
         incidentType: "physical_restraint",
@@ -618,19 +620,19 @@ export const groComplianceRouter = createRouter({
     // Seed record retention
     await db.insert(recordRetention).values([
       {
-        id: "rr-001", youthId: "youth-001", youthName: "Marcus Johnson", mrn: "MRN-2026-001",
+        id: "rr-001", youthId: "youth-001", youthName: "Synthetic Youth 001", mrn: "SYNTH-REC-001",
         recordType: "admission_intake", createdDate: "2026-06-15", retentionYears: 5,
         expirationDate: "2031-06-15", status: "active",
         createdAt: now, updatedAt: now,
       },
       {
-        id: "rr-002", youthId: "youth-001", youthName: "Marcus Johnson", mrn: "MRN-2026-001",
+        id: "rr-002", youthId: "youth-001", youthName: "Synthetic Youth 001", mrn: "SYNTH-REC-001",
         recordType: "incident", createdDate: "2025-06-15", retentionYears: 5,
         expirationDate: "2030-06-15", status: "active",
         createdAt: now, updatedAt: now,
       },
       {
-        id: "rr-003", youthId: "youth-004", youthName: "Olivia Chen", mrn: "MRN-2026-004",
+        id: "rr-003", youthId: "youth-004", youthName: "Synthetic Youth 027", mrn: "SYNTH-REC-004",
         recordType: "discharge_summary", createdDate: "2020-06-01", retentionYears: 5,
         expirationDate: "2025-06-01", status: "expired",
         createdAt: now, updatedAt: now,

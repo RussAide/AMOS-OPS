@@ -1,7 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Search,
-  Filter,
   Target,
   CheckCircle,
   AlertTriangle,
@@ -13,7 +12,7 @@ import {
 
 const reviewData = [
   {
-    employee: "Sarah Johnson",
+    employee: "Synthetic Staff 01",
     position: "Lead RN",
     reviewPeriod: "Jan 2025 – Jun 2025",
     selfReview: "Submitted",
@@ -31,7 +30,7 @@ const reviewData = [
     status: "Supervisor Review",
   },
   {
-    employee: "David Park",
+    employee: "Synthetic Staff 04",
     position: "QMHP",
     reviewPeriod: "Jan 2025 – Jun 2025",
     selfReview: "Pending",
@@ -40,7 +39,7 @@ const reviewData = [
     status: "Self-Review Pending",
   },
   {
-    employee: "Emily Roberts",
+    employee: "Synthetic-Person-037 Roberts",
     position: "CPI Specialist",
     reviewPeriod: "Jul 2024 – Dec 2024",
     selfReview: "Submitted",
@@ -49,7 +48,7 @@ const reviewData = [
     status: "Completed",
   },
   {
-    employee: "James Wilson",
+    employee: "Synthetic Staff 09",
     position: "Case Manager",
     reviewPeriod: "Jan 2025 – Jun 2025",
     selfReview: "Pending",

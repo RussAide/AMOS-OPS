@@ -5,6 +5,20 @@ import { randomUUID } from "crypto";
 
 // ─── M16: Residential Operations Router ──────────────────────
 
+interface CountRow {
+  c: number;
+}
+
+const listBehavioralObservationsProcedure = authedQuery
+  .input(z.object({ youthId: z.string().optional() }).optional())
+  .query(async ({ input }) => {
+    let sql = "SELECT * FROM behavioral_observations WHERE 1=1";
+    const params: unknown[] = [];
+    if (input?.youthId) { sql += " AND youth_id = ?"; params.push(input.youthId); }
+    sql += " ORDER BY observation_date DESC";
+    return sqlite.prepare(sql).all(...params) ?? [];
+  });
+
 export const m18Router = createRouter({
   // ─── Bed Census ────────────────────────────────────────────
   getBedCensus: authedQuery.query(async () => {
@@ -33,7 +47,7 @@ export const m18Router = createRouter({
     .input(z.object({ date: z.string().optional() }).optional())
     .query(async ({ input }) => {
       let sql = "SELECT * FROM shifts WHERE 1=1";
-      const params: any[] = [];
+      const params: unknown[] = [];
       if (input?.date) { sql += " AND shift_date = ?"; params.push(input.date); }
       sql += " ORDER BY shift_date DESC, start_time DESC";
       return sqlite.prepare(sql).all(...params) ?? [];
@@ -72,15 +86,8 @@ export const m18Router = createRouter({
     }),
 
   // ─── Behavioral Observations ───────────────────────────────
-  listBehavioralObs: authedQuery
-    .input(z.object({ youthId: z.string().optional() }).optional())
-    .query(async ({ input }) => {
-      let sql = "SELECT * FROM behavioral_observations WHERE 1=1";
-      const params: any[] = [];
-      if (input?.youthId) { sql += " AND youth_id = ?"; params.push(input.youthId); }
-      sql += " ORDER BY observation_date DESC";
-      return sqlite.prepare(sql).all(...params) ?? [];
-    }),
+  listBehavioralObs: listBehavioralObservationsProcedure,
+  listBehavioralObservations: listBehavioralObservationsProcedure,
 
   createBehavioralObs: authedQuery
     .input(z.object({
@@ -106,7 +113,7 @@ export const m18Router = createRouter({
     .input(z.object({ youthId: z.string().optional() }).optional())
     .query(async ({ input }) => {
       let sql = "SELECT * FROM milieu_notes WHERE 1=1";
-      const params: any[] = [];
+      const params: unknown[] = [];
       if (input?.youthId) { sql += " AND youth_id = ?"; params.push(input.youthId); }
       sql += " ORDER BY note_date DESC";
       return sqlite.prepare(sql).all(...params) ?? [];
@@ -117,7 +124,7 @@ export const m18Router = createRouter({
     .input(z.object({ youthId: z.string().optional() }).optional())
     .query(async ({ input }) => {
       let sql = "SELECT * FROM family_contacts WHERE 1=1";
-      const params: any[] = [];
+      const params: unknown[] = [];
       if (input?.youthId) { sql += " AND youth_id = ?"; params.push(input.youthId); }
       sql += " ORDER BY contact_date DESC";
       return sqlite.prepare(sql).all(...params) ?? [];
@@ -146,19 +153,21 @@ export const m18Router = createRouter({
 
   // ─── Residential Dashboard Summary ─────────────────────────
   residentialSummary: authedQuery.query(async () => {
-    const totalBeds = sqlite.prepare("SELECT COUNT(*) as c FROM bed_census").get() as any;
-    const occupiedBeds = sqlite.prepare("SELECT COUNT(*) as c FROM bed_census WHERE is_occupied = 1").get() as any;
-    const todaysShifts = sqlite.prepare("SELECT COUNT(*) as c FROM shifts WHERE shift_date = date('now')").get() as any;
-    const pendingHandoffs = sqlite.prepare("SELECT COUNT(*) as c FROM shift_handoffs WHERE status = 'pending'").get() as any;
-    const todaysBehavioral = sqlite.prepare("SELECT COUNT(*) as c FROM behavioral_observations WHERE observation_date = date('now')").get() as any;
-    const openFamilyContacts = sqlite.prepare("SELECT COUNT(*) as c FROM family_contacts WHERE follow_up_needed = 1").get() as any;
-    const pendingDebriefs = sqlite.prepare("SELECT COUNT(*) as c FROM restrictive_interventions WHERE debrief_completed = 0").get() as any;
+    const totalBeds = sqlite.prepare("SELECT COUNT(*) as c FROM bed_census").get() as CountRow | undefined;
+    const occupiedBeds = sqlite.prepare("SELECT COUNT(*) as c FROM bed_census WHERE is_occupied = 1").get() as CountRow | undefined;
+    const todaysShifts = sqlite.prepare("SELECT COUNT(*) as c FROM shifts WHERE shift_date = date('now')").get() as CountRow | undefined;
+    const pendingHandoffs = sqlite.prepare("SELECT COUNT(*) as c FROM shift_handoffs WHERE status = 'pending'").get() as CountRow | undefined;
+    const todaysBehavioral = sqlite.prepare("SELECT COUNT(*) as c FROM behavioral_observations WHERE observation_date = date('now')").get() as CountRow | undefined;
+    const openFamilyContacts = sqlite.prepare("SELECT COUNT(*) as c FROM family_contacts WHERE follow_up_needed = 1").get() as CountRow | undefined;
+    const pendingDebriefs = sqlite.prepare("SELECT COUNT(*) as c FROM restrictive_interventions WHERE debrief_completed = 0").get() as CountRow | undefined;
+    const totalBedCount = totalBeds?.c ?? 0;
+    const occupiedBedCount = occupiedBeds?.c ?? 0;
 
     return {
-      totalBeds: totalBeds?.c ?? 0,
-      occupiedBeds: occupiedBeds?.c ?? 0,
-      availableBeds: (totalBeds?.c ?? 0) - (occupiedBeds?.c ?? 0),
-      occupancyRate: totalBeds?.c > 0 ? Math.round((occupiedBeds?.c / totalBeds?.c) * 100) : 0,
+      totalBeds: totalBedCount,
+      occupiedBeds: occupiedBedCount,
+      availableBeds: totalBedCount - occupiedBedCount,
+      occupancyRate: totalBedCount > 0 ? Math.round((occupiedBedCount / totalBedCount) * 100) : 0,
       todaysShifts: todaysShifts?.c ?? 0,
       pendingHandoffs: pendingHandoffs?.c ?? 0,
       todaysBehavioral: todaysBehavioral?.c ?? 0,

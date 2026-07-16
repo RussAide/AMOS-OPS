@@ -20,8 +20,8 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
-  Heart, Plus, Search, Clock, Calendar, User, AlertTriangle, CheckCircle2, XCircle,
-  ChevronRight, RefreshCw, Stethoscope, BookOpen, Activity, Smile, Brain, School, Gamepad2
+  Heart, Plus, Search, Clock, Calendar, AlertTriangle, CheckCircle2, XCircle,
+  ChevronRight, RefreshCw, Stethoscope, Brain, School, Gamepad2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +33,8 @@ const CARE_TYPES = [
   { value: "recreational", label: "Recreational", icon: Gamepad2 },
   { value: "emotional_support", label: "Emotional Support", icon: Heart },
   { value: "crisis_intervention", label: "Crisis Intervention", icon: AlertTriangle },
-];
+] as const;
+type CareType = typeof CARE_TYPES[number]["value"];
 
 const SHIFT_TYPES = [
   { value: "day", label: "Day" },
@@ -45,7 +46,7 @@ const SHIFT_TYPES = [
 export default function YouthCareLogPage() {
   const utils = trpc.useUtils();
   const [search, setSearch] = useState("");
-  const [filterCareType, setFilterCareType] = useState("");
+  const [filterCareType, setFilterCareType] = useState<"" | CareType>("");
   const [filterFollowUp, setFilterFollowUp] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -158,7 +159,7 @@ export default function YouthCareLogPage() {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input placeholder="Search care logs..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
-          <Select value={filterCareType} onValueChange={setFilterCareType}>
+          <Select value={filterCareType} onValueChange={(value) => setFilterCareType(value as typeof filterCareType)}>
             <SelectTrigger className="w-[160px]"><SelectValue placeholder="All Types" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="">All Types</SelectItem>
@@ -292,8 +293,8 @@ export default function YouthCareLogPage() {
                   youthName: formYouthName,
                   mrn: formMrn,
                   logDate: new Date().toISOString().split("T")[0],
-                  shiftType: formShiftType as any,
-                  careType: formCareType as any,
+                  shiftType: formShiftType as Parameters<typeof createLog.mutate>[0]["shiftType"],
+                  careType: formCareType as Parameters<typeof createLog.mutate>[0]["careType"],
                   description: formDescription,
                   observations: formObservations || undefined,
                   youthResponse: formYouthResponse || undefined,

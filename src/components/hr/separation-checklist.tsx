@@ -50,11 +50,7 @@ export function SeparationChecklist({ personId, personName }: Props) {
   const bulkMutation = trpc.separation.bulkUpsert.useMutation();
   const utils = trpc.useUtils();
 
-  // Build local state from DB + defaults
-  const [localItems, setLocalItems] = useState<Record<string, ChecklistState>>({});
-
-  // Sync DB items to local state when dialog opens
-  useMemo(() => {
+  const baseItems = useMemo(() => {
     const init: Record<string, ChecklistState> = {};
     for (const def of CHECKLIST_DEF) {
       const dbItem = dbItems.find((d) => d.itemId === def.id);
@@ -65,16 +61,21 @@ export function SeparationChecklist({ personId, personName }: Props) {
         notes: dbItem?.notes ?? "",
       };
     }
-    setLocalItems(init);
-  }, [dbItems, open]);
+    return init;
+  }, [dbItems]);
+  const [itemOverrides, setItemOverrides] = useState<Record<string, ChecklistState>>({});
+  const localItems = useMemo(
+    () => ({ ...baseItems, ...itemOverrides }),
+    [baseItems, itemOverrides]
+  );
 
   const toggleItem = useCallback((id: string) => {
-    setLocalItems((prev) => {
-      const item = prev[id];
-      if (!item) return prev;
+    setItemOverrides((previousOverrides) => {
+      const item = previousOverrides[id] ?? baseItems[id];
+      if (!item) return previousOverrides;
       const nowCompleted = !item.completed;
       return {
-        ...prev,
+        ...previousOverrides,
         [id]: {
           ...item,
           completed: nowCompleted,
@@ -82,15 +83,23 @@ export function SeparationChecklist({ personId, personName }: Props) {
         },
       };
     });
-  }, []);
+  }, [baseItems]);
 
   const updateItem = useCallback((id: string, field: "completedBy" | "notes", value: string) => {
-    setLocalItems((prev) => {
-      const item = prev[id];
-      if (!item) return prev;
-      return { ...prev, [id]: { ...item, [field]: value } };
+    setItemOverrides((previousOverrides) => {
+      const item = previousOverrides[id] ?? baseItems[id];
+      if (!item) return previousOverrides;
+      return { ...previousOverrides, [id]: { ...item, [field]: value } };
     });
-  }, []);
+  }, [baseItems]);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setItemOverrides({});
+      setSaved(false);
+    }
+    setOpen(nextOpen);
+  };
 
   const completedCount = useMemo(
     () => Object.values(localItems).filter((i) => i.completed).length,
@@ -149,7 +158,7 @@ export function SeparationChecklist({ personId, personName }: Props) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button size="sm" variant="outline" className="gap-1 text-xs">
           <LogOut size={13} />

@@ -17,12 +17,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
-  ShieldCheck, Plus, Search, AlertTriangle, CheckCircle2, XCircle, Clock,
-  ChevronRight, RefreshCw, MapPin, ClipboardCheck
+  ShieldCheck, Plus, Search, AlertTriangle, CheckCircle2, XCircle,
+  ChevronRight, RefreshCw, ClipboardCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -55,7 +54,7 @@ const CHECKLIST_ITEMS = [
   { key: "item6CleanSanitary", label: "Area is clean and sanitary" },
   { key: "item7EquipmentSecure", label: "Equipment is secure" },
   { key: "item8YouthAreasSafe", label: "Youth areas are safe" },
-];
+] as const;
 
 export default function SafetyRoundPage() {
   const utils = trpc.useUtils();
@@ -321,7 +320,7 @@ export default function SafetyRoundPage() {
               <Button
                 onClick={() => createRound.mutate({
                   shiftDate: new Date().toISOString().split("T")[0],
-                  shiftType: formShiftType as any,
+                  shiftType: formShiftType as Parameters<typeof createRound.mutate>[0]["shiftType"],
                   area: formArea,
                   completedBy: formCompletedBy,
                   item1NoHazards: formChecks["item1NoHazards"],
@@ -363,7 +362,7 @@ export default function SafetyRoundPage() {
                 </div>
                 <div className="border rounded-lg divide-y">
                   {CHECKLIST_ITEMS.map((item) => {
-                    const passed = (detail as any)[item.key] as boolean;
+                    const passed = detail[item.key];
                     return (
                       <div key={item.key} className="flex items-center justify-between p-2.5">
                         <span className="text-sm">{item.label}</span>

@@ -1,12 +1,85 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "../middleware";
-import { getDb } from "../queries/connection";
+import { createRouter, publicQuery, authedQuery } from "../middleware";
+import { getDb, sqlite } from "../queries/connection";
 import { bedCensusV2, facilities } from "@db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 // ─── M20: Residential Operations v2 + Predictive Analytics ───
 
+interface AuthorizationRow {
+  id: string;
+  youth_id: string;
+  youth_name: string;
+  mrn: string;
+  payer_name: string;
+  policy_number: string | null;
+  stage: "readiness" | "submission" | "tracking" | "reauthorization" | "retrospective";
+  status: "pending" | "in_progress" | "submitted" | "approved" | "denied" | "appealed" | "expired" | "closed";
+  readiness_clinical_docs: number;
+  readiness_assessment_current: number;
+  readiness_loc_supported: number;
+  readiness_treatment_plan: number;
+  readiness_progress_notes: number;
+  readiness_medical_necessity: number;
+  readiness_utilization_review: number;
+  readiness_guardian_consent: number;
+  readiness_ub04_clean: number;
+  readiness_excluded_services: number;
+  readiness_met_at: string | null;
+  submission_date: string | null;
+  submitted_by: string | null;
+  submission_method: "portal" | "fax" | "email" | "phone" | null;
+  submission_reference: string | null;
+  authorization_number: string | null;
+  approved_units: number | null;
+  approved_from_date: string | null;
+  approved_to_date: string | null;
+  approved_level_of_care: string | null;
+  denial_reason: string | null;
+  appeal_date: string | null;
+  appeal_status: string | null;
+  reauth_due_date: string | null;
+  reauth_submitted_at: string | null;
+  reauth_status: "not_due" | "upcoming" | "overdue" | "submitted" | "approved" | null;
+  days_until_expiration: number | null;
+  retrospective_review_date: string | null;
+  retrospective_findings: string | null;
+  retrospective_actions: string | null;
+  billing_excluded_services: string | null;
+  exclusion_controls_applied: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  created_by: string | null;
+}
+
 export const m20Router = createRouter({
+  // ─── Authorization lifecycle compatibility ──────────────
+  listAuthorizations: authedQuery.query(async () => (
+    sqlite.prepare(
+      "SELECT * FROM authorizations ORDER BY created_at DESC"
+    ).all() as AuthorizationRow[]
+  )),
+
+  authSummary: authedQuery.query(async () => {
+    const authorizations = sqlite.prepare(
+      "SELECT status, reauth_status, days_until_expiration FROM authorizations"
+    ).all() as Array<Pick<AuthorizationRow, "status" | "reauth_status" | "days_until_expiration">>;
+
+    return {
+      total: authorizations.length,
+      pending: authorizations.filter((item) => item.status === "pending").length,
+      approved: authorizations.filter((item) => item.status === "approved").length,
+      denied: authorizations.filter((item) => item.status === "denied").length,
+      appealed: authorizations.filter((item) => item.status === "appealed").length,
+      reauthOverdue: authorizations.filter((item) => item.reauth_status === "overdue").length,
+      upcomingExpiry: authorizations.filter((item) => (
+        item.days_until_expiration !== null
+        && item.days_until_expiration >= 0
+        && item.days_until_expiration <= 30
+      )).length,
+    };
+  }),
+
   // ─── Census Predictive Analytics ─────────────────────────
 
   getAdmissionTrends: publicQuery.query(async () => {

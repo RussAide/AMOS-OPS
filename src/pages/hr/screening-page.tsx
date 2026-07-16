@@ -5,7 +5,6 @@ import {
   ClipboardCheck,
   Clock,
   CheckCircle,
-  XCircle,
   AlertTriangle,
   ChevronDown,
   UserCheck,

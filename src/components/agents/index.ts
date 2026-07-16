@@ -8,13 +8,13 @@
 
 export {
   AgentPersonaIndicator,
-  getAgentForRoute,
-  AGENT_PERSONAS,
 } from "./agent-persona-indicator";
 
+export { getAgentForRoute, AGENT_PERSONAS } from "./agent-personas";
+
 export type {
-  AgentPersonaIndicatorProps,
   AgentPersona,
+  AgentPersonaIndicatorProps,
   AgentStatus,
   AgentColor,
-} from "./agent-persona-indicator";
+} from "./agent-personas";

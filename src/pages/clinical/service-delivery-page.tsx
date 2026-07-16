@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import {
-  Package2 as Package, Search, Filter, X, FileText, Clock, CheckCircle, AlertCircle,
-  BarChart3, Users, Activity, TrendingUp, Calendar
+   Search, X, FileText, CheckCircle, AlertCircle, Users, Activity, Calendar
 } from "lucide-react";
 
 const DOC_STATUS_COLORS: Record<string, string> = {
@@ -29,13 +28,13 @@ export function ServiceDeliveryPage() {
     if (docFilter !== "all" && e.documentationStatus !== docFilter) return false;
     if (!search) return true;
     const q = search.toLowerCase();
-    return (e.clinicalNotes?.toLowerCase().includes(q) ?? false) || e.youthName.toLowerCase().includes(q);
+    return e.serviceDescription.toLowerCase().includes(q) || e.youthName.toLowerCase().includes(q);
   });
   const mhrsEncounters = (deliveryData?.mhrsEncounters ?? []).filter((e) => {
     if (docFilter !== "all" && e.documentationStatus !== docFilter) return false;
     if (!search) return true;
     const q = search.toLowerCase();
-    return (e.clinicalNotes?.toLowerCase().includes(q) ?? false) || e.youthName.toLowerCase().includes(q);
+    return e.serviceDescription.toLowerCase().includes(q) || e.youthName.toLowerCase().includes(q);
   });
   const clinicalSessions = (deliveryData?.clinicalSessions ?? []).filter((s) => {
     if (!search) return true;
@@ -215,11 +214,11 @@ export function ServiceDeliveryPage() {
                     <div className="flex items-center gap-4 text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>
                       <span>{e.encounterType}</span>
                       <span>{e.unitsBilled ?? 0} units</span>
-                      <span>Duration: {e.durationMinutes} min</span>
-                      {e.isSignatureRequired && <span className="text-red-600 flex items-center gap-1"><AlertCircle size={10} /> Sig Required</span>}
+                      <span>Duration: {e.minutesDelivered} min</span>
+                      {!e.signedBy && e.documentationStatus !== "submitted" && <span className="text-red-600 flex items-center gap-1"><AlertCircle size={10} /> Signature Pending</span>}
                     </div>
-                    {e.clinicalNotes && (
-                      <p className="text-[12px] mt-2 line-clamp-2" style={{ color: "var(--topbar-subtitle)" }}>{e.clinicalNotes}</p>
+                    {e.serviceDescription && (
+                      <p className="text-[12px] mt-2 line-clamp-2" style={{ color: "var(--topbar-subtitle)" }}>{e.serviceDescription}</p>
                     )}
                   </div>
                 ))}
@@ -253,7 +252,7 @@ export function ServiceDeliveryPage() {
                     <div className="flex items-center gap-4 text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>
                       <span>{e.encounterType}</span>
                       <span>{e.unitsBilled ?? 0} units</span>
-                      <span>Duration: {e.durationMinutes} min</span>
+                      <span>Duration: {e.minutesDelivered} min</span>
                     </div>
                     {e.skillsTaught && (
                       <div className="mt-2 flex flex-wrap gap-1">

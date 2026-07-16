@@ -1,11 +1,8 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { readNullableString, readString, toRecords } from "@/components/data/record-utils";
 
 const FUNCTIONS = [
   { key: "function1_coordination", label: "Care Coordination", desc: "Coordinate services across providers and systems" },
@@ -24,13 +21,76 @@ const STATUS_MAP: Record<string, string> = {
   transferred: "bg-blue-100 text-blue-700",
 };
 
+interface CaseRecord extends Record<string, unknown> {
+  id: string;
+  youth_name: string;
+  mrn: string;
+  case_manager_name: string | null;
+  status: string;
+  last_review_date: string | null;
+  next_review_date: string | null;
+  function2_referrals_json: string | null;
+  function3_collaterals_json: string | null;
+  function4_barriers_json: string | null;
+}
+
+function normalizeCaseRecord(value: Record<string, unknown>): CaseRecord | null {
+  const id = readString(value, "id");
+  if (!id) return null;
+  return {
+    ...value,
+    id,
+    youth_name: readString(value, "youth_name", "Unnamed youth"),
+    mrn: readString(value, "mrn"),
+    case_manager_name: readNullableString(value, "case_manager_name"),
+    status: readString(value, "status", "active"),
+    last_review_date: readNullableString(value, "last_review_date"),
+    next_review_date: readNullableString(value, "next_review_date"),
+    function2_referrals_json: readNullableString(value, "function2_referrals_json"),
+    function3_collaterals_json: readNullableString(value, "function3_collaterals_json"),
+    function4_barriers_json: readNullableString(value, "function4_barriers_json"),
+  };
+}
+
+interface ReferralRecord {
+  provider: string;
+  type: string;
+  date: string;
+  status: string;
+}
+
+interface CollateralRecord {
+  contact: string;
+  relationship: string;
+  date: string;
+  notes: string;
+}
+
+interface BarrierRecord {
+  barrier: string;
+  impact: string;
+  resolution: string;
+}
+
+function parseRecordArray<T>(value: string | null): T[] {
+  try {
+    const parsed: unknown = JSON.parse(value ?? "[]");
+    return Array.isArray(parsed) ? parsed as T[] : [];
+  } catch {
+    return [];
+  }
+}
+
 export function CaseManagementPage() {
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
-  const { data: cases = [] } = trpc.m16.listCases.useQuery();
+  const { data: rawCases } = trpc.m16.listCases.useQuery();
   const { data: summary } = trpc.m16.caseMgmtSummary.useQuery();
-  const { data: youthList = [] } = trpc.m13.listYouth.useQuery();
+  const cases = toRecords(rawCases).flatMap((caseRecord) => {
+    const normalized = normalizeCaseRecord(caseRecord);
+    return normalized ? [normalized] : [];
+  });
 
-  const selectedCase = cases.find((c: any) => c.id === selectedCaseId);
+  const selectedCase = cases.find((c) => c.id === selectedCaseId);
 
   return (
     <>
@@ -74,7 +134,7 @@ export function CaseManagementPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {cases.map((c: any) => (
+            {cases.map((c) => (
               <button
                 key={c.id}
                 onClick={() => setSelectedCaseId(c.id === selectedCaseId ? null : c.id)}
@@ -107,12 +167,12 @@ export function CaseManagementPage() {
   );
 }
 
-function CaseDetail({ caseData: c }: { caseData: any }) {
+function CaseDetail({ caseData: c }: { caseData: CaseRecord }) {
   const functionsCompleted = FUNCTIONS.filter((f, idx) => c[`function${idx + 1}_${f.key.split("_")[1]}` as keyof typeof c] === 1).length;
 
-  let referrals: any[] = []; try { referrals = JSON.parse(c.function2_referrals_json ?? "[]"); } catch { /* */ }
-  let collaterals: any[] = []; try { collaterals = JSON.parse(c.function3_collaterals_json ?? "[]"); } catch { /* */ }
-  let barriers: any[] = []; try { barriers = JSON.parse(c.function4_barriers_json ?? "[]"); } catch { /* */ }
+  const referrals = parseRecordArray<ReferralRecord>(c.function2_referrals_json);
+  const collaterals = parseRecordArray<CollateralRecord>(c.function3_collaterals_json);
+  const barriers = parseRecordArray<BarrierRecord>(c.function4_barriers_json);
 
   return (
     <div className="space-y-4">
@@ -134,7 +194,7 @@ function CaseDetail({ caseData: c }: { caseData: any }) {
         {/* 6 Functions */}
         {FUNCTIONS.map((f, idx) => {
           const isActive = c[`function${idx + 1}_${f.key.split("_")[1]}` as keyof typeof c] === 1;
-          const notes = c[`function${idx + 1}_${f.key.split("_")[1]}_notes` as keyof typeof c] as string;
+          const notes = String(c[`function${idx + 1}_${f.key.split("_")[1]}_notes` as keyof typeof c] ?? "");
           return (
             <Card key={f.key} className={isActive ? "border-[#2e8b8b]/30" : "border-gray-200 opacity-70"}>
               <CardHeader className="pb-2">
@@ -162,7 +222,7 @@ function CaseDetail({ caseData: c }: { caseData: any }) {
           <CardHeader><CardTitle className="text-sm">External Referrals</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {referrals.map((r: any, idx: number) => (
+              {referrals.map((r, idx: number) => (
                 <div key={idx} className="flex items-center justify-between p-2 rounded border border-gray-200">
                   <div>
                     <div className="text-sm font-medium">{r.provider}</div>
@@ -184,7 +244,7 @@ function CaseDetail({ caseData: c }: { caseData: any }) {
           <CardHeader><CardTitle className="text-sm">Collateral Contacts</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {collaterals.map((contact: any, idx: number) => (
+              {collaterals.map((contact, idx: number) => (
                 <div key={idx} className="p-2 rounded border border-gray-200">
                   <div className="flex items-center justify-between">
                     <div className="text-sm font-medium">{contact.contact}</div>
@@ -205,7 +265,7 @@ function CaseDetail({ caseData: c }: { caseData: any }) {
           <CardHeader><CardTitle className="text-sm">Barriers & Resolutions</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {barriers.map((b: any, idx: number) => (
+              {barriers.map((b, idx: number) => (
                 <div key={idx} className={`p-2 rounded border ${b.impact === "High" ? "border-red-300 bg-red-50" : b.impact === "Moderate" ? "border-yellow-300 bg-yellow-50" : "border-gray-200"}`}>
                   <div className="flex items-center justify-between">
                     <div className="text-sm font-medium">{b.barrier}</div>

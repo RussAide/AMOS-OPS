@@ -9,8 +9,14 @@ import Database from "better-sqlite3";
 import * as schema from "./schema";
 import { formTemplates, formTemplateFields, formRoleBindings } from "./schema";
 import { randomUUID } from "crypto";
+import { assertSyntheticSeedAllowed } from "./seed-guard";
 
-const client = new Database("hr-lifecycle.db");
+const formsDatabasePath = process.env.DATABASE_PATH ?? "amos-ops-evaluation-forms.db";
+assertSyntheticSeedAllowed({
+  scriptName: "db/seed-forms.ts",
+  databasePath: formsDatabasePath,
+});
+const client = new Database(formsDatabasePath);
 const db = drizzle(client, { schema });
 
 // ─── Form Definitions ────────────────────────────────────────
@@ -126,7 +132,7 @@ const FORMS: FormDef[] = [
       { name: "hrApprovalSignature", label: "HR Approval Signature", fieldType: "signature", required: true, section: "Approval" },
     ],
     roleBindings: [
-      { role: "operations-manager", isRequired: true, isAutoAssigned: false, assignmentTrigger: "manual", dueDays: 7 },
+      { role: "facilities-manager", isRequired: true, isAutoAssigned: false, assignmentTrigger: "manual", dueDays: 7 },
       { role: "hr-director", isRequired: true, isAutoAssigned: false, assignmentTrigger: "manual", dueDays: 7 },
     ],
   },
@@ -164,7 +170,7 @@ const FORMS: FormDef[] = [
       { name: "signatureDate", label: "Date", fieldType: "date", required: true, section: "Signature" },
     ],
     roleBindings: [
-      { role: "gro-staff", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-create", dueDays: 7 },
+      { role: "rcs-day", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-create", dueDays: 7 },
     ],
   },
   {
@@ -193,7 +199,7 @@ const FORMS: FormDef[] = [
       { name: "interviewDate2", label: "Date", fieldType: "date", required: true, section: "Signature" },
     ],
     roleBindings: [
-      { role: "supervisor", isRequired: true, isAutoAssigned: false, assignmentTrigger: "manual", dueDays: 3 },
+      { role: "shift-supervisor", isRequired: true, isAutoAssigned: false, assignmentTrigger: "manual", dueDays: 3 },
       { role: "clinical-director", isRequired: false, isAutoAssigned: false, assignmentTrigger: "manual", dueDays: 3 },
       { role: "hr-director", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-status-change:offers-o-accepted", dueDays: 7 },
     ],
@@ -285,7 +291,7 @@ const FORMS: FormDef[] = [
       { name: "signatureDate", label: "Date", fieldType: "date", required: true, section: "Signature" },
     ],
     roleBindings: [
-      { role: "gro-staff", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:conditional-offer", dueDays: 3 },
+      { role: "rcs-day", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:conditional-offer", dueDays: 3 },
       { role: "hr-director", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:conditional-offer", dueDays: 5 },
     ],
   },
@@ -457,7 +463,7 @@ const FORMS: FormDef[] = [
       { name: "hrDate", label: "Date", fieldType: "date", required: true, section: "Signatures" },
     ],
     roleBindings: [
-      { role: "gro-staff", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:final-agreement-clearance", dueDays: 3 },
+      { role: "rcs-day", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:final-agreement-clearance", dueDays: 3 },
       { role: "hr-director", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:final-agreement-clearance", dueDays: 5 },
     ],
   },
@@ -483,7 +489,7 @@ const FORMS: FormDef[] = [
       { name: "date", label: "Date", fieldType: "date", required: true, section: "Authorization" },
     ],
     roleBindings: [
-      { role: "gro-staff", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:final-agreement-clearance", dueDays: 3 },
+      { role: "rcs-day", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:final-agreement-clearance", dueDays: 3 },
     ],
   },
   {
@@ -510,7 +516,7 @@ const FORMS: FormDef[] = [
       { name: "medicalInfo", label: "Medical Conditions / Allergies", fieldType: "textarea", required: false, section: "Medical" },
     ],
     roleBindings: [
-      { role: "gro-staff", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:final-agreement-clearance", dueDays: 1 },
+      { role: "rcs-day", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:final-agreement-clearance", dueDays: 1 },
     ],
   },
   {
@@ -537,7 +543,7 @@ const FORMS: FormDef[] = [
       { name: "stateFormType", label: "State Form Type", fieldType: "text", required: true, section: "State" },
     ],
     roleBindings: [
-      { role: "gro-staff", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:final-agreement-clearance", dueDays: 1 },
+      { role: "rcs-day", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:final-agreement-clearance", dueDays: 1 },
     ],
   },
   {
@@ -601,7 +607,7 @@ const FORMS: FormDef[] = [
     ],
     roleBindings: [
       { role: "training-coordinator", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:orientation", dueDays: 1 },
-      { role: "gro-staff", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:orientation", dueDays: 1 },
+      { role: "rcs-day", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:orientation", dueDays: 1 },
       { role: "hr-director", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:orientation", dueDays: 3 },
     ],
   },
@@ -629,7 +635,7 @@ const FORMS: FormDef[] = [
       { name: "hrWitnessDate", label: "Date", fieldType: "date", required: true, section: "Witness" },
     ],
     roleBindings: [
-      { role: "gro-staff", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:orientation", dueDays: 1 },
+      { role: "rcs-day", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:orientation", dueDays: 1 },
     ],
   },
 
@@ -737,9 +743,9 @@ const FORMS: FormDef[] = [
       { name: "supervisorSignature", label: "Supervisor Signature", fieldType: "signature", required: true, section: "Signatures" },
     ],
     roleBindings: [
-      { role: "gro-staff", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:training", dueDays: 30 },
+      { role: "rcs-day", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:training", dueDays: 30 },
       { role: "training-coordinator", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:training", dueDays: 30 },
-      { role: "supervisor", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:training", dueDays: 30 },
+      { role: "shift-supervisor", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:training", dueDays: 30 },
     ],
   },
 
@@ -768,8 +774,8 @@ const FORMS: FormDef[] = [
       { name: "supervisorSignature", label: "Supervisor Signature", fieldType: "signature", required: true, section: "Signatures" },
     ],
     roleBindings: [
-      { role: "gro-staff", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:gro-assignment", dueDays: 3 },
-      { role: "supervisor", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:gro-assignment", dueDays: 3 },
+      { role: "rcs-day", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:gro-assignment", dueDays: 3 },
+      { role: "shift-supervisor", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:gro-assignment", dueDays: 3 },
     ],
   },
   {
@@ -794,7 +800,7 @@ const FORMS: FormDef[] = [
       { name: "effectiveDate", label: "Effective Date", fieldType: "date", required: true, section: "Header" },
     ],
     roleBindings: [
-      { role: "supervisor", isRequired: false, isAutoAssigned: true, assignmentTrigger: "on-module-entry:gro-assignment", dueDays: 7 },
+      { role: "shift-supervisor", isRequired: false, isAutoAssigned: true, assignmentTrigger: "on-module-entry:gro-assignment", dueDays: 7 },
     ],
   },
 
@@ -827,7 +833,7 @@ const FORMS: FormDef[] = [
       { name: "date", label: "Date", fieldType: "date", required: true, section: "Signature" },
     ],
     roleBindings: [
-      { role: "gro-staff", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:benefits-enrollment", dueDays: 30 },
+      { role: "rcs-day", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:benefits-enrollment", dueDays: 30 },
       { role: "hr-director", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:benefits-enrollment", dueDays: 30 },
     ],
   },
@@ -856,7 +862,7 @@ const FORMS: FormDef[] = [
       { name: "date", label: "Date", fieldType: "date", required: true, section: "Signature" },
     ],
     roleBindings: [
-      { role: "gro-staff", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:benefits-enrollment", dueDays: 30 },
+      { role: "rcs-day", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:benefits-enrollment", dueDays: 30 },
     ],
   },
 
@@ -891,7 +897,7 @@ const FORMS: FormDef[] = [
       { name: "hrSignature", label: "HR Director Signature", fieldType: "signature", required: true, section: "Signatures" },
     ],
     roleBindings: [
-      { role: "supervisor", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-status-change:offers-o-accepted", dueDays: 30 },
+      { role: "shift-supervisor", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-status-change:offers-o-accepted", dueDays: 30 },
       { role: "hr-director", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-status-change:offers-o-accepted", dueDays: 30 },
     ],
   },
@@ -927,7 +933,7 @@ const FORMS: FormDef[] = [
       { name: "hrSignature", label: "HR Director Signature", fieldType: "signature", required: true, section: "Signatures" },
     ],
     roleBindings: [
-      { role: "supervisor", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-status-change:offers-o-accepted", dueDays: 90 },
+      { role: "shift-supervisor", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-status-change:offers-o-accepted", dueDays: 90 },
       { role: "hr-director", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-status-change:offers-o-accepted", dueDays: 90 },
     ],
   },
@@ -959,7 +965,7 @@ const FORMS: FormDef[] = [
       { name: "hrSignature", label: "HR Director Signature", fieldType: "signature", required: true, section: "Signatures" },
     ],
     roleBindings: [
-      { role: "supervisor", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-status-change:offers-o-accepted", dueDays: 365 },
+      { role: "shift-supervisor", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-status-change:offers-o-accepted", dueDays: 365 },
       { role: "hr-director", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-status-change:offers-o-accepted", dueDays: 365 },
     ],
   },
@@ -987,7 +993,7 @@ const FORMS: FormDef[] = [
       { name: "hrSignature", label: "HR Director Signature", fieldType: "signature", required: true, section: "Signatures" },
     ],
     roleBindings: [
-      { role: "supervisor", isRequired: false, isAutoAssigned: false, assignmentTrigger: "manual", dueDays: 0 },
+      { role: "shift-supervisor", isRequired: false, isAutoAssigned: false, assignmentTrigger: "manual", dueDays: 0 },
       { role: "hr-director", isRequired: false, isAutoAssigned: false, assignmentTrigger: "manual", dueDays: 0 },
     ],
   },
@@ -1016,8 +1022,8 @@ const FORMS: FormDef[] = [
       { name: "supervisorSignature", label: "Supervisor Acknowledgment", fieldType: "signature", required: true, section: "Signatures" },
     ],
     roleBindings: [
-      { role: "gro-staff", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:separation", dueDays: 1 },
-      { role: "supervisor", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:separation", dueDays: 1 },
+      { role: "rcs-day", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:separation", dueDays: 1 },
+      { role: "shift-supervisor", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:separation", dueDays: 1 },
     ],
   },
   {
@@ -1103,7 +1109,7 @@ const FORMS: FormDef[] = [
       { name: "supervisorSignature", label: "Supervisor Signature", fieldType: "signature", required: true, section: "Signatures" },
     ],
     roleBindings: [
-      { role: "supervisor", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:separation", dueDays: 1 },
+      { role: "shift-supervisor", isRequired: true, isAutoAssigned: true, assignmentTrigger: "on-module-entry:separation", dueDays: 1 },
     ],
   },
   {
@@ -1164,7 +1170,7 @@ const FORMS: FormDef[] = [
       { name: "supervisorSignature", label: "Supervisor Review Signature", fieldType: "signature", required: true, section: "Signature" },
     ],
     roleBindings: [
-      { role: "supervisor", isRequired: false, isAutoAssigned: false, assignmentTrigger: "manual", dueDays: 0 },
+      { role: "shift-supervisor", isRequired: false, isAutoAssigned: false, assignmentTrigger: "manual", dueDays: 0 },
     ],
   },
 
@@ -1223,7 +1229,7 @@ const FORMS: FormDef[] = [
       { name: "hrDirectorSignature", label: "HR Director Signature", fieldType: "signature", required: true, section: "Signatures" },
     ],
     roleBindings: [
-      { role: "qa-officer", isRequired: false, isAutoAssigned: false, assignmentTrigger: "manual", dueDays: 0 },
+      { role: "hr-compliance-officer", isRequired: false, isAutoAssigned: false, assignmentTrigger: "manual", dueDays: 0 },
       { role: "hr-director", isRequired: false, isAutoAssigned: false, assignmentTrigger: "manual", dueDays: 0 },
     ],
   },

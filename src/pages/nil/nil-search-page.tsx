@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useRef } from "react";
 import { trpc } from "@/providers/trpc";
 import {
   Search, Users, AlertTriangle, FileText, BookOpen, Pill,
@@ -113,7 +112,7 @@ export function NILSearchPage() {
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search by name, tag, type, or module... (e.g., 'Jada', 'behavioral', 'incident')"
+            placeholder="Search by name, tag, type, or module... (e.g., 'Synthetic-Person-002', 'behavioral', 'incident')"
             className="w-full pl-9 pr-10 py-2.5 rounded-lg border text-[13px]"
             style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)" }}
           />
@@ -169,7 +168,7 @@ export function NILSearchPage() {
               <p className="text-[14px] font-medium" style={{ color: "var(--topbar-title)" }}>NIL Semantic Search</p>
               <p className="text-[12px] mt-1" style={{ color: "var(--topbar-subtitle)" }}>
                 Search across youth records, incidents, audits, treatment plans, medications, SOPs, and more.
-                <br />Try: "Jada", "behavioral", "medication", "CANS", "HVAC"
+                <br />Try: "Synthetic-Person-002", "behavioral", "medication", "CANS", "HVAC"
               </p>
             </div>
           )}
@@ -196,7 +195,7 @@ export function NILSearchPage() {
                 </span>
               </div>
               <div className="space-y-2">
-                {searchResults.map((result: any) => {
+                {searchResults.map((result) => {
                   const ti = TYPE_ICONS[result.type] || TYPE_ICONS.document;
                   const Icon = ti.icon;
                   const isSelected = selectedEntity === result.id;
@@ -286,7 +285,7 @@ export function NILSearchPage() {
                     <Network size={13} style={{ color: "#245C5A" }} /> Connected Records ({relationships.length})
                   </h4>
                   <div className="space-y-2">
-                    {relationships.map((rel: any, i: number) => {
+                    {relationships.map((rel, i: number) => {
                       if (!rel.entity) return null;
                       const ti = TYPE_ICONS[rel.entity.type] || TYPE_ICONS.document;
                       const Icon = ti.icon;

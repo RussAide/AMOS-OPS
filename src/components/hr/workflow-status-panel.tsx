@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
 import { trpc } from "@/providers/trpc";
 import {
   Zap,
@@ -14,28 +14,36 @@ import {
 
 // ─── Static fallback rules ───────────────────────────────────
 
-const STATIC_RULES = [
+interface WorkflowRule {
+  id: string;
+  name: string;
+  event: string;
+  category: string;
+  enabled: boolean;
+  condition: string | null;
+  actions: Array<{ type: string; target: string; priority: string }>;
+}
+
+const STATIC_RULES: WorkflowRule[] = [
   { id: "wf-hr-status-change", name: "HR Status Changed", event: "hr.status-changed", category: "HR", enabled: true, condition: null as string | null, actions: [{ type: "notify", target: "hr-director", priority: "normal" }] },
   { id: "wf-hr-person-created", name: "New Person Added", event: "hr.person-created", category: "HR", enabled: true, condition: null, actions: [{ type: "notify", target: "hr-director", priority: "normal" }] },
   { id: "wf-offer-accepted", name: "Offer Accepted", event: "hr.status-changed", category: "HR", enabled: true, condition: "offers → o-accepted", actions: [{ type: "notify", target: "hr-director", priority: "high" }] },
-  { id: "wf-cleared-for-duty", name: "Cleared for Duty", event: "hr.status-changed", category: "HR", enabled: true, condition: "clearance → c-cleared", actions: [{ type: "notify", target: "hr-director", priority: "high" }, { type: "notify", target: "supervisor", priority: "normal" }] },
-  { id: "wf-credential-expired", name: "Credential Expired", event: "hr.status-changed", category: "HR", enabled: true, condition: "credentials → cr-expired", actions: [{ type: "notify", target: "qa-officer", priority: "urgent" }, { type: "notify", target: "hr-director", priority: "urgent" }] },
+  { id: "wf-cleared-for-duty", name: "Cleared for Duty", event: "hr.status-changed", category: "HR", enabled: true, condition: "clearance → c-cleared", actions: [{ type: "notify", target: "hr-director", priority: "high" }, { type: "notify", target: "shift-supervisor", priority: "normal" }] },
+  { id: "wf-credential-expired", name: "Credential Expired", event: "hr.status-changed", category: "HR", enabled: true, condition: "credentials → cr-expired", actions: [{ type: "notify", target: "hr-compliance-officer", priority: "urgent" }, { type: "notify", target: "hr-director", priority: "urgent" }] },
   { id: "wf-doc-uploaded", name: "Document Uploaded", event: "document.uploaded", category: "Documents", enabled: true, condition: null, actions: [{ type: "notify", target: "hr-director", priority: "low" }] },
   { id: "wf-doc-verified", name: "Document Verified", event: "document.verified", category: "Documents", enabled: true, condition: null, actions: [{ type: "notify", target: "self", priority: "normal" }] },
   { id: "wf-doc-rejected", name: "Document Rejected", event: "document.rejected", category: "Documents", enabled: true, condition: null, actions: [{ type: "notify", target: "self", priority: "high" }, { type: "notify", target: "hr-director", priority: "normal" }] },
-  { id: "wf-training-completed", name: "Training Completed", event: "training.completed", category: "Training", enabled: true, condition: null, actions: [{ type: "notify", target: "self", priority: "normal" }, { type: "notify", target: "supervisor", priority: "normal" }] },
+  { id: "wf-training-completed", name: "Training Completed", event: "training.completed", category: "Training", enabled: true, condition: null, actions: [{ type: "notify", target: "self", priority: "normal" }, { type: "notify", target: "shift-supervisor", priority: "normal" }] },
 ];
 
 export function WorkflowStatusPanel() {
-  const { data: apiRules } = trpc.workflow.listRules.useQuery();
-  const { data: apiEventTypes } = trpc.workflow.getEventTypes.useQuery();
-  const [rules, setRules] = useState(STATIC_RULES);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: apiRules, isLoading: rulesLoading } = trpc.workflow.listRules.useQuery();
+  const { data: apiEventTypes, isLoading: eventTypesLoading } = trpc.workflow.getEventTypes.useQuery();
 
   // Use API data if available, otherwise fall back to static
-  useEffect(() => {
+  const rules = useMemo<WorkflowRule[]>(() => {
     if (apiRules && apiRules.length > 0) {
-      const mapped = apiRules.map((r: Record<string, unknown>) => ({
+      return apiRules.map((r) => ({
         id: String(r.id),
         name: String(r.name),
         event: String(r.event),
@@ -48,10 +56,10 @@ export function WorkflowStatusPanel() {
           priority: String(a.priority),
         })),
       }));
-      setRules(mapped);
     }
-    setIsLoading(false);
+    return STATIC_RULES;
   }, [apiRules, apiEventTypes]);
+  const isLoading = rulesLoading || eventTypesLoading;
 
   // Group rules by category
   const byCategory: Record<string, typeof rules> = {};

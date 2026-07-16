@@ -1,16 +1,5 @@
 import { trpc } from "@/providers/trpc";
-import {
-  Lock, FileKey, ShieldAlert, Eye, Users, CheckCircle,
-  XCircle, AlertTriangle, HelpCircle, Clock, Building2,
-  FileText, AlertOctagon, ChevronRight, Ban,
-} from "lucide-react";
-
-const STATUS_CONFIG = {
-  on_target: { icon: CheckCircle, color: "#059669", bg: "#ECFDF5", label: "On Target" },
-  at_risk: { icon: AlertTriangle, color: "#B45309", bg: "#FFFBEB", label: "At Risk" },
-  off_target: { icon: XCircle, color: "#DC2626", bg: "#FEF2F2", label: "Off Target" },
-  not_measured: { icon: HelpCircle, color: "#6B7280", bg: "#F3F4F6", label: "Not Measured" },
-};
+import { Lock, FileKey, Eye, Building2, AlertOctagon, Ban } from "lucide-react";
 
 const CONSENT_STATUS = {
   active: { color: "#059669", bg: "#ECFDF5", label: "Active" },
@@ -286,7 +275,7 @@ export function Part2DashboardPage() {
                       <span style={{ color: "var(--topbar-subtitle)" }}>· {entry.accessContext}</span>
                     </div>
                     <span style={{ color: entry.unauthorizedFlag ? "#DC2626" : "var(--topbar-subtitle)" }}>
-                      {new Date(entry.accessTimestamp).toLocaleTimeString()}
+                      {entry.accessTimestamp ? new Date(entry.accessTimestamp).toLocaleTimeString() : "—"}
                     </span>
                   </div>
                 ))}

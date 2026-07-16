@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   Users,
   TrendingUp,
-  Calendar,
   Send,
   Eye,
   CheckSquare,
@@ -24,7 +23,6 @@ import {
   Bell,
   GraduationCap,
   Search,
-  Filter,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────
@@ -91,7 +89,7 @@ const CHECKLIST_ITEMS: ChecklistItem[] = [
     id: "CHK-006", title: "Safety Training",
     description: "Complete CPR/First Aid certification, CPI training, and emergency response drills.",
     icon: Shield, iconColor: "#D97706", iconBg: "#FFFBEB",
-    completed: false, assignedDate: "2026-07-02", completedDate: null, assignedTo: "Lilian Ike", overdue: false,
+    completed: false, assignedDate: "2026-07-02", completedDate: null, assignedTo: "Demo Clinical Lead", overdue: false,
   },
   {
     id: "CHK-007", title: "Policy Acknowledgments",
@@ -109,24 +107,24 @@ const CHECKLIST_ITEMS: ChecklistItem[] = [
 
 const DEMO_NEW_HIRES: NewHire[] = [
   {
-    id: "NH-001", name: "Emily Watson", position: "Residential Counselor",
+    id: "NH-001", name: "Synthetic-Person-037 Watson", position: "Residential Counselor",
     startDate: "2026-07-01", progress: 75, status: "on-track",
-    completedItems: 6, totalItems: 8, email: "e.watson@amos-care.org", supervisor: "James Rodriguez",
+    completedItems: 6, totalItems: 8, email: "e.watson@example.invalid", supervisor: "James Rodriguez",
   },
   {
-    id: "NH-002", name: "Jordan Lee", position: "Case Manager",
+    id: "NH-002", name: "Synthetic-Person-019 Lee", position: "Case Manager",
     startDate: "2026-07-01", progress: 62, status: "on-track",
-    completedItems: 5, totalItems: 8, email: "j.lee@amos-care.org", supervisor: "Dr. Sarah Chen",
+    completedItems: 5, totalItems: 8, email: "j.lee@example.invalid", supervisor: "Dr. Synthetic Youth 035",
   },
   {
     id: "NH-003", name: "Taylor Brooks", position: "Mental Health Technician",
     startDate: "2026-07-08", progress: 25, status: "at-risk",
-    completedItems: 2, totalItems: 8, email: "t.brooks@amos-care.org", supervisor: "Lilian Ike",
+    completedItems: 2, totalItems: 8, email: "t.brooks@example.invalid", supervisor: "Demo Clinical Lead",
   },
   {
     id: "NH-004", name: "Alex Rivera", position: "Therapist",
     startDate: "2026-07-08", progress: 12, status: "at-risk",
-    completedItems: 1, totalItems: 8, email: "a.rivera@amos-care.org", supervisor: "Dr. Sarah Chen",
+    completedItems: 1, totalItems: 8, email: "a.rivera@example.invalid", supervisor: "Dr. Synthetic Youth 035",
   },
 ];
 

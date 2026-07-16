@@ -1,16 +1,168 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "../middleware";
-import { getDb } from "../queries/connection";
+import { createRouter, publicQuery, authedQuery, auditLog } from "../middleware";
+import { getDb, sqlite } from "../queries/connection";
 import {
   facilities, rooms, facilityPhases, bedCensusV2,
-  campusStages, stageAssignments, stageProgressionCriteria,
+  campusStages, stageAssignments, campusReadinessCriteria,
   censusAlerts, censusSnapshots,
 } from "@db/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
 
 // ─── M19: 48-Bed Facility Architecture Router ────────────────
 
+interface MedicationAdministrationRow {
+  id: string;
+  youth_id: string;
+  youth_name: string;
+  mrn: string;
+  medication_name: string;
+  generic_name: string | null;
+  dosage: string;
+  route: string;
+  frequency: string;
+  indication: string | null;
+  prescribing_provider: string | null;
+  prescription_date: string | null;
+  scheduled_time: string;
+  admin_date: string;
+  admin_time: string | null;
+  administered_by: string | null;
+  witnessed_by: string | null;
+  status: "scheduled" | "administered" | "refused" | "held" | "missed" | "not_available";
+  refusal_reason: string | null;
+  hold_reason: string | null;
+  is_prn: number;
+  prn_reason: string | null;
+  prn_effectiveness: string | null;
+  is_controlled: number;
+  controlled_count_before: number | null;
+  controlled_count_after: number | null;
+  waste_witnessed_by: string | null;
+  notes: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+function getMedicationAdministration(id: string): MedicationAdministrationRow {
+  const medication = sqlite.prepare(
+    "SELECT * FROM medication_administrations WHERE id = ?"
+  ).get(id) as MedicationAdministrationRow | undefined;
+
+  if (!medication) {
+    throw new Error("Medication administration record not found");
+  }
+  return medication;
+}
+
 export const m19Router = createRouter({
+  // ─── Medication Administration Record compatibility ─────
+  // These procedures expose the persisted M16 MAR records through the
+  // namespace retained by the current residential client.
+  listMedications: authedQuery.query(async () => (
+    sqlite.prepare(
+      "SELECT * FROM medication_administrations ORDER BY admin_date DESC, scheduled_time ASC, youth_name ASC"
+    ).all() as MedicationAdministrationRow[]
+  )),
+
+  medSummary: authedQuery.query(async () => {
+    const medications = sqlite.prepare(
+      "SELECT status, is_prn FROM medication_administrations"
+    ).all() as Array<Pick<MedicationAdministrationRow, "status" | "is_prn">>;
+
+    return {
+      scheduled: medications.filter((item) => item.status === "scheduled").length,
+      administered: medications.filter((item) => item.status === "administered").length,
+      refused: medications.filter((item) => item.status === "refused").length,
+      missed: medications.filter((item) => item.status === "missed").length,
+      prnGiven: medications.filter((item) => item.is_prn === 1 && item.status === "administered").length,
+    };
+  }),
+
+  administer: authedQuery
+    .input(z.object({
+      medicationId: z.string().min(1),
+      administeredBy: z.string().trim().min(1).max(200),
+      adminTime: z.string().trim().min(1).max(20),
+      notes: z.string().trim().max(4000).optional(),
+      witnessedBy: z.string().trim().min(1).max(200).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const actor = ctx.user.email;
+      const medication = getMedicationAdministration(input.medicationId);
+      if (medication.status !== "scheduled") {
+        throw new Error(`Medication cannot be administered from status ${medication.status}`);
+      }
+
+      sqlite.prepare(
+        "UPDATE medication_administrations SET status = 'administered', administered_by = ?, admin_time = ?, witnessed_by = ?, notes = ?, updated_at = ? WHERE id = ? AND status = 'scheduled'"
+      ).run(
+        input.administeredBy,
+        input.adminTime,
+        input.witnessedBy ?? null,
+        input.notes ?? null,
+        new Date().toISOString(),
+        input.medicationId,
+      );
+
+      auditLog({
+        action: "m19:administerMedication",
+        actor,
+        resource: `medication-administration:${input.medicationId}`,
+        details: `Administration recorded by ${input.administeredBy}`,
+      });
+      return { success: true, medication: getMedicationAdministration(input.medicationId) };
+    }),
+
+  recordRefusal: authedQuery
+    .input(z.object({
+      medicationId: z.string().min(1),
+      reason: z.string().trim().min(1).max(2000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const actor = ctx.user.email;
+      const medication = getMedicationAdministration(input.medicationId);
+      if (medication.status !== "scheduled") {
+        throw new Error(`Medication refusal cannot be recorded from status ${medication.status}`);
+      }
+
+      sqlite.prepare(
+        "UPDATE medication_administrations SET status = 'refused', refusal_reason = ?, administered_by = ?, updated_at = ? WHERE id = ? AND status = 'scheduled'"
+      ).run(input.reason, actor, new Date().toISOString(), input.medicationId);
+
+      auditLog({
+        action: "m19:recordMedicationRefusal",
+        actor,
+        resource: `medication-administration:${input.medicationId}`,
+        details: "Medication refusal recorded by authenticated team member",
+      });
+      return { success: true, medication: getMedicationAdministration(input.medicationId) };
+    }),
+
+  holdMedication: authedQuery
+    .input(z.object({
+      medicationId: z.string().min(1),
+      reason: z.string().trim().min(1).max(2000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const actor = ctx.user.email;
+      const medication = getMedicationAdministration(input.medicationId);
+      if (medication.status !== "scheduled") {
+        throw new Error(`Medication cannot be held from status ${medication.status}`);
+      }
+
+      sqlite.prepare(
+        "UPDATE medication_administrations SET status = 'held', hold_reason = ?, administered_by = ?, updated_at = ? WHERE id = ? AND status = 'scheduled'"
+      ).run(input.reason, actor, new Date().toISOString(), input.medicationId);
+
+      auditLog({
+        action: "m19:holdMedication",
+        actor,
+        resource: `medication-administration:${input.medicationId}`,
+        details: "Medication hold recorded by authenticated team member",
+      });
+      return { success: true, medication: getMedicationAdministration(input.medicationId) };
+    }),
+
   // ─── Facilities ──────────────────────────────────────────
   listFacilities: publicQuery.query(async () => {
     return getDb().select().from(facilities).orderBy(facilities.name);
@@ -275,9 +427,9 @@ export const m19Router = createRouter({
 
     // Seed Main Residence beds (4 beds)
     await getDb().insert(bedCensusV2).values([
-      { id: "bed-001", facilityId: "fac-001", roomId: "rm-001", bedNumber: "1", bedLabel: "MR-101-1", isOccupied: true, youthId: "youth-001", youthName: "Marcus Johnson", mrn: "MRN-2026-001", assignedDate: "2026-06-15" },
-      { id: "bed-002", facilityId: "fac-001", roomId: "rm-002", bedNumber: "1", bedLabel: "MR-102-1", isOccupied: true, youthId: "youth-002", youthName: "Aaliyah Williams", mrn: "MRN-2026-002", assignedDate: "2026-06-10" },
-      { id: "bed-003", facilityId: "fac-001", roomId: "rm-003", bedNumber: "1", bedLabel: "MR-103-1", isOccupied: true, youthId: "youth-003", youthName: "Ethan Brown", mrn: "MRN-2026-003", assignedDate: "2026-06-20" },
+      { id: "bed-001", facilityId: "fac-001", roomId: "rm-001", bedNumber: "1", bedLabel: "MR-101-1", isOccupied: true, youthId: "youth-001", youthName: "Synthetic Youth 001", mrn: "SYNTH-REC-001", assignedDate: "2026-06-15" },
+      { id: "bed-002", facilityId: "fac-001", roomId: "rm-002", bedNumber: "1", bedLabel: "MR-102-1", isOccupied: true, youthId: "youth-002", youthName: "Synthetic Youth 005", mrn: "SYNTH-REC-002", assignedDate: "2026-06-10" },
+      { id: "bed-003", facilityId: "fac-001", roomId: "rm-003", bedNumber: "1", bedLabel: "MR-103-1", isOccupied: true, youthId: "youth-003", youthName: "Synthetic Youth 014", mrn: "SYNTH-REC-003", assignedDate: "2026-06-20" },
       { id: "bed-004", facilityId: "fac-001", roomId: "rm-004", bedNumber: "1", bedLabel: "MR-104-1", isOccupied: false },
     ]).onConflictDoNothing();
 
@@ -295,8 +447,8 @@ export const m19Router = createRouter({
           bedLabel: `NF-${room.num}-${b}`,
           isOccupied: isOcc,
           youthId: isOcc ? `youth-00${bedNum - 1}` : null,
-          youthName: isOcc ? (bedNum === 5 ? "Sophia Davis" : bedNum === 6 ? "Liam Martinez" : bedNum === 7 ? "Isabella Garcia" : null) : null,
-          mrn: isOcc ? `MRN-2026-00${bedNum - 1}` : null,
+          youthName: isOcc ? (bedNum === 5 ? "Synthetic Youth 017" : bedNum === 6 ? "Synthetic Youth 040" : bedNum === 7 ? "Synthetic Youth 041" : null) : null,
+          mrn: isOcc ? `SYNTH-REC-00${bedNum - 1}` : null,
           assignedDate: isOcc ? "2026-06-25" : null,
         });
         bedNum++;
@@ -304,65 +456,47 @@ export const m19Router = createRouter({
     }
     await getDb().insert(bedCensusV2).values(nfBeds).onConflictDoNothing();
 
-    // Seed campus stages (3 stages linked to facilities)
-    await getDb().insert(campusStages).values([
-      { id: "stage-001", stageNumber: 1, name: "Stage 1 — Assessment & Stabilization", description: "Intake, comprehensive assessment, CANS scoring, safety planning. Average LOS: 14-30 days.", facilityId: "fac-001", licensedCapacity: 6, operationalCapacity: 4, currentCensus: 3, capacityAlertThreshold: 85, capacityCriticalThreshold: 95, status: "active", activationDate: "2024-01-15", awakeStaffRatio: "1:6", overnightStaffRatio: "1:12", requiresLPHAAssessment: true, minAssessmentHours: 24 },
-      { id: "stage-002", stageNumber: 2, name: "Stage 2 — Active Treatment", description: "Individual therapy, group sessions, skills training, family engagement. Average LOS: 60-90 days.", facilityId: "fac-001", licensedCapacity: 6, operationalCapacity: 4, currentCensus: 2, capacityAlertThreshold: 85, capacityCriticalThreshold: 95, status: "active", activationDate: "2024-01-15", awakeStaffRatio: "1:8", overnightStaffRatio: "1:16", requiresLPHAAssessment: false, minAssessmentHours: 0 },
-      { id: "stage-003", stageNumber: 3, name: "Stage 3 — Transition & Discharge Planning", description: "Discharge readiness, aftercare coordination, family conferencing, community reintegration. Average LOS: 14-21 days.", facilityId: "fac-002", licensedCapacity: 8, operationalCapacity: 8, currentCensus: 0, capacityAlertThreshold: 90, capacityCriticalThreshold: 95, status: "planned", activationDate: "2026-10-01", awakeStaffRatio: "1:8", overnightStaffRatio: "1:16", requiresLPHAAssessment: false, minAssessmentHours: 0 },
+    // Seed the canonical CTR-023 campus development pathway. Readiness values
+    // are fictional demonstration references, not claims about live facilities.
+    const controlledCampusStages = [
+      { id: "campus-stage-1", stageNumber: 1, name: "Stage 1 — Main Residential Unit", description: "Fictional demonstration reference: GRO main facility; 16 controlled beds (2×4 upstairs, 2×4 downstairs).", facilityId: "fac-001", licensedCapacity: 16, operationalCapacity: 16, currentCensus: 6, capacityAlertThreshold: 90, capacityCriticalThreshold: 95, status: "operational" as const, activationDate: "2024-01-15", awakeStaffRatio: "1:8", overnightStaffRatio: "1:16", requiresLPHAAssessment: false, minAssessmentHours: 0 },
+      { id: "campus-stage-2", stageNumber: 2, name: "Stage 2 — Emergency Care Services", description: "Fictional demonstration reference: Emergency Care Services crisis stabilization Profit Center; controlled capacity 16 beds.", facilityId: "fac-003", licensedCapacity: 16, operationalCapacity: 0, currentCensus: 0, capacityAlertThreshold: 90, capacityCriticalThreshold: 95, status: "licensing_in_progress" as const, activationDate: null, awakeStaffRatio: "1:8", overnightStaffRatio: "1:16", requiresLPHAAssessment: false, minAssessmentHours: 0 },
+      { id: "campus-stage-3", stageNumber: 3, name: "Stage 3 — Cypress Campus", description: "Fictional demonstration reference: 16 residential beds plus BHC, GAD, Executive Office, and Education on 1.7 acres.", facilityId: "fac-004", licensedCapacity: 16, operationalCapacity: 0, currentCensus: 0, capacityAlertThreshold: 90, capacityCriticalThreshold: 95, status: "capital_planning" as const, activationDate: null, awakeStaffRatio: "1:8", overnightStaffRatio: "1:16", requiresLPHAAssessment: false, minAssessmentHours: 0 },
+    ];
+    for (const stage of controlledCampusStages) {
+      await getDb().insert(campusStages).values(stage).onConflictDoUpdate({
+        target: campusStages.id,
+        set: stage,
+      });
+    }
+
+    await getDb().insert(campusReadinessCriteria).values([
+      { id: "ready-001", stageId: "campus-stage-1", criterionNumber: 1, criterionName: "Operational capacity control", description: "Prototype registry records the controlled 16-bed Main Residential Unit capacity and operational readiness reference.", requiredForReadiness: true, evidenceSource: "CTR-023 / Campus readiness register", targetState: "Operational" },
+      { id: "ready-002", stageId: "campus-stage-2", criterionNumber: 1, criterionName: "Licensing readiness", description: "Prototype registry records Emergency Care Services as licensing in progress; no operational capacity is exposed.", requiredForReadiness: true, evidenceSource: "CTR-023 / Licensing readiness register", targetState: "License approved before activation" },
+      { id: "ready-003", stageId: "campus-stage-3", criterionNumber: 1, criterionName: "Capital readiness", description: "Prototype registry records Cypress Campus as capital planning; no operational capacity is exposed.", requiredForReadiness: true, evidenceSource: "CTR-023 / Capital planning register", targetState: "Capital and site readiness accepted" },
     ]).onConflictDoNothing();
 
-    // Seed progression criteria for Stage 1
-    await getDb().insert(stageProgressionCriteria).values([
-      { id: "crit-001", stageId: "stage-001", criterionNumber: 1, criterionName: "CANS Assessment Complete", description: "Full CANS assessment completed within 14 days of admission", requiredForProgression: true, assessmentTool: "CANS", targetScore: "All domains scored" },
-      { id: "crit-002", stageId: "stage-001", criterionNumber: 2, criterionName: "Safety Plan Established", description: "Individualized safety plan developed, documented, and reviewed with youth and guardian", requiredForProgression: true, assessmentTool: "Clinical Judgment", targetScore: "Plan approved by LPHA" },
-      { id: "crit-003", stageId: "stage-001", criterionNumber: 3, criterionName: "Risk Stabilization", description: "Suicide/self-harm risk reduced to low or manageable level per clinical assessment", requiredForProgression: true, assessmentTool: "CANS Risk Domain", targetScore: "Score <= 2" },
-      { id: "crit-004", stageId: "stage-001", criterionNumber: 4, criterionName: "Guardian Engagement", description: "Guardian has participated in at least 1 family session or care planning meeting", requiredForProgression: true, assessmentTool: "Clinical Documentation", targetScore: "Documented contact" },
-      { id: "crit-005", stageId: "stage-001", criterionNumber: 5, criterionName: "Treatment Plan Drafted", description: "Initial treatment plan with measurable goals drafted and reviewed by treatment team", requiredForProgression: true, assessmentTool: "Treatment Plan", targetScore: "Goals SMART-formatted" },
-      { id: "crit-006", stageId: "stage-001", criterionNumber: 6, criterionName: "Medication Stabilization", description: "If on psychotropic medication, regimen stabilized with no PRN events in 72 hours", requiredForProgression: false, assessmentTool: "MAR Review", targetScore: "72-hour stability" },
-    ]).onConflictDoNothing();
-
-    // Seed progression criteria for Stage 2
-    await getDb().insert(stageProgressionCriteria).values([
-      { id: "crit-007", stageId: "stage-002", criterionNumber: 1, criterionName: "Therapy Engagement", description: "Youth actively participating in individual and group therapy sessions", requiredForProgression: true, assessmentTool: "Session Attendance", targetScore: ">= 80% attendance" },
-      { id: "crit-008", stageId: "stage-002", criterionNumber: 2, criterionName: "Skills Acquisition", description: "Measurable progress on at least 2 treatment plan goals as documented in progress notes", requiredForProgression: true, assessmentTool: "Goal Attainment Scale", targetScore: "Score >= 3" },
-      { id: "crit-009", stageId: "stage-002", criterionNumber: 3, criterionName: "Behavioral Stability", description: "No restrictive interventions in past 14 days; behavioral observations show consistent progress", requiredForProgression: true, assessmentTool: "Behavioral Tracking", targetScore: "14-day clean period" },
-      { id: "crit-010", stageId: "stage-002", criterionNumber: 4, criterionName: "Family Engagement", description: "Family has participated in at least 2 family therapy sessions or care conferences", requiredForProgression: true, assessmentTool: "Family Contact Log", targetScore: "2+ documented contacts" },
-      { id: "crit-011", stageId: "stage-002", criterionNumber: 5, criterionName: "Discharge Readiness Assessment", description: "LPHA has completed discharge readiness assessment with positive recommendation", requiredForProgression: true, assessmentTool: "LPHA Assessment", targetScore: "Ready for transition" },
-    ]).onConflictDoNothing();
-
-    // Seed progression criteria for Stage 3
-    await getDb().insert(stageProgressionCriteria).values([
-      { id: "crit-012", stageId: "stage-003", criterionNumber: 1, criterionName: "Aftercare Plan Finalized", description: "Comprehensive aftercare plan with outpatient appointments, school reintegration, and community supports", requiredForProgression: true, assessmentTool: "Aftercare Plan", targetScore: "All appointments scheduled" },
-      { id: "crit-013", stageId: "stage-003", criterionNumber: 2, criterionName: "Guardian Capacity", description: "Guardian demonstrates ability to manage youth's needs post-discharge with safety plan understanding", requiredForProgression: true, assessmentTool: "Guardian Assessment", targetScore: "Competency verified" },
-      { id: "crit-014", stageId: "stage-003", criterionNumber: 3, criterionName: "Community Linkages", description: "All community services (outpatient therapy, school, medical) confirmed active with first appointments within 7 days", requiredForProgression: true, assessmentTool: "Referral Tracking", targetScore: "Appointments within 7 days" },
-      { id: "crit-015", stageId: "stage-003", criterionNumber: 4, criterionName: "Youth Self-Management", description: "Youth demonstrates coping skills, medication management understanding, and help-seeking behaviors", requiredForProgression: true, assessmentTool: "Youth Interview", targetScore: "Competency demonstrated" },
-    ]).onConflictDoNothing();
-
-    // Seed stage assignments for current residents
-    await getDb().insert(stageAssignments).values([
-      { id: "sa-001", youthId: "youth-001", youthName: "Marcus Johnson", mrn: "MRN-2026-001", toStageId: "stage-001", assignmentType: "initial", assignedBy: "Dr. Hall", assignedById: "user-001", assignmentRationale: "New admission — requires comprehensive assessment and stabilization", projectedDurationDays: 21, bedAssignment: "MR-101-1", completionOutcome: "ongoing" },
-      { id: "sa-002", youthId: "youth-002", youthName: "Aaliyah Williams", mrn: "MRN-2026-002", toStageId: "stage-002", assignmentType: "progression", assignedBy: "Lilian Ike", assignedById: "user-002", assignmentRationale: "Completed Stage 1 criteria — CANS complete, safety plan established, risk stabilized", projectedDurationDays: 75, bedAssignment: "MR-102-1", completionOutcome: "ongoing" },
-      { id: "sa-003", youthId: "youth-003", youthName: "Ethan Brown", mrn: "MRN-2026-003", toStageId: "stage-001", assignmentType: "initial", assignedBy: "Dr. Hall", assignedById: "user-001", assignmentRationale: "New admission — acute behavioral concerns, requires close monitoring", projectedDurationDays: 30, bedAssignment: "MR-103-1", completionOutcome: "ongoing" },
-    ]).onConflictDoNothing();
-
-    return { success: true, message: "48-bed facility + 3-stage campus model seeded" };
+    return { success: true, message: "Fictional 48-bed three-stage campus development pathway seeded" };
   }),
 
   // ══════════════════════════════════════════════════════════════
-  // CAMPUS STAGES (T-002)
+  // CAMPUS DEVELOPMENT STAGES (CTR-023)
   // ══════════════════════════════════════════════════════════════
 
   // ─── Campus Stages CRUD ──────────────────────────────────
 
   listCampusStages: publicQuery
-    .input(z.object({ facilityId: z.string().optional(), status: z.string().optional() }).optional())
+    .input(z.object({
+      facilityId: z.string().optional(),
+      status: z.enum(["operational", "licensing_in_progress", "capital_planning", "paused", "closed"]).optional(),
+    }).optional())
     .query(async ({ input }) => {
       let query = getDb().select().from(campusStages).orderBy(campusStages.stageNumber);
       if (input?.facilityId) {
         query = query.where(eq(campusStages.facilityId, input.facilityId)) as typeof query;
       }
       if (input?.status) {
-        query = query.where(eq(campusStages.status, input.status as any)) as typeof query;
+        query = query.where(eq(campusStages.status, input.status)) as typeof query;
       }
       return query;
     }),
@@ -385,12 +519,10 @@ export const m19Router = createRouter({
       operationalCapacity: z.number().default(16),
       capacityAlertThreshold: z.number().default(90),
       capacityCriticalThreshold: z.number().default(95),
-      status: z.enum(["planned", "active", "paused", "closed"]).default("planned"),
+      status: z.enum(["operational", "licensing_in_progress", "capital_planning", "paused", "closed"]).default("capital_planning"),
       activationDate: z.string().optional(),
       awakeStaffRatio: z.string().default("1:8"),
       overnightStaffRatio: z.string().default("1:16"),
-      requiresLPHAAssessment: z.boolean().default(false),
-      minAssessmentHours: z.number().default(0),
     }))
     .mutation(async ({ input }) => {
       await getDb().insert(campusStages).values({ ...input, currentCensus: 0 });
@@ -405,7 +537,7 @@ export const m19Router = createRouter({
       operationalCapacity: z.number().optional(),
       capacityAlertThreshold: z.number().optional(),
       capacityCriticalThreshold: z.number().optional(),
-      status: z.enum(["planned", "active", "paused", "closed"]).optional(),
+      status: z.enum(["operational", "licensing_in_progress", "capital_planning", "paused", "closed"]).optional(),
       currentCensus: z.number().optional(),
       awakeStaffRatio: z.string().optional(),
       overnightStaffRatio: z.string().optional(),
@@ -420,7 +552,7 @@ export const m19Router = createRouter({
     .input(z.object({ id: z.string(), activatedBy: z.string() }))
     .mutation(async ({ input }) => {
       await getDb().update(campusStages).set({
-        status: "active",
+        status: "operational",
         activationDate: new Date().toISOString(),
       }).where(eq(campusStages.id, input.id));
       return { success: true };
@@ -479,7 +611,7 @@ export const m19Router = createRouter({
       const activeAssignments = await getDb().select().from(stageAssignments)
         .where(and(
           eq(stageAssignments.toStageId, stage.id),
-          eq(stageAssignments.completionOutcome as any, "ongoing" as any)
+          eq(stageAssignments.completionOutcome, "ongoing")
         ));
       const newCensus = activeAssignments.length;
       await getDb().update(campusStages).set({ currentCensus: newCensus }).where(eq(campusStages.id, stage.id));
@@ -518,13 +650,13 @@ export const m19Router = createRouter({
     return { success: true };
   }),
 
-  // ─── Stage Assignments ───────────────────────────────────
+  // ─── Campus Placements ───────────────────────────────────
 
-  listStageAssignments: publicQuery
+  listCampusPlacements: publicQuery
     .input(z.object({
       stageId: z.string().optional(),
       youthId: z.string().optional(),
-      status: z.enum(["ongoing", "progressed", "regressed", "discharged", "transferred"]).optional(),
+      status: z.enum(["ongoing", "completed", "discharged", "transferred"]).optional(),
     }).optional())
     .query(async ({ input }) => {
       let query = getDb().select().from(stageAssignments).orderBy(desc(stageAssignments.createdAt));
@@ -535,19 +667,19 @@ export const m19Router = createRouter({
         query = query.where(eq(stageAssignments.youthId, input.youthId)) as typeof query;
       }
       if (input?.status) {
-        query = query.where(eq(stageAssignments.completionOutcome as any, input.status as any)) as typeof query;
+        query = query.where(eq(stageAssignments.completionOutcome, input.status)) as typeof query;
       }
       return query;
     }),
 
-  assignToStage: publicQuery
+  assignCampusPlacement: publicQuery
     .input(z.object({
       youthId: z.string(),
       youthName: z.string(),
       mrn: z.string(),
       toStageId: z.string(),
       fromStageId: z.string().optional(),
-      assignmentType: z.enum(["initial", "progression", "regression", "transfer", "discharge"]).default("initial"),
+      assignmentType: z.enum(["placement", "transfer", "discharge"]).default("placement"),
       assignedBy: z.string(),
       assignedById: z.string().optional(),
       assignmentRationale: z.string().optional(),
@@ -572,10 +704,10 @@ export const m19Router = createRouter({
       return { success: true, assignmentId: id };
     }),
 
-  completeStageAssignment: publicQuery
+  completeCampusPlacement: publicQuery
     .input(z.object({
       assignmentId: z.string(),
-      completionOutcome: z.enum(["progressed", "regressed", "discharged", "transferred"]),
+      completionOutcome: z.enum(["completed", "discharged", "transferred"]),
       completedDate: z.string(),
     }))
     .mutation(async ({ input }) => {
@@ -597,14 +729,14 @@ export const m19Router = createRouter({
       return { success: true };
     }),
 
-  // ─── Progression Criteria ────────────────────────────────
+  // ─── Campus Development Readiness Criteria ───────────────
 
-  listProgressionCriteria: publicQuery
+  listCampusReadinessCriteria: publicQuery
     .input(z.object({ stageId: z.string() }))
     .query(async ({ input }) => {
-      return getDb().select().from(stageProgressionCriteria)
-        .where(eq(stageProgressionCriteria.stageId, input.stageId))
-        .orderBy(stageProgressionCriteria.criterionNumber);
+      return getDb().select().from(campusReadinessCriteria)
+        .where(eq(campusReadinessCriteria.stageId, input.stageId))
+        .orderBy(campusReadinessCriteria.criterionNumber);
     }),
 
   // ─── Census Alerts ───────────────────────────────────────
@@ -613,7 +745,7 @@ export const m19Router = createRouter({
     .input(z.object({
       facilityId: z.string().optional(),
       stageId: z.string().optional(),
-      severity: z.string().optional(),
+      severity: z.enum(["low", "moderate", "high", "critical"]).optional(),
       acknowledged: z.boolean().optional(),
     }).optional())
     .query(async ({ input }) => {
@@ -625,7 +757,7 @@ export const m19Router = createRouter({
         query = query.where(eq(censusAlerts.stageId, input.stageId)) as typeof query;
       }
       if (input?.severity) {
-        query = query.where(eq(censusAlerts.severity, input.severity as any)) as typeof query;
+        query = query.where(eq(censusAlerts.severity, input.severity)) as typeof query;
       }
       return query;
     }),

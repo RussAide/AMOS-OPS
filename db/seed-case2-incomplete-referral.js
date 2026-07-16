@@ -8,7 +8,18 @@ import { randomUUID } from "crypto";
 
 // ─── Open Database ─────────────────────────────────────────────
 
-const dbPath = process.env.DB_PATH || "/mnt/agents/output/amos-ops-extracted/codebase/amos-ops.db";
+const dbPath = process.env.DB_PATH || process.env.DATABASE_PATH || "amos-ops.db";
+if (
+  process.env.NODE_ENV === "production" ||
+  process.env.AMOS_SEED_MODE !== "synthetic" ||
+  process.env.APP_ENV !== "demo" ||
+  process.env.AMOS_RUNTIME_MODE !== "demo" ||
+  !/(?:^|[._/-])(demo|eval|evaluation|synthetic|test)(?:[._/-]|$)/i.test(dbPath)
+) {
+  throw new Error(
+    "[SeedGuard] Demo runtime mode and an evaluation-named database are required",
+  );
+}
 const sqlite = new Database(dbPath);
 sqlite.pragma("journal_mode = WAL");
 
@@ -28,9 +39,9 @@ const daysFrom = (n) => {
 };
 
 // ─── Actor IDs ─────────────────────────────────────────────────
-const ACTOR_INTAKE_COORD = "pilot-intake-coordinator@adolbi.com";
-const ACTOR_SYSTEM = "system@adolbi.com";
-const ACTOR_GUARDIAN = "angela.thompson@email.com";
+const ACTOR_INTAKE_COORD = "pilot-intake-coordinator@amos-ops.invalid";
+const ACTOR_SYSTEM = "system@amos-ops.invalid";
+const ACTOR_GUARDIAN = "guardian.case2@example.invalid";
 
 // ═══════════════════════════════════════════════════════════════
 // STEP 1: Create Patient B — Youth Profile
@@ -39,9 +50,9 @@ const ACTOR_GUARDIAN = "angela.thompson@email.com";
 console.log("[Case2] Step 1: Creating Patient B youth profile...");
 
 const patientBId = randomUUID();
-const patientBMRN = "MRN-C2-20250705-001";
-const patientBName = "Maya Thompson";
-const dob = "2011-07-05";
+const patientBMRN = "SYNTH-CASE2-RECORD-001";
+const patientBName = "Synthetic Youth Case-002";
+const dob = "2011-01-01";
 
 // Check if table exists, create if not
 sqlite.exec(`
@@ -117,11 +128,11 @@ sqlite.prepare(`
     created_at, updated_at, created_by
   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `).run(
-  patientBId, patientBMRN, "Maya", "Thompson", dob, 14, "female",
-  "Angela Thompson", "Mother", "(512) 555-0142", "angela.thompson@email.com",
-  "Marcus Thompson", "Father", "(512) 555-0143",
-  "school", "Austin Independent School District - Counseling Department", "(512) 555-0200",
-  "Ms. Jennifer Walsh, School Counselor", daysAgo(10),
+  patientBId, patientBMRN, "Synthetic", "Case-002", dob, 14, "female",
+  "Synthetic Guardian 15", "Mother", "+1-555-0101", "guardian.case2@example.invalid",
+  "Synthetic Guardian 14", "Father", "+1-555-0102",
+  "school", "Synthetic School Referral Office", "+1-555-0103",
+  "Synthetic School Counselor", daysAgo(10),
   "referral_pending", "not_yet_determined",
   `[PILOT CASE 2] 14yo female presenting with behavioral challenges including: defiance at school, verbal aggression toward peers, declining academic performance over past semester, two disciplinary referrals in past 60 days. School counselor referred for behavioral health evaluation.\n\nPresenting concerns: Oppositional behavior, emotional dysregulation, peer conflict.\nNo prior psychiatric hospitalizations. No current medications.\nFamily history: Parents divorced, joint custody, primarily resides with mother.`,
   daysAgo(10), daysAgo(10), ACTOR_INTAKE_COORD
@@ -205,7 +216,7 @@ sqlite.prepare(`
     { name: "clinical_criteria_checklist", required: true, description: "Clinical criteria checklist for admission" }
   ]),
   JSON.stringify([
-    { condition: "unscreened_over_48h", triggerDescription: ">48 hours unscreened", target: "supervisor", maxHours: 48 },
+    { condition: "unscreened_over_48h", triggerDescription: ">48 hours unscreened", target: "clinical-supervisor", maxHours: 48 },
     { condition: "clinical_risk_detected", triggerDescription: "Clinical risk detected during screening", target: "Treatment Director" }
   ]),
   "patient", daysAgo(10)
@@ -612,7 +623,7 @@ console.log("══════════════════════�
 console.log("  PILOT CASE 2: INCOMPLETE REFERRAL — SEED COMPLETE");
 console.log("═══════════════════════════════════════════════════════════════");
 console.log("");
-console.log("Patient B: Maya Thompson (14yo female, behavioral)");
+console.log("Patient B: Synthetic Youth Case-002 (14yo female, behavioral)");
 console.log(`  MRN:        ${patientBMRN}`);
 console.log(`  Youth ID:   ${patientBId}`);
 console.log(`  Intake ID:  ${intakeId}`);

@@ -1,6 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/providers/trpc";
-import { TrendingUp, AlertTriangle, Calendar, Zap, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
+import { TrendingUp, AlertTriangle, Calendar, Zap } from "lucide-react";
 
 export function PredictiveAnalytics() {
   const { data: trends } = trpc.m20.getAdmissionTrends.useQuery();

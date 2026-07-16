@@ -6,9 +6,38 @@ import { randomUUID } from "crypto";
 // ─── Mock Microsoft Graph Client ───────────────────────────
 // Simulates Entra ID responses for demo/pilot mode
 
-function mockGraphUsers(): any[] {
+interface MockGraphUser {
+  id: string;
+  displayName: string;
+  givenName: string;
+  surname: string;
+  userPrincipalName: string;
+  mail: string;
+  jobTitle: string;
+  department: string;
+  accountEnabled: boolean;
+}
+
+interface MockGraphGroup {
+  id: string;
+  displayName: string;
+  description: string;
+  groupType: string;
+  securityEnabled: boolean;
+  mailEnabled: boolean;
+  memberCount: number;
+}
+
+interface CountRow {
+  c: number;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function mockGraphUsers(): MockGraphUser[] {
   const depts = ["Executive", "Clinical", "HR", "Compliance", "Operations", "GRO Residential", "IT"];
-  const roles = ["administrator", "hr-director", "clinical-director", "supervisor", "qa-officer", "operations-manager", "training-coordinator"];
   const firstNames = ["Patricia", "James", "Maria", "Robert", "Linda", "William", "Barbara", "Michael", "Susan", "David"];
   const lastNames = ["Anderson", "Martinez", "Thompson", "Robinson", "Clark", "Rodriguez", "Lewis", "Lee", "Walker", "Hall"];
   return Array.from({ length: 12 }, (_, i) => ({
@@ -16,15 +45,15 @@ function mockGraphUsers(): any[] {
     displayName: `${firstNames[i]} ${lastNames[i]}`,
     givenName: firstNames[i],
     surname: lastNames[i],
-    userPrincipalName: `${firstNames[i].toLowerCase()}.${lastNames[i].toLowerCase()}@adolbi.com`,
-    mail: `${firstNames[i].toLowerCase()}.${lastNames[i].toLowerCase()}@adolbi.com`,
+    userPrincipalName: `${firstNames[i].toLowerCase()}.${lastNames[i].toLowerCase()}@amos-ops.invalid`,
+    mail: `${firstNames[i].toLowerCase()}.${lastNames[i].toLowerCase()}@amos-ops.invalid`,
     jobTitle: ["Program Director", "HR Director", "Clinical Director", "Residential Supervisor", "QA Officer", "Operations Manager", "Training Coordinator", "Clinical Supervisor", "Compliance Officer", "IT Administrator", "Case Manager", "Billing Coordinator"][i],
     department: depts[i % depts.length],
     accountEnabled: true,
   }));
 }
 
-function mockGraphGroups(): any[] {
+function mockGraphGroups(): MockGraphGroup[] {
   return [
     { id: randomUUID(), displayName: "AMOS-OPS-Administrators", description: "Full system access", groupType: "Security", securityEnabled: true, mailEnabled: false, memberCount: 2 },
     { id: randomUUID(), displayName: "AMOS-OPS-HR-Directors", description: "HR lifecycle management", groupType: "Security", securityEnabled: true, mailEnabled: false, memberCount: 3 },
@@ -39,9 +68,9 @@ export const msGraphRouter = createRouter({
   // ─── Status ────────────────────────────────────────────────
 
   status: publicQuery.query(async () => {
-    const userCount = (sqlite.prepare("SELECT COUNT(*) as c FROM ms_graph_users").get() as any)?.c ?? 0;
-    const groupCount = (sqlite.prepare("SELECT COUNT(*) as c FROM ms_graph_groups").get() as any)?.c ?? 0;
-    const lastSync = sqlite.prepare("SELECT * FROM ms_graph_sync_log ORDER BY started_at DESC LIMIT 1").get() as any;
+    const userCount = (sqlite.prepare("SELECT COUNT(*) as c FROM ms_graph_users").get() as CountRow | undefined)?.c ?? 0;
+    const groupCount = (sqlite.prepare("SELECT COUNT(*) as c FROM ms_graph_groups").get() as CountRow | undefined)?.c ?? 0;
+    const lastSync = sqlite.prepare("SELECT * FROM ms_graph_sync_log ORDER BY started_at DESC LIMIT 1").get();
     return {
       connected: true,
       tenant: "adolbi.onmicrosoft.com",
@@ -79,8 +108,8 @@ export const msGraphRouter = createRouter({
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', datetime('now'))`
               ).run(randomUUID(), u.id, u.displayName, u.givenName, u.surname, u.userPrincipalName, u.mail, u.jobTitle, u.department, u.accountEnabled ? 1 : 0);
               usersSynced++;
-            } catch (e: any) {
-              errors.push(`User ${u.displayName}: ${e.message}`);
+            } catch (error: unknown) {
+              errors.push(`User ${u.displayName}: ${errorMessage(error)}`);
             }
           }
         }
@@ -95,8 +124,8 @@ export const msGraphRouter = createRouter({
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
               ).run(randomUUID(), g.id, g.displayName, g.description, g.groupType, g.securityEnabled ? 1 : 0, g.mailEnabled ? 1 : 0, g.memberCount);
               groupsSynced++;
-            } catch (e: any) {
-              errors.push(`Group ${g.displayName}: ${e.message}`);
+            } catch (error: unknown) {
+              errors.push(`Group ${g.displayName}: ${errorMessage(error)}`);
             }
           }
         }
@@ -105,11 +134,11 @@ export const msGraphRouter = createRouter({
           "UPDATE ms_graph_sync_log SET status = ?, users_synced = ?, groups_synced = ?, errors_json = ?, completed_at = datetime('now') WHERE id = ?"
         ).run(errors.length > 0 ? "partial" : "completed", usersSynced, groupsSynced, errors.length > 0 ? JSON.stringify(errors) : null, logId);
 
-      } catch (e: any) {
+      } catch (error: unknown) {
         sqlite.prepare(
           "UPDATE ms_graph_sync_log SET status = 'failed', errors_json = ?, completed_at = datetime('now') WHERE id = ?"
-        ).run(JSON.stringify([e.message]), logId);
-        throw e;
+        ).run(JSON.stringify([errorMessage(error)]), logId);
+        throw error;
       }
 
       return { usersSynced, groupsSynced, errors: errors.length > 0 ? errors : undefined };
@@ -121,7 +150,7 @@ export const msGraphRouter = createRouter({
     .input(z.object({ department: z.string().optional(), status: z.string().optional() }).optional())
     .query(async ({ input }) => {
       let sql = "SELECT * FROM ms_graph_users WHERE 1=1";
-      const params: any[] = [];
+      const params: unknown[] = [];
       if (input?.department) { sql += " AND department = ?"; params.push(input.department); }
       if (input?.status) { sql += " AND sync_status = ?"; params.push(input.status); }
       sql += " ORDER BY display_name";

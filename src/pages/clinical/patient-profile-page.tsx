@@ -1,11 +1,59 @@
 import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { trpc } from "@/providers/trpc";
 import {
-  HeartPulse, ArrowLeft, Calendar, Phone, Mail, MapPin,
-  User, ShieldAlert, FileText, Plus, ChevronRight, X,
-  CheckCircle, Clock, AlertTriangle
+  ArrowLeft, ArrowRight, Calendar, Phone, Mail, MapPin,
+  User, ShieldAlert, FileText, Plus, X,
+  CheckCircle, Clock
 } from "lucide-react";
+
+export const M41C_PATIENT_PROFILE_OUTCOME_TAB_MODE =
+  "metadata_only_quarantine" as const;
+export const M41C_PATIENT_PROFILE_OUTCOME_TAB_TEST_ID =
+  "m41c-patient-profile-outcome-governance" as const;
+
+export function PatientProfileOutcomeGovernancePanel() {
+  return (
+    <section
+      className="overflow-hidden rounded-xl border border-amber-200 bg-white shadow-sm"
+      data-mode={M41C_PATIENT_PROFILE_OUTCOME_TAB_MODE}
+      data-testid={M41C_PATIENT_PROFILE_OUTCOME_TAB_TEST_ID}
+    >
+      <div className="border-b border-amber-200 bg-gradient-to-r from-amber-50 via-white to-teal-50 p-5">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-amber-800">
+          <ShieldAlert aria-hidden="true" className="size-4" />
+          Governed evaluation boundary
+        </div>
+        <h3 className="mt-3 text-lg font-bold text-slate-950">
+          Outcome Measure Governance
+        </h3>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+          The inherited patient-profile execution display is unavailable.
+          Authority, licensing, version, competency, and human-review controls
+          are evaluated without protected instrument content, patient records,
+          or computed clinical outputs.
+        </p>
+      </div>
+      <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-teal-950">
+            Synthetic evaluation only
+          </p>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            No live clinical writes are available from this profile tab.
+          </p>
+        </div>
+        <Link
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-teal-800 px-5 py-3 text-sm font-semibold text-white transition hover:bg-teal-900"
+          to="/clinical/intelligence-fabric"
+        >
+          Open Clinical Intelligence Fabric
+          <ArrowRight aria-hidden="true" className="size-4" />
+        </Link>
+      </div>
+    </section>
+  );
+}
 
 const STATUS_COLORS: Record<string, string> = {
   intake: "#2563EB", active: "#059669", hold: "#D97706",
@@ -15,11 +63,8 @@ const PLAN_STATUS_COLORS: Record<string, string> = {
   draft: "#6B7280", active: "#059669", under_review: "#D97706",
   completed: "#2563EB", discontinued: "#DC2626",
 };
-const SESSION_TYPE_ICONS: Record<string, typeof HeartPulse> = {
-  individual: User, group: User, family: User, couples: User,
-  intake: FileText, crisis: ShieldAlert, telehealth: Phone,
-};
 
+const DEMO_REFERENCE_DATE_MS = Date.UTC(2026, 6, 13);
 export function PatientProfilePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -36,7 +81,6 @@ export function PatientProfilePage() {
   const dischargePatient = trpc.bhc.dischargePatient.useMutation({ onSuccess: () => utils.bhc.getPatient.invalidate({ id: patientId }) });
   const createPlan = trpc.bhc.createTreatmentPlan.useMutation({ onSuccess: () => { utils.bhc.getPatient.invalidate({ id: patientId }); setShowNewPlan(false); } });
   const createSession = trpc.bhc.createSession.useMutation({ onSuccess: () => { utils.bhc.getPatient.invalidate({ id: patientId }); setShowNewSession(false); } });
-  const createOutcome = trpc.bhc.createOutcomeMeasure.useMutation({ onSuccess: () => utils.bhc.getPatient.invalidate({ id: patientId }) });
 
   if (isLoading) {
     return (
@@ -50,8 +94,8 @@ export function PatientProfilePage() {
     );
   }
 
-  const { patient, treatmentPlans, recentSessions, outcomeMeasures } = data;
-  const age = Math.floor((Date.now() - new Date(patient.dateOfBirth).getTime()) / 31557600000);
+  const { patient, treatmentPlans, recentSessions } = data;
+  const age = Math.floor((DEMO_REFERENCE_DATE_MS - new Date(patient.dateOfBirth).getTime()) / 31557600000);
 
   // Risk assessment from latest session
   const latestSession = recentSessions[0];
@@ -68,7 +112,7 @@ export function PatientProfilePage() {
     { key: "overview" as const, label: "Overview" },
     { key: "plans" as const, label: `Treatment Plans (${treatmentPlans.length})` },
     { key: "sessions" as const, label: `Sessions (${recentSessions.length})` },
-    { key: "outcomes" as const, label: `Outcomes (${outcomeMeasures.length})` },
+    { key: "outcomes" as const, label: "Outcome Governance" },
   ];
 
   return (
@@ -344,69 +388,7 @@ export function PatientProfilePage() {
         )}
 
         {activeTab === "outcomes" && (
-          <div>
-            <h3 className="text-[14px] font-semibold mb-4" style={{ color: "var(--topbar-title)" }}>Outcome Measures</h3>
-            {outcomeMeasures.length === 0 ? (
-              <p className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>No outcome measures recorded</p>
-            ) : (
-              <div className="space-y-4">
-                {Object.entries(outcomeMeasures.reduce((acc: Record<string, typeof outcomeMeasures>, o) => {
-                  if (!acc[o.measureType]) acc[o.measureType] = [];
-                  acc[o.measureType].push(o);
-                  return acc;
-                }, {})).map(([measureType, measures]) => (
-                  <div key={measureType} className="rounded-lg border p-4" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)" }}>
-                    <h4 className="text-[14px] font-semibold mb-3" style={{ color: "var(--topbar-title)" }}>{measureType}</h4>
-                    {/* Mini chart bar */}
-                    <div className="flex items-end gap-1 h-16 mb-3">
-                      {measures.sort((a, b) => new Date(a.administeredAt).getTime() - new Date(b.administeredAt).getTime()).map((m, i) => (
-                        <div key={m.id} className="flex-1 flex flex-col items-center gap-0.5">
-                          <div
-                            className="w-full rounded-t"
-                            style={{
-                              height: `${(m.score / m.maxScore) * 48}px`,
-                              backgroundColor: m.score > m.maxScore * 0.7 ? "#DC2626" : m.score > m.maxScore * 0.4 ? "#D97706" : "#059669",
-                              minHeight: "4px",
-                            }}
-                          />
-                          <span className="text-[9px]" style={{ color: "var(--topbar-subtitle)" }}>
-                            {new Date(m.administeredAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    {/* Table */}
-                    <table className="w-full text-[12px]">
-                      <thead>
-                        <tr style={{ borderBottom: `1px solid var(--card-border)` }}>
-                          <th className="text-left py-1" style={{ color: "var(--topbar-subtitle)" }}>Date</th>
-                          <th className="text-left py-1" style={{ color: "var(--topbar-subtitle)" }}>Score</th>
-                          <th className="text-left py-1" style={{ color: "var(--topbar-subtitle)" }}>Severity</th>
-                          <th className="text-left py-1" style={{ color: "var(--topbar-subtitle)" }}>Administered By</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {measures.sort((a, b) => new Date(b.administeredAt).getTime() - new Date(a.administeredAt).getTime()).map((m) => (
-                          <tr key={m.id} style={{ borderBottom: `1px solid var(--card-border)` }}>
-                            <td className="py-1" style={{ color: "var(--topbar-title)" }}>{new Date(m.administeredAt).toLocaleDateString()}</td>
-                            <td className="py-1 font-medium" style={{ color: m.score > m.maxScore * 0.7 ? "#DC2626" : "var(--topbar-title)" }}>{m.score}/{m.maxScore}</td>
-                            <td className="py-1">
-                              {m.severityLevel && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold" style={{ backgroundColor: (m.severityLevel === "severe" || m.severityLevel === "moderately_severe") ? "#FEE2E2" : m.severityLevel === "moderate" ? "#FFFBEB" : "#F0FDFA", color: (m.severityLevel === "severe" || m.severityLevel === "moderately_severe") ? "#DC2626" : m.severityLevel === "moderate" ? "#D97706" : "#059669" }}>
-                                  {m.severityLevel}
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-1" style={{ color: "var(--topbar-subtitle)" }}>{m.administeredBy.slice(0, 8)}...</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <PatientProfileOutcomeGovernancePanel />
         )}
       </div>
 
@@ -537,7 +519,21 @@ function NewSessionModal({ patientId, onClose, onSubmit, isPending }: {
         <div className="flex justify-end gap-3 mt-6">
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-[13px] font-medium border" style={{ borderColor: "var(--card-border)", color: "var(--topbar-subtitle)" }}>Cancel</button>
           <button
-            onClick={() => onSubmit({ patientId, sessionDate: new Date(form.sessionDate).toISOString(), sessionType: form.sessionType as any, durationMinutes: parseInt(form.durationMinutes) || 60, chiefComplaint: form.chiefComplaint || undefined, sessionNotes: form.sessionNotes || undefined, clinicianId: form.clinicianId, billingCode: form.billingCode || undefined, riskAssessment: { suicideRisk: form.suicideRisk as any, homocideRisk: form.homocideRisk as any, elopementRisk: form.elopementRisk as any } })}
+            onClick={() => onSubmit({
+              patientId,
+              sessionDate: new Date(form.sessionDate).toISOString(),
+              sessionType: form.sessionType as Parameters<typeof onSubmit>[0]["sessionType"],
+              durationMinutes: parseInt(form.durationMinutes) || 60,
+              chiefComplaint: form.chiefComplaint || undefined,
+              sessionNotes: form.sessionNotes || undefined,
+              clinicianId: form.clinicianId,
+              billingCode: form.billingCode || undefined,
+              riskAssessment: {
+                suicideRisk: form.suicideRisk as NonNullable<Parameters<typeof onSubmit>[0]["riskAssessment"]>["suicideRisk"],
+                homocideRisk: form.homocideRisk as NonNullable<Parameters<typeof onSubmit>[0]["riskAssessment"]>["homocideRisk"],
+                elopementRisk: form.elopementRisk as NonNullable<Parameters<typeof onSubmit>[0]["riskAssessment"]>["elopementRisk"],
+              },
+            })}
             disabled={isPending || !form.sessionDate || !form.clinicianId}
             className="px-4 py-2 rounded-lg text-[13px] font-medium text-white disabled:opacity-50"
             style={{ backgroundColor: "#245C5A" }}

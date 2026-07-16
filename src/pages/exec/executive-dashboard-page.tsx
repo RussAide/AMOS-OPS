@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { trpc } from "@/providers/trpc";
 import {
-  Crown, AlertTriangle, Target, TrendingUp, FileText,
-  ShieldAlert, ArrowUpRight, ArrowDownRight, Minus,
-  CheckCircle2, Clock, XCircle, ChevronRight, BarChart3,
+  Crown, Target, TrendingUp, FileText,
+  ShieldAlert,
+  CheckCircle2, Clock,
   Users, Home, DollarSign, AlertOctagon, Sparkles,
 } from "lucide-react";
 
@@ -37,39 +36,38 @@ export function ExecutiveDashboardPage() {
   const { data: execSummary } = trpc.analytics.executiveSummary.useQuery();
   const { data: workforce } = trpc.analytics.workforceOverview.useQuery();
   const { data: revenue } = trpc.analytics.revenueOverview.useQuery();
-  const { data: compliance } = trpc.analytics.complianceOverview.useQuery();
   const { data: residential } = trpc.analytics.residentialOverview.useQuery();
   const { data: clinical } = trpc.analytics.clinicalOverview.useQuery();
 
   // Seed data for executive command
   const riskItems = [
-    { id: "r1", title: "Facility licensing delay — New Facility Phase 2", category: "Regulatory", level: "high" as const, likelihood: "likely", impact: "high", owner: "E. Russ Aideyan", mitigation: "Expedited HHSC application with consultant support. Target: Q3 approval.", status: "open", createdAt: "2026-06-15" },
-    { id: "r2", title: "CANS backlog — 1 youth pending assessment > 30 days", category: "Clinical", level: "medium" as const, likelihood: "certain", impact: "medium", owner: "Dr. Hall", mitigation: "Dedicated assessment session scheduled. CANS completion by 7/10.", status: "open", createdAt: "2026-06-20" },
-    { id: "r3", title: "Revenue collection rate below 80% target", category: "Financial", level: "high" as const, likelihood: "likely", impact: "high", owner: "Lilian Ike", mitigation: "Denial appeal process tightened. Missing documentation tracker deployed.", status: "open", createdAt: "2026-05-01" },
+    { id: "r1", title: "Facility licensing delay — New Facility Phase 2", category: "Regulatory", level: "high" as const, likelihood: "likely", impact: "high", owner: "Demo Executive", mitigation: "Expedited HHSC application with consultant support. Target: Q3 approval.", status: "open", createdAt: "2026-06-15" },
+    { id: "r2", title: "CANS backlog — 1 youth pending assessment > 30 days", category: "Clinical", level: "medium" as const, likelihood: "certain", impact: "medium", owner: "Demo Clinical Director", mitigation: "Dedicated assessment session scheduled. CANS completion by 7/10.", status: "open", createdAt: "2026-06-20" },
+    { id: "r3", title: "Revenue collection rate below 80% target", category: "Financial", level: "high" as const, likelihood: "likely", impact: "high", owner: "Demo Clinical Lead", mitigation: "Denial appeal process tightened. Missing documentation tracker deployed.", status: "open", createdAt: "2026-05-01" },
     { id: "r4", title: "Staff vacancy — 4 open clinical positions", category: "Workforce", level: "critical" as const, likelihood: "certain", impact: "high", owner: "HR Lead", mitigation: "Active recruitment across 3 channels. 2 candidates in final interview stage.", status: "open", createdAt: "2026-04-10" },
-    { id: "r5", title: "Controlled substance count discrepancy (resolved)", category: "Operational", level: "low" as const, likelihood: "unlikely", impact: "medium", owner: "Sarah RCS", mitigation: "Dual-count protocol reinforced. Witness requirement verified. No recurrence.", status: "closed", createdAt: "2026-06-10" },
-    { id: "r6", title: "CBC engagement timeline — contract negotiation", category: "Strategic", level: "medium" as const, likelihood: "possible", impact: "high", owner: "E. Russ Aideyan", mitigation: "Legal review scheduled. Partnership framework draft in progress.", status: "open", createdAt: "2026-06-01" },
+    { id: "r5", title: "Controlled substance count discrepancy (resolved)", category: "Operational", level: "low" as const, likelihood: "unlikely", impact: "medium", owner: "Synthetic Staff 01", mitigation: "Dual-count protocol reinforced. Witness requirement verified. No recurrence.", status: "closed", createdAt: "2026-06-10" },
+    { id: "r6", title: "CBC engagement timeline — contract negotiation", category: "Strategic", level: "medium" as const, likelihood: "possible", impact: "high", owner: "Demo Executive", mitigation: "Legal review scheduled. Partnership framework draft in progress.", status: "open", createdAt: "2026-06-01" },
   ];
 
   const decisions = [
-    { id: "d1", title: "Approve New Facility Phase 2 activation", context: "Campus expansion from 12 to 28 operational beds.", decision: "Approved with conditions", decidedBy: "E. Russ Aideyan", decidedAt: "2026-06-28", impact: "High", status: "implemented", relatedRisks: ["r1"] },
-    { id: "d2", title: "Implement AMOS-Coach for staff training", context: "Wave 2 persona activation for competency tracking.", decision: "Approved", decidedBy: "E. Russ Aideyan", decidedAt: "2026-06-25", impact: "Medium", status: "in_progress", relatedRisks: [] },
-    { id: "d3", title: "Engage CBC for faith-based partnership", context: "Community engagement initiative for youth support network.", decision: "Pursue", decidedBy: "E. Russ Aideyan", decidedAt: "2026-06-20", impact: "High", status: "in_progress", relatedRisks: ["r6"] },
-    { id: "d4", title: "Upgrade GRO to 24/7 nursing coverage", context: "Clinical review recommended full-time nursing for residential.", decision: "Deferred to Q3 budget", decidedBy: "E. Russ Aideyan", decidedAt: "2026-06-15", impact: "High", status: "deferred", relatedRisks: ["r4"] },
+    { id: "d1", title: "Approve New Facility Phase 2 activation", context: "Campus expansion from 12 to 28 operational beds.", decision: "Approved with conditions", decidedBy: "Demo Executive", decidedAt: "2026-06-28", impact: "High", status: "implemented", relatedRisks: ["r1"] },
+    { id: "d2", title: "Implement AMOS-Coach for staff training", context: "Wave 2 persona activation for competency tracking.", decision: "Approved", decidedBy: "Demo Executive", decidedAt: "2026-06-25", impact: "Medium", status: "in_progress", relatedRisks: [] },
+    { id: "d3", title: "Engage CBC for faith-based partnership", context: "Community engagement initiative for youth support network.", decision: "Pursue", decidedBy: "Demo Executive", decidedAt: "2026-06-20", impact: "High", status: "in_progress", relatedRisks: ["r6"] },
+    { id: "d4", title: "Upgrade GRO to 24/7 nursing coverage", context: "Clinical review recommended full-time nursing for residential.", decision: "Deferred to Q3 budget", decidedBy: "Demo Executive", decidedAt: "2026-06-15", impact: "High", status: "deferred", relatedRisks: ["r4"] },
   ];
 
   const initiatives = [
-    { id: "i1", name: "CBC Faith-Based Partnership", description: "Community engagement with Covenant Bible Church for mentorship, family support, and volunteer programs.", status: "on_track" as const, progress: 65, owner: "E. Russ Aideyan", startDate: "2026-04-01", targetDate: "2026-09-30", milestones: [{ label: "Initial contact", done: true }, { label: "MOU draft", done: true }, { label: "Legal review", done: false }, { label: "Board approval", done: false }, { label: "Launch", done: false }] },
+    { id: "i1", name: "CBC Faith-Based Partnership", description: "Community engagement with Covenant Bible Church for mentorship, family support, and volunteer programs.", status: "on_track" as const, progress: 65, owner: "Demo Executive", startDate: "2026-04-01", targetDate: "2026-09-30", milestones: [{ label: "Initial contact", done: true }, { label: "MOU draft", done: true }, { label: "Legal review", done: false }, { label: "Board approval", done: false }, { label: "Launch", done: false }] },
     { id: "i2", name: "GRO Residential Launch", description: "48-bed residential treatment campus with phased activation. Current: 12 beds operational.", status: "on_track" as const, progress: 38, owner: "Operations", startDate: "2026-01-01", targetDate: "2026-12-31", milestones: [{ label: "Phase 1 (12 beds)", done: true }, { label: "Phase 2 (16 beds)", done: false }, { label: "Phase 3 (16 beds)", done: false }, { label: "Phase 4 (4 beds)", done: false }, { label: "Full activation", done: false }] },
-    { id: "i3", name: "BHC Clinical Expansion", description: "Expand BHC services to include outpatient and crisis stabilization programs.", status: "at_risk" as const, progress: 45, owner: "Dr. Hall", startDate: "2026-03-01", targetDate: "2026-10-31", milestones: [{ label: "Outpatient licensure", done: true }, { label: "Crisis protocol draft", done: true }, { label: "Staff hiring (4 roles)", done: false }, { label: "Pilot launch", done: false }] },
-    { id: "i4", name: "AMOS-OPS Full Deployment", description: "Enterprise intranet rollout across all 13 personas and 8 workflows.", status: "on_track" as const, progress: 72, owner: "AMOS II / E. Russ", startDate: "2026-01-01", targetDate: "2026-08-31", milestones: [{ label: "Sprint 1 complete", done: true }, { label: "Sprint 2 complete", done: true }, { label: "Sprint 3 in progress", done: true }, { label: "Pilot activation", done: false }, { label: "Production handoff", done: false }] },
-    { id: "i5", name: "Revenue Cycle Optimization", description: "Target 85% collection rate through denial management and documentation improvements.", status: "delayed" as const, progress: 30, owner: "Lilian Ike", startDate: "2026-05-01", targetDate: "2026-09-30", milestones: [{ label: "Denial analysis", done: true }, { label: "Process redesign", done: false }, { label: "Staff training", done: false }, { label: "Target achievement", done: false }] },
+    { id: "i3", name: "BHC Clinical Expansion", description: "Expand BHC services to include outpatient and crisis stabilization programs.", status: "at_risk" as const, progress: 45, owner: "Demo Clinical Director", startDate: "2026-03-01", targetDate: "2026-10-31", milestones: [{ label: "Outpatient licensure", done: true }, { label: "Crisis protocol draft", done: true }, { label: "Staff hiring (4 roles)", done: false }, { label: "Pilot launch", done: false }] },
+    { id: "i4", name: "AMOS-OPS Full Deployment", description: "Enterprise intranet rollout across all 13 personas and 8 workflows.", status: "on_track" as const, progress: 72, owner: "AMOS II / Demo Executive", startDate: "2026-01-01", targetDate: "2026-08-31", milestones: [{ label: "Sprint 1 complete", done: true }, { label: "Sprint 2 complete", done: true }, { label: "Sprint 3 in progress", done: true }, { label: "Pilot activation", done: false }, { label: "Production handoff", done: false }] },
+    { id: "i5", name: "Revenue Cycle Optimization", description: "Target 85% collection rate through denial management and documentation improvements.", status: "delayed" as const, progress: 30, owner: "Demo Clinical Lead", startDate: "2026-05-01", targetDate: "2026-09-30", milestones: [{ label: "Denial analysis", done: true }, { label: "Process redesign", done: false }, { label: "Staff training", done: false }, { label: "Target achievement", done: false }] },
   ];
 
   const memos = [
-    { id: "bm1", title: "Q2 2026 Operational Brief", date: "2026-06-30", author: "E. Russ Aideyan", classification: "Board", summary: "Campus at 58% occupancy (7/12 beds). Revenue collection at 77%, targeting 85% by Q3. 4 clinical vacancies open. CBC partnership progressing through legal review. AMOS-OPS Sprint 3 on track for August delivery.", status: "published" },
+    { id: "bm1", title: "Q2 2026 Operational Brief", date: "2026-06-30", author: "Demo Executive", classification: "Board", summary: "Campus at 58% occupancy (7/12 beds). Revenue collection at 77%, targeting 85% by Q3. 4 clinical vacancies open. CBC partnership progressing through legal review. AMOS-OPS Sprint 3 on track for August delivery.", status: "published" },
     { id: "bm2", title: "Risk Register Update — July 2026", date: "2026-07-01", author: "AMOS-Sentinel", classification: "Executive", summary: "6 active risks identified. Critical: 4 open clinical positions affecting shift coverage. High: Revenue collection below target, facility licensing timeline tight. Medium: CANS backlog, CBC negotiation. All risks have active mitigation plans.", status: "published" },
-    { id: "bm3", title: "Strategic Growth Roadmap", date: "2026-06-15", author: "E. Russ Aideyan", classification: "Board", summary: "3 growth initiatives active: CBC partnership (65% complete), GRO residential launch (38% complete), BHC clinical expansion (45% complete, at-risk due to hiring). Recommend prioritizing clinical hiring to prevent service delay.", status: "review" },
+    { id: "bm3", title: "Strategic Growth Roadmap", date: "2026-06-15", author: "Demo Executive", classification: "Board", summary: "3 growth initiatives active: CBC partnership (65% complete), GRO residential launch (38% complete), BHC clinical expansion (45% complete, at-risk due to hiring). Recommend prioritizing clinical hiring to prevent service delay.", status: "review" },
     { id: "bm4", title: "Incident Summary — June 2026", date: "2026-06-30", author: "AMOS-Sentinel", classification: "Board", summary: "4 incidents this month: 2 behavioral (resolved), 1 medication error (no harm, protocol reinforced), 1 equipment failure (replaced). All corrective actions on track. No repeat incidents.", status: "published" },
   ];
 
@@ -162,7 +160,7 @@ export function ExecutiveDashboardPage() {
           {/* Quick Stats Row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: "Open Risks", value: openRisks.length, alert: criticalHighRisks.length > 0, alertColor: "#DC2626" },
+              { label: "Open Risks", value: openRisks.length, color: criticalHighRisks.length > 0 ? "#DC2626" : "var(--topbar-title)" },
               { label: "Active Decisions", value: decisions.filter(d => d.status === "in_progress").length, color: "#2563EB" },
               { label: "Growth Initiatives", value: initiatives.filter(i => i.status === "on_track").length, total: initiatives.length, color: "#059669" },
               { label: "Board Memos", value: memos.filter(m => m.status === "published").length, total: memos.length, color: "#7C3AED" },
@@ -170,7 +168,7 @@ export function ExecutiveDashboardPage() {
               <div key={c.label} className="rounded-lg border p-3" style={{ backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)" }}>
                 <div className="text-[11px] font-medium" style={{ color: "var(--topbar-subtitle)" }}>{c.label}</div>
                 <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-[18px] font-bold" style={{ color: (c as any).alert ? (c as any).alertColor : (c as any).color ?? "var(--topbar-title)" }}>{c.value}</span>
+                  <span className="text-[18px] font-bold" style={{ color: c.color }}>{c.value}</span>
                   {c.total !== undefined && <span className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>/ {c.total}</span>}
                 </div>
               </div>
