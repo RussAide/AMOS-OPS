@@ -17,6 +17,7 @@ import { evaluateCorsOrigin } from "./cors-policy";
 import { env } from "./lib/env";
 import { enforceDatabaseStartupPolicy } from "./startup-policy";
 import { createPublicRuntimeConfig } from "./runtime-mode";
+import { inheritResponseHeaders } from "./response-headers";
 
 const logger = createStructuredLogger("amos-ops-api");
 
@@ -295,12 +296,13 @@ app.use("/api/trpc/*", async (c) => {
     const { fetchRequestHandler } = await import("@trpc/server/adapters/fetch");
     const { appRouter } = await import("./router");
     const { createContext } = await import("./context");
-    return fetchRequestHandler({
+    const response = await fetchRequestHandler({
       endpoint: "/api/trpc",
       req: c.req.raw,
       router: appRouter,
       createContext,
     });
+    return inheritResponseHeaders(response, c.res.headers);
   } catch (err: unknown) {
     const correlationId = c.res.headers.get("x-correlation-id") ?? randomUUID();
     logger.error("trpc.adapter_failed", {
