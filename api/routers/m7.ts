@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery, authedQuery, adminQuery, auditLog } from "../middleware";
 import { randomUUID } from "crypto";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ═══════════════════════════════════════════════════════════════
 // M7: GAD — General Administration
@@ -165,7 +167,29 @@ function seedGAD() {
     );
   }
 }
-seedGAD();
+
+const volatileGadStoreEnabled = (() => {
+  try {
+    assertSyntheticScenarioRuntime(env);
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+if (volatileGadStoreEnabled) {
+  seedGAD();
+}
+
+function assertGadWriteProvider(): void {
+  if (!volatileGadStoreEnabled) {
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message:
+        "General Administration writes are unavailable because no durable Production provider is configured.",
+    });
+  }
+}
 
 export const m7Router = createRouter({
   // ════════════════════════════════════════════════════════════
@@ -226,6 +250,7 @@ export const m7Router = createRouter({
       managerId: z.string().optional(),
     }))
     .mutation(({ ctx, input }) => {
+      assertGadWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const facility = facilitiesStore.find((f) => f.id === input.id);
       if (!facility) throw new Error("Facility not found");
@@ -273,6 +298,7 @@ export const m7Router = createRouter({
       dueDate: z.string().optional(),
     }))
     .mutation(({ ctx, input }) => {
+      assertGadWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const id = randomUUID();
       const woNumber = `WO-${new Date().getFullYear()}-${String(Math.floor(100 + Math.random() * 900)).padStart(3, "0")}`;
@@ -302,6 +328,7 @@ export const m7Router = createRouter({
       completionNotes: z.string().optional(),
     }))
     .mutation(({ ctx, input }) => {
+      assertGadWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const wo = workOrdersStore.find((w) => w.id === input.id);
       if (!wo) throw new Error("Work order not found");
@@ -323,6 +350,7 @@ export const m7Router = createRouter({
   deleteWorkOrder: adminQuery
     .input(z.object({ id: z.string() }))
     .mutation(({ ctx, input }) => {
+      assertGadWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const idx = workOrdersStore.findIndex((w) => w.id === input.id);
       if (idx === -1) throw new Error("Work order not found");
@@ -371,6 +399,7 @@ export const m7Router = createRouter({
       notes: z.string().optional(),
     }))
     .mutation(({ ctx, input }) => {
+      assertGadWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const id = randomUUID();
       const prNumber = `PR-${new Date().getFullYear()}-${String(Math.floor(100 + Math.random() * 900)).padStart(3, "0")}`;
@@ -409,6 +438,7 @@ export const m7Router = createRouter({
       actualCost: z.number().optional(),
     }))
     .mutation(({ ctx, input }) => {
+      assertGadWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const pr = procurementStore.find((p) => p.id === input.id);
       if (!pr) throw new Error("Procurement request not found");
@@ -443,6 +473,7 @@ export const m7Router = createRouter({
   deleteProcurementRequest: adminQuery
     .input(z.object({ id: z.string() }))
     .mutation(({ ctx, input }) => {
+      assertGadWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const idx = procurementStore.findIndex((p) => p.id === input.id);
       if (idx === -1) throw new Error("Procurement request not found");
@@ -501,6 +532,7 @@ export const m7Router = createRouter({
       contractExpiry: z.string().optional(),
     }))
     .mutation(({ ctx, input }) => {
+      assertGadWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const id = randomUUID();
       const now = new Date().toISOString();
@@ -535,6 +567,7 @@ export const m7Router = createRouter({
       status: z.string().optional(),
     }))
     .mutation(({ ctx, input }) => {
+      assertGadWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const vendor = vendorsStore.find((v) => v.id === input.id);
       if (!vendor) throw new Error("Vendor not found");
@@ -587,6 +620,7 @@ export const m7Router = createRouter({
       notes: z.string().optional(),
     }))
     .mutation(({ ctx, input }) => {
+      assertGadWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const id = randomUUID();
       const contractNumber = `VC-${new Date().getFullYear()}-${String(Math.floor(100 + Math.random() * 900)).padStart(3, "0")}`;
@@ -617,6 +651,7 @@ export const m7Router = createRouter({
       notes: z.string().optional(),
     }))
     .mutation(({ ctx, input }) => {
+      assertGadWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const contract = vendorContractsStore.find((c) => c.id === input.id);
       if (!contract) throw new Error("Contract not found");
@@ -667,6 +702,7 @@ export const m7Router = createRouter({
       notes: z.string().optional(),
     }))
     .mutation(({ ctx, input }) => {
+      assertGadWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const id = randomUUID();
       const siNumber = `SI-${new Date().getFullYear()}-${String(Math.floor(100 + Math.random() * 900)).padStart(3, "0")}`;
@@ -704,6 +740,7 @@ export const m7Router = createRouter({
       reviewed: z.boolean().optional(),
     }))
     .mutation(({ ctx, input }) => {
+      assertGadWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const inspection = safetyInspectionsStore.find((s) => s.id === input.id);
       if (!inspection) throw new Error("Safety inspection not found");
@@ -733,6 +770,7 @@ export const m7Router = createRouter({
   deleteSafetyInspection: adminQuery
     .input(z.object({ id: z.string() }))
     .mutation(({ ctx, input }) => {
+      assertGadWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const idx = safetyInspectionsStore.findIndex((s) => s.id === input.id);
       if (idx === -1) throw new Error("Safety inspection not found");

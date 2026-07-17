@@ -11,6 +11,7 @@ import {
   shiftHandoffs,
 } from "@db/schema";
 import { eq, desc, and, gte, lte, type InferInsertModel } from "drizzle-orm";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ═══════════════════════════════════════════════════════════════
 // GRO Residential Operations Router (D008-02)
@@ -1070,6 +1071,7 @@ export const groRouter = createRouter({
   // ════════════════════════════════════════════════════════════
 
   seedResidentialData: adminQuery.mutation(async () => {
+    assertSyntheticScenarioRuntime(env);
     const db = getDb();
     const now = nowIso();
     const today = now.split("T")[0];

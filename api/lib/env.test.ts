@@ -106,7 +106,7 @@ describe("environment isolation controls", () => {
       buildEnvironmentConfig({
         APP_ENV: "production",
         NODE_ENV: "production",
-        DATABASE_PATH: "/data/production/amos-ops.db",
+        DATABASE_PATH: "/app/persistent/data/production/amos-ops.db",
         CREDENTIAL_NAMESPACE: "amos-ops/production",
         APP_SECRET: "replace-me",
         JWT_SECRET: "replace-me",
@@ -136,7 +136,7 @@ describe("environment isolation controls", () => {
       APP_ENV: "production",
       AMOS_RUNTIME_MODE: "production",
       NODE_ENV: "production",
-      DATABASE_PATH: "/data/production/amos-ops.db",
+      DATABASE_PATH: "/app/persistent/data/production/amos-ops.db",
       CREDENTIAL_NAMESPACE: "amos-ops/production",
       APP_SECRET: testCredential("production-app"),
       JWT_SECRET: testCredential("production-jwt"),
@@ -155,9 +155,80 @@ describe("environment isolation controls", () => {
     expect(config.mfaPolicy).toBe("required-all");
     expect(config.productionReleaseAuthorized).toBe(true);
     expect(config.productionReleaseId).toBe("RG1-GO-2026-001");
+    expect(config.persistentRoot).toBe("/app/persistent");
+    expect(config.databasePath).toBe(
+      "/app/persistent/data/production/amos-ops.db",
+    );
+    expect(config.trainingDatabasePath).toBe(
+      "/app/persistent/data/production/training/amos-ops-training.db",
+    );
+    expect(config.uploadPath).toBe("/app/persistent/uploads/production");
+    expect(config.trainingUploadPath).toBe(
+      "/app/persistent/uploads/production/training",
+    );
+    expect(config.backupPath).toBe("/app/persistent/backups/production");
     expect(() => assertSyntheticScenarioRuntime(config)).toThrow(
       /Demo or an isolated release-review/,
     );
+  });
+
+  it.each([
+    ["DATABASE_PATH", "/tmp/production/amos-ops.db"],
+    ["TRAINING_DATABASE_PATH", "/tmp/production/training/amos-ops.db"],
+    ["UPLOAD_PATH", "/tmp/uploads/production"],
+    ["TRAINING_UPLOAD_PATH", "/tmp/uploads/production/training"],
+    ["BACKUP_PATH", "/tmp/backups/production"],
+  ])("rejects a nonpersistent production %s", (name, value) => {
+    expect(() =>
+      buildEnvironmentConfig({
+        APP_ENV: "production",
+        AMOS_RUNTIME_MODE: "production",
+        NODE_ENV: "production",
+        CREDENTIAL_NAMESPACE: "amos-ops/production",
+        APP_SECRET: testCredential("production-app"),
+        JWT_SECRET: testCredential("production-jwt"),
+        DEPLOYMENT_APPROVAL_ID: "APR-2026-001",
+        DEPLOYMENT_CHANGE_REFERENCE: "CHG-2026-001",
+        AMOS_ALLOWED_ORIGINS: "https://amos.example.invalid",
+        ALLOW_SELF_REGISTRATION: "false",
+        MFA_POLICY: "required-all",
+        AMOS_PRODUCTION_RELEASE_AUTHORIZED: "true",
+        AMOS_PRODUCTION_RELEASE_ID: "RG1-GO-2026-001",
+        [name]: value,
+      }),
+    ).toThrow(new RegExp(`${name}.*beneath PERSISTENT_ROOT`));
+  });
+
+  it("requires the canonical root to match Railway's mounted volume", () => {
+    const base = {
+      APP_ENV: "production",
+      AMOS_RUNTIME_MODE: "production",
+      NODE_ENV: "production",
+      CREDENTIAL_NAMESPACE: "amos-ops/production",
+      APP_SECRET: testCredential("production-app"),
+      JWT_SECRET: testCredential("production-jwt"),
+      DEPLOYMENT_APPROVAL_ID: "APR-2026-001",
+      DEPLOYMENT_CHANGE_REFERENCE: "CHG-2026-001",
+      AMOS_ALLOWED_ORIGINS: "https://amos.example.invalid",
+      ALLOW_SELF_REGISTRATION: "false",
+      MFA_POLICY: "required-all",
+      AMOS_PRODUCTION_RELEASE_AUTHORIZED: "true",
+      AMOS_PRODUCTION_RELEASE_ID: "RG1-GO-2026-001",
+      RAILWAY_PROJECT_ID: "project-001",
+    };
+
+    expect(() =>
+      buildEnvironmentConfig({
+        ...base,
+        RAILWAY_VOLUME_MOUNT_PATH: "/app/not-persistent",
+      }),
+    ).toThrow(/must match RAILWAY_VOLUME_MOUNT_PATH/);
+    expect(
+      buildEnvironmentConfig({
+        ...base,
+        RAILWAY_VOLUME_MOUNT_PATH: "/app/persistent",
+      }).persistentRoot,
+    ).toBe("/app/persistent");
   });
 
   it("keeps production locked without explicit release authorization", () => {
@@ -166,8 +237,8 @@ describe("environment isolation controls", () => {
         APP_ENV: "production",
         AMOS_RUNTIME_MODE: "production",
         NODE_ENV: "production",
-        DATABASE_PATH: "/data/production/amos-ops.db",
-        UPLOAD_PATH: "/uploads/production",
+        DATABASE_PATH: "/app/persistent/data/production/amos-ops.db",
+        UPLOAD_PATH: "/app/persistent/uploads/production",
         CREDENTIAL_NAMESPACE: "amos-ops/production",
         APP_SECRET: testCredential("production-app"),
         JWT_SECRET: testCredential("production-jwt"),
@@ -185,8 +256,8 @@ describe("environment isolation controls", () => {
       APP_ENV: "production",
       AMOS_RUNTIME_MODE: "production",
       NODE_ENV: "production",
-      DATABASE_PATH: "/data/production/amos-ops.db",
-      UPLOAD_PATH: "/uploads/production",
+      DATABASE_PATH: "/app/persistent/data/production/amos-ops.db",
+      UPLOAD_PATH: "/app/persistent/uploads/production",
       CREDENTIAL_NAMESPACE: "amos-ops/production",
       APP_SECRET: testCredential("bootstrap-app"),
       JWT_SECRET: testCredential("bootstrap-jwt"),

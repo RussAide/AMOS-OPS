@@ -1,6 +1,11 @@
-import { sqlite } from "./queries/connection";
+import type Database from "better-sqlite3";
+import { currentDataScope, sqlite, type DataScope } from "./queries/connection";
 import { ensureIdentitySchema } from "./security/identity-schema";
-import { assertSyntheticScenarioRuntime, env } from "./lib/env";
+import {
+  assertSyntheticScenarioRuntime,
+  env,
+  type EnvironmentConfig,
+} from "./lib/env";
 import {
   ensurePhase2ControlSchema,
   seedPhase2ControlScenario,
@@ -14,6 +19,69 @@ import { bootstrapFreshDatabaseSchema } from "./fresh-schema";
 
 interface SchemaDatabase {
   exec(sql: string): unknown;
+}
+
+type SyntheticFixtureDatabase = Pick<Database.Database, "exec" | "prepare">;
+
+export interface DatabaseInitializationOptions {
+  trainingWorkspace?: boolean;
+}
+
+/**
+ * Refuse to trust the caller's workspace flag by itself. Synthetic fixtures may
+ * be initialized for a Production deployment's training database, but never by
+ * accidentally setting trainingWorkspace while the operational database proxy
+ * is active.
+ */
+export function assertDatabaseInitializationScope(
+  options: DatabaseInitializationOptions,
+  activeDataScope: DataScope = currentDataScope(),
+): void {
+  const requestedDataScope: DataScope = options.trainingWorkspace
+    ? "training"
+    : "operational";
+  if (requestedDataScope !== activeDataScope) {
+    throw new Error(
+      `DATABASE_INITIALIZATION_SCOPE_MISMATCH: requested ${requestedDataScope} initialization while the ${activeDataScope} database is active.`,
+    );
+  }
+}
+
+/**
+ * Central fail-closed policy for deterministic operational fixtures. Production
+ * operational storage is always empty until authoritative data is created or
+ * loaded. Explicitly isolated training, Demo, and release-review stores retain
+ * the milestone fixtures required for evaluation.
+ */
+export function shouldInitializeSyntheticOperationalFixtures(
+  options: DatabaseInitializationOptions,
+  environment: EnvironmentConfig = env,
+): boolean {
+  if (options.trainingWorkspace) return true;
+  if (environment.isProduction) return false;
+  if (
+    (environment.isDemo && environment.evaluationMode) ||
+    environment.reviewDeployment
+  ) {
+    assertSyntheticScenarioRuntime(environment);
+    return true;
+  }
+  return false;
+}
+
+export function initializeSyntheticOperationalFixtures(
+  db: SyntheticFixtureDatabase,
+  options: DatabaseInitializationOptions,
+  environment: EnvironmentConfig = env,
+): boolean {
+  assertDatabaseInitializationScope(options);
+  if (!shouldInitializeSyntheticOperationalFixtures(options, environment)) {
+    return false;
+  }
+  seedM21CcmgSyntheticScenarios(db);
+  seedPhase2ControlScenario(db);
+  seedPhase3ControlScenario(db);
+  return true;
 }
 
 /** Runtime fallback for environments that initialize an empty prototype DB before migration adoption. */
@@ -293,10 +361,18 @@ export function seedM21CcmgSyntheticScenarios(
 
 // ─── Auto-create all tables on startup ─────────────────────
 
-export function initDatabase(options: { trainingWorkspace?: boolean } = {}) {
+export function initDatabase(options: DatabaseInitializationOptions = {}) {
   console.log("[DB] Initializing database...");
+  assertDatabaseInitializationScope(options);
 
-  const freshSchema = bootstrapFreshDatabaseSchema(sqlite);
+  const freshSchema = bootstrapFreshDatabaseSchema(sqlite, {
+    migrationDataMode: shouldInitializeSyntheticOperationalFixtures(
+      options,
+      env,
+    )
+      ? "include"
+      : "schema-only",
+  });
   if (freshSchema.bootstrapped) {
     console.log(
       `[DB] Fresh schema bootstrapped from ${freshSchema.appliedMigrations} controlled migrations; ` +
@@ -327,16 +403,7 @@ export function initDatabase(options: { trainingWorkspace?: boolean } = {}) {
   ensureM21CcmgSchema(sqlite);
   ensurePhase2ControlSchema(sqlite);
   ensurePhase3ControlSchema(sqlite);
-  if (
-    options.trainingWorkspace ||
-    (env.isDemo && env.evaluationMode) ||
-    env.reviewDeployment
-  ) {
-    if (!options.trainingWorkspace) assertSyntheticScenarioRuntime(env);
-    seedM21CcmgSyntheticScenarios(sqlite);
-    seedPhase2ControlScenario(sqlite);
-    seedPhase3ControlScenario(sqlite);
-  }
+  initializeSyntheticOperationalFixtures(sqlite, options, env);
 
   // HR
   sqlite.exec(`

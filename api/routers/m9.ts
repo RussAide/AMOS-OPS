@@ -4,6 +4,7 @@ import { getDb } from "../queries/connection";
 import { nilEntities, nilRelationships } from "@db/schema";
 import { eq, like, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ─── M9: NIL Knowledge Graph ───────────────────────────────
 
@@ -171,6 +172,7 @@ export const m9Router = createRouter({
     }),
 
   reindex: publicQuery.mutation(async () => {
+    assertSyntheticScenarioRuntime(env);
     const actor = "AMOS-Seed";
     const db = getDb();
 

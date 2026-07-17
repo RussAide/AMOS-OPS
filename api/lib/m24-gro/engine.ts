@@ -2499,4 +2499,23 @@ export class M24GroEngine {
   }
 }
 
-export const m24GroEngine = new M24GroEngine();
+let sharedM24GroEngine: M24GroEngine | undefined;
+
+function getSharedM24GroEngine(): M24GroEngine {
+  return (sharedM24GroEngine ??= new M24GroEngine());
+}
+
+export function isM24GroEngineInitialized(): boolean {
+  return sharedM24GroEngine !== undefined;
+}
+
+/** Preserve the existing shared-engine API without creating synthetic state at
+ * module load. The first permitted operation initializes the isolated
+ * Demo/review engine; Production router gates reject before this proxy is read. */
+export const m24GroEngine: M24GroEngine = new Proxy({} as M24GroEngine, {
+  get(_target, property) {
+    const engine = getSharedM24GroEngine();
+    const value: unknown = Reflect.get(engine, property, engine);
+    return typeof value === "function" ? value.bind(engine) : value;
+  },
+});

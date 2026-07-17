@@ -17,6 +17,9 @@ import {
   type M24ScenarioViewModel,
   type M24StageViewModel,
 } from "@/data/m24-synthetic-data";
+import { runtimeConfig } from "@/config/runtime";
+import { mayUseIsolatedFixtures } from "@/context/onboarding-context";
+import { useAuth } from "@/hooks/use-auth";
 
 const COLORS = {
   teal: "#245C5A",
@@ -204,21 +207,85 @@ function ScenarioPicker({
 
 export interface M24OperationsDashboardProps {
   readonly model?: typeof M24_SYNTHETIC_VIEW;
+  readonly syntheticDataAllowed?: boolean;
+}
+
+function M24Unavailable() {
+  return (
+    <main className="space-y-5 p-4 md:p-6">
+      <section
+        className="rounded-2xl border p-6"
+        style={{
+          background: "var(--card-bg)",
+          borderColor: "var(--card-border)",
+        }}
+      >
+        <ShieldCheck size={24} style={{ color: COLORS.teal }} />
+        <h1
+          className="mt-4 text-xl font-bold"
+          style={{ color: "var(--topbar-title)" }}
+        >
+          GRO Residential operational data unavailable
+        </h1>
+        <p
+          className="mt-2 max-w-2xl text-[12px] leading-5"
+          style={{ color: "var(--topbar-subtitle)" }}
+        >
+          No authoritative residential records are available. Production does
+          not substitute demonstration census, work queues, or incident data.
+        </p>
+      </section>
+    </main>
+  );
 }
 
 export function M24OperationsDashboard({
-  model = M24_SYNTHETIC_VIEW,
+  ...props
 }: M24OperationsDashboardProps) {
+  if (props.syntheticDataAllowed !== undefined) {
+    return (
+      <M24OperationsDashboardContent
+        {...props}
+        syntheticDataAllowed={props.syntheticDataAllowed ?? true}
+      />
+    );
+  }
+  return <AuthenticatedM24OperationsDashboard {...props} />;
+}
+
+function AuthenticatedM24OperationsDashboard(
+  props: M24OperationsDashboardProps,
+) {
+  const { workspace } = useAuth();
+  return (
+    <M24OperationsDashboardContent
+      {...props}
+      syntheticDataAllowed={mayUseIsolatedFixtures(
+        runtimeConfig.evaluationMode,
+        workspace,
+      )}
+    />
+  );
+}
+
+function M24OperationsDashboardContent({
+  model: suppliedModel,
+  syntheticDataAllowed,
+}: M24OperationsDashboardProps & { syntheticDataAllowed: boolean }) {
+  const model = syntheticDataAllowed
+    ? (suppliedModel ?? M24_SYNTHETIC_VIEW)
+    : null;
   const [section, setSection] = useState<Section>("overview");
   const [selectedScenarioId, setSelectedScenarioId] = useState(
-    model.scenarios[0].id,
+    model?.scenarios[0]?.id ?? "",
   );
   const selectedScenario = useMemo(
     () =>
-      model.scenarios.find((item) => item.id === selectedScenarioId) ??
-      model.scenarios[0],
-    [model.scenarios, selectedScenarioId],
+      model?.scenarios.find((item) => item.id === selectedScenarioId) ??
+      model?.scenarios[0],
+    [model, selectedScenarioId],
   );
+  if (!model || !selectedScenario) return <M24Unavailable />;
 
   return (
     <main className="space-y-5 p-4 md:p-6">

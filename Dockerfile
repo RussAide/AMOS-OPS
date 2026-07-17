@@ -31,10 +31,12 @@ ENV AMOS_ENVIRONMENT_ID=amos-ops-demo
 ENV CREDENTIAL_NAMESPACE=amos-ops/demo
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV PERSISTENT_ROOT=/app/persistent
 ENV DATABASE_PATH=/app/data/demo/amos-ops.db
 ENV TRAINING_DATABASE_PATH=/app/data/demo/training/amos-ops-training.db
 ENV UPLOAD_PATH=/app/uploads/demo
 ENV TRAINING_UPLOAD_PATH=/app/uploads/demo/training
+ENV BACKUP_PATH=/app/data/demo/backups
 
 # Install runtime dependencies only. Runtime secrets are injected by the host.
 RUN apt-get update && apt-get install -y python3 make g++ \
@@ -52,9 +54,13 @@ COPY --from=builder /app/db ./db
 COPY --from=builder /app/docs ./docs
 COPY --from=builder /app/accepted-baselines ./accepted-baselines
 
+# Demo and isolated-review defaults remain outside the Production persistent
+# root. Railway must mount the Production volume at /app/persistent; Production
+# startup validation rejects paths that are not strict descendants of that root.
 RUN mkdir -p /app/data/demo/training /app/uploads/demo/training \
+  /app/data/demo/backups \
   /app/data/staging/training /app/uploads/staging/training \
-  /app/data/production/training /app/uploads/production/training
+  /app/data/staging/backups
 
 # Expose port
 EXPOSE 3000

@@ -19,14 +19,21 @@ existing sessions and records an access-profile event.
 
 ## Physical isolation
 
-Railway must provide one persistent volume containing four distinct paths:
+Railway must attach one persistent volume at the canonical root
+`/app/persistent`. Operational and Training stores use distinct descendants of
+that root:
 
 ```text
-/app/data/production/amos-ops.db
-/app/data/production/training/amos-ops-training.db
-/app/uploads/production/
-/app/uploads/production/training/
+/app/persistent/data/production/amos-ops.db
+/app/persistent/data/production/training/amos-ops-training.db
+/app/persistent/uploads/production/
+/app/persistent/uploads/production/training/
+/app/persistent/backups/production/
 ```
+
+Production startup fails closed if any configured database, upload, or backup
+path is not a strict descendant of `/app/persistent`. Demo and isolated-review
+resources remain outside this Production root and must never reuse these paths.
 
 Every authenticated application request is routed through an asynchronous data
 scope. Legacy raw-SQL callers and Drizzle callers both resolve to the same scoped
@@ -44,3 +51,6 @@ operational control plane.
 
 No Training or Demo subdomain, branch, service, database deployment, or second
 site is required.
+
+The complete Production storage, migration, verification, and rollback contract
+is documented in [RM.1 Production persistence](RM1-PERSISTENCE.md).

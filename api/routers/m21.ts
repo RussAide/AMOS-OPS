@@ -4,6 +4,7 @@ import type Database from "better-sqlite3";
 import { createRouter, publicQuery, authedQuery, auditLog } from "../middleware";
 import { sqlite } from "../queries/connection";
 import { randomUUID } from "crypto";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 import {
   CCMG_QUEUE_IDS,
   changedFieldNames,
@@ -2412,7 +2413,14 @@ export const m21Router = createRouter({
 
   listPersonas: publicQuery.query(async () => {
     const rows = sqlite.prepare("SELECT * FROM agent_personas ORDER BY sort_order").all() as PersonaRow[];
-    if (rows.length === 0) return PERSONA_SEED;
+    if (rows.length === 0) {
+      try {
+        assertSyntheticScenarioRuntime(env);
+        return PERSONA_SEED;
+      } catch {
+        return [];
+      }
+    }
     return rows.map(r => ({
       id: r.id,
       name: r.name,
@@ -2475,11 +2483,17 @@ export const m21Router = createRouter({
       evidenceClass: z.enum(["synthetic_demo", "production"]).default("synthetic_demo"),
       asOf: z.string().refine((value) => Number.isFinite(Date.parse(value)), "Invalid asOf timestamp").optional(),
     }).optional())
-    .query(({ ctx, input }) => buildM21OversightDashboard(
-      { id: ctx.user.id, role: ctx.user.role },
-      input?.evidenceClass ?? "synthetic_demo",
-      input?.asOf ?? new Date().toISOString(),
-    )),
+    .query(({ ctx, input }) => {
+      const evidenceClass = input?.evidenceClass ?? "synthetic_demo";
+      if (evidenceClass === "synthetic_demo") {
+        assertSyntheticScenarioRuntime(env);
+      }
+      return buildM21OversightDashboard(
+        { id: ctx.user.id, role: ctx.user.role },
+        evidenceClass,
+        input?.asOf ?? new Date().toISOString(),
+      );
+    }),
 
   getReferralDetail: authedQuery
     .input(z.object({
@@ -2487,12 +2501,17 @@ export const m21Router = createRouter({
       evidenceClass: z.enum(["synthetic_demo", "production"]).default("synthetic_demo"),
       asOf: z.string().refine((value) => Number.isFinite(Date.parse(value)), "Invalid asOf timestamp").optional(),
     }))
-    .query(({ ctx, input }) => buildM21ReferralDetail(
-      { id: ctx.user.id, role: ctx.user.role },
-      input.referralId,
-      input.evidenceClass,
-      input.asOf ?? new Date().toISOString(),
-    )),
+    .query(({ ctx, input }) => {
+      if (input.evidenceClass === "synthetic_demo") {
+        assertSyntheticScenarioRuntime(env);
+      }
+      return buildM21ReferralDetail(
+        { id: ctx.user.id, role: ctx.user.role },
+        input.referralId,
+        input.evidenceClass,
+        input.asOf ?? new Date().toISOString(),
+      );
+    }),
 
   transitionWorkflow: authedQuery
     .input(z.object({

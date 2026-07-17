@@ -6,6 +6,7 @@ import {
   adminQuery,
 } from "../middleware";
 import { sqlite } from "../queries/connection";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ═══════════════════════════════════════════════════════════════
 // D005: Workflow Engine — 8 Complete Workflow Definitions
@@ -671,6 +672,7 @@ export const workflowRouter = createRouter({
   // ─── Seed All Workflow Definitions into DB ─────────────────
 
   seedWorkflowDefinitions: adminQuery.mutation(async () => {
+    assertSyntheticScenarioRuntime(env);
     const now = new Date().toISOString();
     const stmt = sqlite.prepare(
       `INSERT OR IGNORE INTO workflow_definitions_v2 (id, name, description, status_map, evidence_gates, escalation_rules, entity_type, created_at)
@@ -2134,6 +2136,7 @@ export const workflowRouter = createRouter({
   // ═══════════════════════════════════════════════════════════════
 
   seedWorkflowInstances: adminQuery.mutation(async ({ ctx }) => {
+    assertSyntheticScenarioRuntime(env);
     const actor = ctx.user.email;
     const now = new Date();
     const twoDaysAgo = new Date(now.getTime() - 2 * 86400000).toISOString();

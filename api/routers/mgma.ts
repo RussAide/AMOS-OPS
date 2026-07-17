@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
   KPI_DEFINITIONS,
   MGMA_DOMAIN_MAPPINGS,
@@ -28,9 +28,28 @@ import {
 } from "@db/schema";
 import { adminQuery, createRouter, authedQuery } from "../middleware";
 import { getDb } from "../queries/connection";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 const viewModeSchema = z.enum(["production_baseline", "synthetic_demo"]);
 type MgmaViewMode = z.infer<typeof viewModeSchema>;
+
+const syntheticMgmaRuntimeEnabled = (() => {
+  try {
+    assertSyntheticScenarioRuntime(env);
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+function assertMgmaViewMode(viewMode: MgmaViewMode): void {
+  if (viewMode === "synthetic_demo" && !syntheticMgmaRuntimeEnabled) {
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message: "Synthetic MGMA evidence is unavailable in Production.",
+    });
+  }
+}
 
 const scopeCatalog = [
   {
@@ -592,6 +611,7 @@ export const mgmaRouter = createRouter({
       }),
     )
     .mutation(async ({ input }) => {
+      assertMgmaViewMode("synthetic_demo");
       const kpiId = contractKpiId(input.kpiId);
       const definition = KPI_DEFINITIONS.find(
         (candidate) => candidate.id === kpiId,
@@ -698,6 +718,28 @@ export const mgmaRouter = createRouter({
     )
     .query(async ({ input }) => {
       const db = getDb();
+      if (!syntheticMgmaRuntimeEnabled) {
+        const productionEvidence = eq(
+          mgmaScorecards.evidenceClass,
+          "production",
+        );
+        return input?.division
+          ? db
+              .select()
+              .from(mgmaScorecards)
+              .where(
+                and(
+                  eq(mgmaScorecards.division, input.division),
+                  productionEvidence,
+                ),
+              )
+              .orderBy(desc(mgmaScorecards.scorecardDate))
+          : db
+              .select()
+              .from(mgmaScorecards)
+              .where(productionEvidence)
+              .orderBy(desc(mgmaScorecards.scorecardDate));
+      }
       return input?.division
         ? db
             .select()
@@ -721,6 +763,7 @@ export const mgmaRouter = createRouter({
       }),
     )
     .mutation(async ({ input }) => {
+      assertMgmaViewMode(input.viewMode);
       const dashboard = await buildMgmaDashboard(input.viewMode);
       const scope = dashboard.scopeSummaries.find(
         (item) => item.scopeId === input.division,
@@ -777,16 +820,18 @@ export const mgmaRouter = createRouter({
 
   executiveDashboard: authedQuery
     .input(z.object({ viewMode: viewModeSchema }).optional())
-    .query(({ input }) =>
-      buildMgmaDashboard(input?.viewMode ?? "production_baseline"),
-    ),
+    .query(({ input }) => {
+      const viewMode = input?.viewMode ?? "production_baseline";
+      assertMgmaViewMode(viewMode);
+      return buildMgmaDashboard(viewMode);
+    }),
 
   dataQualityReport: authedQuery
     .input(z.object({ viewMode: viewModeSchema }).optional())
     .query(async ({ input }) => {
-      const dashboard = await buildMgmaDashboard(
-        input?.viewMode ?? "production_baseline",
-      );
+      const viewMode = input?.viewMode ?? "production_baseline";
+      assertMgmaViewMode(viewMode);
+      const dashboard = await buildMgmaDashboard(viewMode);
       return {
         viewMode: dashboard.viewMode,
         evidenceLabel: dashboard.evidenceLabel,
@@ -811,6 +856,7 @@ export const mgmaRouter = createRouter({
   }),
 
   seedMgmaData: adminQuery.mutation(async () => {
+    assertSyntheticScenarioRuntime(env);
     const db = getDb();
     const [domains, kpis, synthetic, production] = await Promise.all([
       db.select().from(mgmaDomains),

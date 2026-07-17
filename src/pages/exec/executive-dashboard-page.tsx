@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
+import { runtimeConfig } from "@/config/runtime";
+import { mayUseIsolatedFixtures } from "@/context/onboarding-context";
+import { useAuth } from "@/hooks/use-auth";
 import {
   Crown, Target, TrendingUp, FileText,
   ShieldAlert,
@@ -30,7 +33,49 @@ const TABS = [
   { key: "memos", label: "Board Memos", icon: FileText },
 ];
 
-export function ExecutiveDashboardPage() {
+interface ExecutiveDashboardPageProps {
+  readonly syntheticDataAllowed?: boolean;
+}
+
+function ExecutiveDataUnavailable() {
+  return (
+    <main className="min-h-screen bg-slate-50 p-6 text-slate-950">
+      <section className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+        <ShieldAlert className="h-8 w-8 text-cyan-700" aria-hidden="true" />
+        <h1 className="mt-4 text-2xl font-bold">
+          Executive operational data unavailable
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          No authoritative risk, decision, initiative, or board-memo records
+          are available. Production does not substitute demonstration records
+          or synthetic personnel.
+        </p>
+      </section>
+    </main>
+  );
+}
+
+export function ExecutiveDashboardPage(props: ExecutiveDashboardPageProps) {
+  if (props.syntheticDataAllowed !== undefined) {
+    return props.syntheticDataAllowed ? (
+      <SyntheticExecutiveDashboard />
+    ) : (
+      <ExecutiveDataUnavailable />
+    );
+  }
+  return <AuthenticatedExecutiveDashboard />;
+}
+
+function AuthenticatedExecutiveDashboard() {
+  const { workspace } = useAuth();
+  return mayUseIsolatedFixtures(runtimeConfig.evaluationMode, workspace) ? (
+    <SyntheticExecutiveDashboard />
+  ) : (
+    <ExecutiveDataUnavailable />
+  );
+}
+
+function SyntheticExecutiveDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
 
   const { data: execSummary } = trpc.analytics.executiveSummary.useQuery();

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createRouter, authedQuery, adminQuery, auditLog } from "../middleware";
 import { sqlite } from "../queries/connection";
 import { randomUUID } from "crypto";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ─── M1: First Vertical Slice Router ───────────────────────
 
@@ -218,6 +219,7 @@ export const m1Router = createRouter({
   }),
 
   seedDefaultTemplates: adminQuery.mutation(async ({ ctx }) => {
+    assertSyntheticScenarioRuntime(env);
     const actor = ctx.user?.email ?? "unknown";
     const templates = [
       { name: "Employee Onboarding Checklist", code: "ONB-001", category: "HR", desc: "Standard onboarding checklist for new hires" },
@@ -837,6 +839,7 @@ export const m1Router = createRouter({
   // ═══════════════════════════════════════════════════════════
 
   seedWorkflowDefinitions: adminQuery.mutation(async ({ ctx }) => {
+    assertSyntheticScenarioRuntime(env);
     const actor = ctx.user?.email ?? "unknown";
     const workflows = [
       { workflow_id: "WF-001", workflow_name: "Referral Intake", category: "GRO" },

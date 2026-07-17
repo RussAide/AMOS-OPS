@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createRouter, publicQuery } from "../middleware";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ─── M29: NIL Knowledge Graph — Semantic Search & Relationships ───
 
@@ -64,6 +65,15 @@ const RELATIONSHIPS: Relationship[] = [
   { from: "ca-0701", to: "sop-002", type: "references", label: "audit reference" },
 ];
 
+const syntheticKnowledgeFixturesEnabled = (() => {
+  try {
+    assertSyntheticScenarioRuntime(env);
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
 export const m29Router = createRouter({
   // ─── Semantic Search ─────────────────────────────────────
   search: publicQuery
@@ -73,6 +83,7 @@ export const m29Router = createRouter({
       status: z.array(z.string()).optional(),
     }).optional() }))
     .query(async ({ input }) => {
+      if (!syntheticKnowledgeFixturesEnabled) return [];
       const q = input.query.toLowerCase();
       const filters = input.filters;
 
@@ -112,6 +123,7 @@ export const m29Router = createRouter({
   getRelationships: publicQuery
     .input(z.object({ entityId: z.string() }))
     .query(async ({ input }) => {
+      if (!syntheticKnowledgeFixturesEnabled) return [];
       const outgoing = RELATIONSHIPS.filter(r => r.from === input.entityId);
       const incoming = RELATIONSHIPS.filter(r => r.to === input.entityId);
 
@@ -132,6 +144,7 @@ export const m29Router = createRouter({
   getEntity: publicQuery
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
+      if (!syntheticKnowledgeFixturesEnabled) return null;
       return ENTITY_DB.find(e => e.id === input.id) ?? null;
     }),
 
@@ -139,6 +152,7 @@ export const m29Router = createRouter({
   getRelated: publicQuery
     .input(z.object({ entityId: z.string(), hops: z.number().default(1) }))
     .query(async ({ input }) => {
+      if (!syntheticKnowledgeFixturesEnabled) return [];
       const visited = new Set<string>();
       const queue: { id: string; hop: number }[] = [{ id: input.entityId, hop: 0 }];
       const related: Entity[] = [];
@@ -169,6 +183,7 @@ export const m29Router = createRouter({
   typeahead: publicQuery
     .input(z.object({ query: z.string().min(1) }))
     .query(async ({ input }) => {
+      if (!syntheticKnowledgeFixturesEnabled) return [];
       const q = input.query.toLowerCase();
       const matches = ENTITY_DB.filter(e =>
         e.title.toLowerCase().includes(q) ||
@@ -185,6 +200,9 @@ export const m29Router = createRouter({
 
   // ─── Get Stats ───────────────────────────────────────────
   stats: publicQuery.query(async () => {
+    if (!syntheticKnowledgeFixturesEnabled) {
+      return { totalEntities: 0, totalRelationships: 0, byType: {}, byModule: {} };
+    }
     const byType = ENTITY_DB.reduce((acc, e) => {
       acc[e.type] = (acc[e.type] || 0) + 1;
       return acc;

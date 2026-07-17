@@ -12,6 +12,7 @@ import {
   mhrsEncounters,
 } from "@db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 import { randomUUID } from "crypto";
 
 // ══════════════════════════════════════════════════════════════
@@ -578,6 +579,7 @@ export const ccmgRouter = createRouter({
   // ════════════════════════════════════════════════════════════
 
   seedCcmgData: adminQuery.mutation(async () => {
+    assertSyntheticScenarioRuntime(env);
     // Synthetic demonstration fixtures only. These labels and record identifiers
     // are deliberately non-personal and must never be treated as patient data.
     const db = getDb();

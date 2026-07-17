@@ -4,6 +4,7 @@ import { getDb } from "../queries/connection";
 import { claims as claimsTable, claimLineItems as lineItemsTable, payers as payersTable, authorizations as authzTable } from "@db/schema";
 import { eq, like, and, or, desc, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ─── M4: Revenue Cycle — AMOS-Revenue ──────────────────────
 
@@ -790,6 +791,7 @@ export const m4Router = createRouter({
   // ════════════════════════════════════════════════════════════
 
   seedRevenueData: publicQuery.mutation(async () => {
+    assertSyntheticScenarioRuntime(env);
     const db = getDb();
     const now = new Date();
     const iso = now.toISOString();

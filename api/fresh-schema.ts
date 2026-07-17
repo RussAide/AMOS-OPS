@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import type Database from "better-sqlite3";
-import { applyPendingMigrations } from "./data-lifecycle";
+import {
+  applyPendingMigrations,
+  type MigrationDataMode,
+} from "./data-lifecycle";
 
 interface TableColumn {
   name: string;
@@ -9,6 +12,7 @@ interface TableColumn {
 
 export interface FreshSchemaBootstrapResult {
   bootstrapped: boolean;
+  migrationDataMode: MigrationDataMode;
   appliedMigrations: number;
   createdCurrentTables: number;
   addedCurrentColumns: number;
@@ -88,11 +92,14 @@ export function bootstrapFreshDatabaseSchema(
   options: {
     migrationsDirectory?: string;
     currentSchemaPath?: string;
+    migrationDataMode?: MigrationDataMode;
   } = {},
 ): FreshSchemaBootstrapResult {
+  const migrationDataMode = options.migrationDataMode ?? "include";
   if (tableExists(db, "users")) {
     return {
       bootstrapped: false,
+      migrationDataMode,
       appliedMigrations: 0,
       createdCurrentTables: 0,
       addedCurrentColumns: 0,
@@ -122,7 +129,9 @@ export function bootstrapFreshDatabaseSchema(
     throw new Error(`Current schema artifact is unavailable: ${currentSchemaPath}`);
   }
 
-  const appliedMigrations = applyPendingMigrations(db, migrationsDirectory);
+  const appliedMigrations = applyPendingMigrations(db, migrationsDirectory, {
+    dataMode: migrationDataMode,
+  });
   const currentSchemaSql = fs.readFileSync(currentSchemaPath, "utf8");
   const reconciled = reconcileCurrentSchema(db, currentSchemaSql);
   const integrity = db.pragma("integrity_check", { simple: true });
@@ -132,6 +141,7 @@ export function bootstrapFreshDatabaseSchema(
 
   return {
     bootstrapped: true,
+    migrationDataMode,
     appliedMigrations: appliedMigrations.length,
     ...reconciled,
   };

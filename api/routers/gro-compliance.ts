@@ -10,6 +10,7 @@ import {
 } from "@db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ══════════════════════════════════════════════════════════════
 // GRO Compliance: Title 26 TAC Chapter 748 (T-006)
@@ -530,6 +531,7 @@ export const groComplianceRouter = createRouter({
   // ════════════════════════════════════════════════════════════
 
   seedGroComplianceData: adminQuery.mutation(async () => {
+    assertSyntheticScenarioRuntime(env);
     const db = getDb();
     const now = new Date().toISOString();
 

@@ -1,4 +1,11 @@
-import { createContext, createElement, useContext, useState, useCallback, type ReactNode } from "react";
+import {
+  createContext,
+  createElement,
+  useContext,
+  useState,
+  useCallback,
+  type ReactNode,
+} from "react";
 import {
   tracks as initialTracks,
   modules as initialModules,
@@ -12,6 +19,24 @@ import {
   type Evidence,
   type QuizResult,
 } from "@/data/onboardingData";
+import { runtimeConfig } from "@/config/runtime";
+import { useAuth } from "@/hooks/use-auth";
+
+export function mayUseIsolatedFixtures(
+  evaluationMode: boolean,
+  workspace: string | null,
+): boolean {
+  return evaluationMode || workspace === "training";
+}
+
+export const mayUseOnboardingFixtures = mayUseIsolatedFixtures;
+
+export function resolveOnboardingFixtures<T>(
+  fixtures: readonly T[],
+  fixturesAllowed: boolean,
+): T[] {
+  return fixturesAllowed ? [...fixtures] : [];
+}
 
 interface OnboardingState {
   // Data
@@ -21,6 +46,7 @@ interface OnboardingState {
   employees: Employee[];
   evidence: Evidence[];
   quizResults: QuizResult[];
+  isUnavailable: boolean;
 
   // Navigation
   selectTrack: (trackId: string | null) => void;
@@ -39,26 +65,87 @@ interface OnboardingState {
 
   // Evidence actions (with file support)
   submitEvidence: (evidence: Omit<Evidence, "id" | "submittedAt">) => void;
-  reviewEvidence: (evidenceId: string, decision: "approved" | "rejected") => void;
+  reviewEvidence: (
+    evidenceId: string,
+    decision: "approved" | "rejected",
+  ) => void;
 
   // Supervisor actions
-  updateEmployeeClearance: (employeeId: string, status: Employee["clearanceStatus"]) => void;
+  updateEmployeeClearance: (
+    employeeId: string,
+    status: Employee["clearanceStatus"],
+  ) => void;
 
   // Getters
   getModulesForTrack: (trackId: string) => Module[];
   getStepsForModule: (moduleId: string) => Step[];
-  getTrackProgress: (trackId: string) => { completed: number; total: number; percentage: number };
-  getModuleProgress: (moduleId: string) => { completed: number; total: number; percentage: number };
+  getTrackProgress: (trackId: string) => {
+    completed: number;
+    total: number;
+    percentage: number;
+  };
+  getModuleProgress: (moduleId: string) => {
+    completed: number;
+    total: number;
+    percentage: number;
+  };
 }
 
 const OnboardingContext = createContext<OnboardingState | null>(null);
 
-export function OnboardingProvider({ children }: { children: ReactNode }) {
-  const [tracks, setTracks] = useState<Track[]>(initialTracks);
-  const [modules, setModules] = useState<Module[]>(initialModules);
-  const [steps, setSteps] = useState<Step[]>(initialSteps);
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
-  const [evidence, setEvidence] = useState<Evidence[]>(initialEvidence);
+interface OnboardingProviderProps {
+  children: ReactNode;
+  workspace?: "training" | "operational";
+}
+
+export function OnboardingProvider({
+  children,
+  workspace,
+}: OnboardingProviderProps) {
+  if (workspace !== undefined) {
+    return createElement(OnboardingStateProvider, {
+      workspace,
+      children,
+    });
+  }
+  return createElement(AuthenticatedOnboardingProvider, { children });
+}
+
+function AuthenticatedOnboardingProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const { workspace } = useAuth();
+  return createElement(OnboardingStateProvider, { workspace, children });
+}
+
+function OnboardingStateProvider({
+  children,
+  workspace,
+}: {
+  children: ReactNode;
+  workspace: "training" | "operational";
+}) {
+  const fixturesAllowed = mayUseOnboardingFixtures(
+    runtimeConfig.evaluationMode,
+    workspace,
+  );
+  const [tracks, setTracks] = useState<Track[]>(() =>
+    resolveOnboardingFixtures(initialTracks, fixturesAllowed),
+  );
+  const [modules, setModules] = useState<Module[]>(() =>
+    resolveOnboardingFixtures(initialModules, fixturesAllowed),
+  );
+  const [steps, setSteps] = useState<Step[]>(() =>
+    resolveOnboardingFixtures(initialSteps, fixturesAllowed),
+  );
+  const [employees, setEmployees] = useState<Employee[]>(() =>
+    resolveOnboardingFixtures(initialEmployees, fixturesAllowed),
+  );
+  const [evidence, setEvidence] = useState<Evidence[]>(() =>
+    resolveOnboardingFixtures(initialEvidence, fixturesAllowed),
+  );
   const [quizResults, setQuizResults] = useState<QuizResult[]>([]);
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
@@ -72,115 +159,174 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     setSelectedModuleId(moduleId);
   }, []);
 
-  const completeStep = useCallback((stepId: string) => {
-    setSteps((prev) =>
-      prev.map((s) => (s.id === stepId ? { ...s, completed: true } : s))
-    );
-    setSteps((currentSteps) => {
-      const step = currentSteps.find((s) => s.id === stepId);
-      if (!step) return currentSteps;
-      const moduleSteps = currentSteps.filter((s) => s.moduleId === step.moduleId);
-      const completedCount = moduleSteps.filter((s) => s.completed).length;
-      setModules((prev) =>
-        prev.map((m) =>
-          m.id === step.moduleId
-            ? { ...m, completedSteps: completedCount, status: getModuleStatus(m, completedCount) }
-            : m
-        )
-      );
-      return currentSteps;
-    });
-  }, []);
-
-  const uncompleteStep = useCallback((stepId: string) => {
-    setSteps((prev) =>
-      prev.map((s) => (s.id === stepId ? { ...s, completed: false } : s))
-    );
-    setSteps((currentSteps) => {
-      const step = currentSteps.find((s) => s.id === stepId);
-      if (!step) return currentSteps;
-      const moduleSteps = currentSteps.filter((s) => s.moduleId === step.moduleId);
-      const completedCount = moduleSteps.filter((s) => s.completed).length;
-      setModules((prev) =>
-        prev.map((m) =>
-          m.id === step.moduleId
-            ? { ...m, completedSteps: completedCount, status: getModuleStatus(m, completedCount) }
-            : m
-        )
-      );
-      return currentSteps;
-    });
-  }, []);
-
-  const markModuleComplete = useCallback((moduleId: string) => {
-    setModules((prev) =>
-      prev.map((m) =>
-        m.id === moduleId ? { ...m, completedSteps: m.stepCount, status: "completed" as const } : m
-      )
-    );
-    setSteps((prev) =>
-      prev.map((s) => (s.moduleId === moduleId ? { ...s, completed: true } : s))
-    );
-    setModules((currentModules) => {
-      const mod = currentModules.find((m) => m.id === moduleId);
-      if (!mod) return currentModules;
-      const trackModules = currentModules.filter((m) => m.trackId === mod.trackId);
-      const completedCount = trackModules.filter((m) => m.status === "completed").length;
-      setTracks((prev) =>
-        prev.map((t) =>
-          t.id === mod.trackId
-            ? { ...t, completedModules: completedCount, clearanceStatus: getTrackClearance(t, completedCount) }
-            : t
-        )
-      );
-      return currentModules;
-    });
-  }, []);
-
-  // Quiz actions
-  const saveQuizResult = useCallback((result: QuizResult) => {
-    setQuizResults((prev) => {
-      const filtered = prev.filter((r) => r.moduleId !== result.moduleId);
-      return [...filtered, result];
-    });
-    // If passed, complete all remaining steps and mark module complete
-    if (result.passed) {
+  const completeStep = useCallback(
+    (stepId: string) => {
+      if (!fixturesAllowed) return;
       setSteps((prev) =>
-        prev.map((s) => (s.moduleId === result.moduleId ? { ...s, completed: true } : s))
+        prev.map((s) => (s.id === stepId ? { ...s, completed: true } : s)),
       );
+      setSteps((currentSteps) => {
+        const step = currentSteps.find((s) => s.id === stepId);
+        if (!step) return currentSteps;
+        const moduleSteps = currentSteps.filter(
+          (s) => s.moduleId === step.moduleId,
+        );
+        const completedCount = moduleSteps.filter((s) => s.completed).length;
+        setModules((prev) =>
+          prev.map((m) =>
+            m.id === step.moduleId
+              ? {
+                  ...m,
+                  completedSteps: completedCount,
+                  status: getModuleStatus(m, completedCount),
+                }
+              : m,
+          ),
+        );
+        return currentSteps;
+      });
+    },
+    [fixturesAllowed],
+  );
+
+  const uncompleteStep = useCallback(
+    (stepId: string) => {
+      if (!fixturesAllowed) return;
+      setSteps((prev) =>
+        prev.map((s) => (s.id === stepId ? { ...s, completed: false } : s)),
+      );
+      setSteps((currentSteps) => {
+        const step = currentSteps.find((s) => s.id === stepId);
+        if (!step) return currentSteps;
+        const moduleSteps = currentSteps.filter(
+          (s) => s.moduleId === step.moduleId,
+        );
+        const completedCount = moduleSteps.filter((s) => s.completed).length;
+        setModules((prev) =>
+          prev.map((m) =>
+            m.id === step.moduleId
+              ? {
+                  ...m,
+                  completedSteps: completedCount,
+                  status: getModuleStatus(m, completedCount),
+                }
+              : m,
+          ),
+        );
+        return currentSteps;
+      });
+    },
+    [fixturesAllowed],
+  );
+
+  const markModuleComplete = useCallback(
+    (moduleId: string) => {
+      if (!fixturesAllowed) return;
       setModules((prev) =>
         prev.map((m) =>
-          m.id === result.moduleId
-            ? { ...m, completedSteps: m.stepCount, status: "completed" as const }
-            : m
-        )
+          m.id === moduleId
+            ? {
+                ...m,
+                completedSteps: m.stepCount,
+                status: "completed" as const,
+              }
+            : m,
+        ),
       );
-      // Update track counts
+      setSteps((prev) =>
+        prev.map((s) =>
+          s.moduleId === moduleId ? { ...s, completed: true } : s,
+        ),
+      );
       setModules((currentModules) => {
-        const mod = currentModules.find((m) => m.id === result.moduleId);
+        const mod = currentModules.find((m) => m.id === moduleId);
         if (!mod) return currentModules;
-        const trackModules = currentModules.filter((m) => m.trackId === mod.trackId);
-        const completedCount = trackModules.filter((m) => m.status === "completed").length;
+        const trackModules = currentModules.filter(
+          (m) => m.trackId === mod.trackId,
+        );
+        const completedCount = trackModules.filter(
+          (m) => m.status === "completed",
+        ).length;
         setTracks((prev) =>
           prev.map((t) =>
             t.id === mod.trackId
-              ? { ...t, completedModules: completedCount, clearanceStatus: getTrackClearance(t, completedCount) }
-              : t
-          )
+              ? {
+                  ...t,
+                  completedModules: completedCount,
+                  clearanceStatus: getTrackClearance(t, completedCount),
+                }
+              : t,
+          ),
         );
         return currentModules;
       });
-    }
-  }, []);
+    },
+    [fixturesAllowed],
+  );
+
+  // Quiz actions
+  const saveQuizResult = useCallback(
+    (result: QuizResult) => {
+      if (!fixturesAllowed) return;
+      setQuizResults((prev) => {
+        const filtered = prev.filter((r) => r.moduleId !== result.moduleId);
+        return [...filtered, result];
+      });
+      // If passed, complete all remaining steps and mark module complete
+      if (result.passed) {
+        setSteps((prev) =>
+          prev.map((s) =>
+            s.moduleId === result.moduleId ? { ...s, completed: true } : s,
+          ),
+        );
+        setModules((prev) =>
+          prev.map((m) =>
+            m.id === result.moduleId
+              ? {
+                  ...m,
+                  completedSteps: m.stepCount,
+                  status: "completed" as const,
+                }
+              : m,
+          ),
+        );
+        // Update track counts
+        setModules((currentModules) => {
+          const mod = currentModules.find((m) => m.id === result.moduleId);
+          if (!mod) return currentModules;
+          const trackModules = currentModules.filter(
+            (m) => m.trackId === mod.trackId,
+          );
+          const completedCount = trackModules.filter(
+            (m) => m.status === "completed",
+          ).length;
+          setTracks((prev) =>
+            prev.map((t) =>
+              t.id === mod.trackId
+                ? {
+                    ...t,
+                    completedModules: completedCount,
+                    clearanceStatus: getTrackClearance(t, completedCount),
+                  }
+                : t,
+            ),
+          );
+          return currentModules;
+        });
+      }
+    },
+    [fixturesAllowed],
+  );
 
   const getQuizResultForModule = useCallback(
     (moduleId: string) => quizResults.find((r) => r.moduleId === moduleId),
-    [quizResults]
+    [quizResults],
   );
 
   // Evidence with file support
   const submitEvidence = useCallback(
     (ev: Omit<Evidence, "id" | "submittedAt">) => {
+      if (!fixturesAllowed) return;
       const newEvidence: Evidence = {
         ...ev,
         id: `ev-${Date.now()}`,
@@ -188,29 +334,39 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       };
       setEvidence((prev) => [newEvidence, ...prev]);
     },
-    []
+    [fixturesAllowed],
   );
 
-  const reviewEvidence = useCallback((evidenceId: string, decision: "approved" | "rejected") => {
-    setEvidence((prev) =>
-      prev.map((e) => (e.id === evidenceId ? { ...e, status: decision } : e))
-    );
-  }, []);
+  const reviewEvidence = useCallback(
+    (evidenceId: string, decision: "approved" | "rejected") => {
+      if (!fixturesAllowed) return;
+      setEvidence((prev) =>
+        prev.map((e) => (e.id === evidenceId ? { ...e, status: decision } : e)),
+      );
+    },
+    [fixturesAllowed],
+  );
 
-  const updateEmployeeClearance = useCallback((employeeId: string, status: Employee["clearanceStatus"]) => {
-    setEmployees((prev) =>
-      prev.map((e) => (e.id === employeeId ? { ...e, clearanceStatus: status } : e))
-    );
-  }, []);
+  const updateEmployeeClearance = useCallback(
+    (employeeId: string, status: Employee["clearanceStatus"]) => {
+      if (!fixturesAllowed) return;
+      setEmployees((prev) =>
+        prev.map((e) =>
+          e.id === employeeId ? { ...e, clearanceStatus: status } : e,
+        ),
+      );
+    },
+    [fixturesAllowed],
+  );
 
   const getModulesForTrack = useCallback(
     (trackId: string) => modules.filter((m) => m.trackId === trackId),
-    [modules]
+    [modules],
   );
 
   const getStepsForModule = useCallback(
     (moduleId: string) => steps.filter((s) => s.moduleId === moduleId),
-    [steps]
+    [steps],
   );
 
   const getTrackProgress = useCallback(
@@ -220,10 +376,12 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       return {
         completed: track.completedModules,
         total: track.moduleCount,
-        percentage: Math.round((track.completedModules / track.moduleCount) * 100),
+        percentage: Math.round(
+          (track.completedModules / track.moduleCount) * 100,
+        ),
       };
     },
-    [tracks]
+    [tracks],
   );
 
   const getModuleProgress = useCallback(
@@ -236,7 +394,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
         percentage: Math.round((mod.completedSteps / mod.stepCount) * 100),
       };
     },
-    [modules]
+    [modules],
   );
 
   return createElement(
@@ -249,6 +407,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
         employees,
         evidence,
         quizResults,
+        isUnavailable: !fixturesAllowed,
         selectedTrackId,
         selectedModuleId,
         selectTrack,
@@ -278,7 +437,10 @@ function getModuleStatus(m: Module, completedCount: number): Module["status"] {
   return "available";
 }
 
-function getTrackClearance(t: Track, completedCount: number): Track["clearanceStatus"] {
+function getTrackClearance(
+  t: Track,
+  completedCount: number,
+): Track["clearanceStatus"] {
   if (completedCount === t.moduleCount) return "cleared";
   if (completedCount > 0) return "in-progress";
   return "pending";
@@ -286,6 +448,7 @@ function getTrackClearance(t: Track, completedCount: number): Track["clearanceSt
 
 export function useOnboarding() {
   const ctx = useContext(OnboardingContext);
-  if (!ctx) throw new Error("useOnboarding must be used within OnboardingProvider");
+  if (!ctx)
+    throw new Error("useOnboarding must be used within OnboardingProvider");
   return ctx;
 }
