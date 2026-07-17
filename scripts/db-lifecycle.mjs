@@ -73,10 +73,21 @@ if (command === "status") {
   if (!process.argv.includes("--confirm-restore")) {
     throw new Error("Restore requires --confirm-restore");
   }
+  const maintenanceConfirmed = process.argv.includes(
+    "--confirm-production-maintenance",
+  );
+  if (process.env.APP_ENV === "production" && !maintenanceConfirmed) {
+    throw new Error(
+      "Production restore requires --confirm-production-maintenance after the application is stopped",
+    );
+  }
   const source = required("--input");
   console.log(
     JSON.stringify({
-      restored: restoreDatabaseBackup(source, databasePath, { allowOverwrite: true }),
+      restored: restoreDatabaseBackup(source, databasePath, {
+        allowOverwrite: true,
+        maintenanceConfirmed,
+      }),
     }),
   );
 } else if (command === "baseline-existing") {

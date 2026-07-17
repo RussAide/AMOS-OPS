@@ -5,7 +5,8 @@ dockerfilePath = "Dockerfile"
 # Production storage contract: attach exactly one persistent Railway volume at
 # /app/persistent. Production data, Training data, uploads, and application
 # backups must all use strict descendants of that mount. See
-# docs/RM1-PERSISTENCE.md for the exact paths and migration/rollback gates.
+# docs/RM1-PERSISTENCE.md for the exact paths and docs/RM2-ENCRYPTION.md for
+# the sealed-key, SQLCipher, envelope-encryption, migration, and rotation gates.
 [deploy]
 healthcheckPath = "/api/health"
 healthcheckTimeout = 30

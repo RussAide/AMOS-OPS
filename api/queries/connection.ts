@@ -5,6 +5,13 @@ import path from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
 import * as schema from "@db/schema";
 import { env, type EnvironmentConfig } from "../lib/env";
+import {
+  inspectEncryptedDatabase,
+  openEncryptedDatabase,
+  removeStaleDatabaseEncryptionTemporary,
+  type DatabaseStorageScope,
+} from "../security/storage-encryption";
+import { assertPathConfined } from "../security/path-confinement";
 
 // ─── SQLite evaluation-build database ─────────────────────
 
@@ -12,7 +19,10 @@ export type DataScope = "operational" | "training";
 
 export interface ProductionStorageStartupOptions {
   mountInfo?: string;
-  verifyDatabase?: (databasePath: string) => void;
+  verifyDatabase?: (
+    databasePath: string,
+    scope: DatabaseStorageScope,
+  ) => void;
 }
 
 function decodeMountInfoPath(value: string): string {
@@ -41,7 +51,11 @@ export function mountPointsFromProcMountInfo(mountInfo: string): Set<string> {
   return mountPoints;
 }
 
-export function verifyExistingSqliteDatabase(databasePath: string): void {
+export function verifyExistingSqliteDatabase(
+  databasePath: string,
+  scope: DatabaseStorageScope = "operational",
+  source: NodeJS.ProcessEnv = process.env,
+): void {
   const resolvedPath = path.resolve(databasePath);
   if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isFile()) {
     throw new Error(
@@ -49,10 +63,26 @@ export function verifyExistingSqliteDatabase(databasePath: string): void {
     );
   }
 
-  const verification = new Database(resolvedPath, {
-    readonly: true,
-    fileMustExist: true,
-  });
+  const isProduction = source.APP_ENV?.trim().toLowerCase() === "production";
+  if (isProduction) {
+    const inspection = inspectEncryptedDatabase(resolvedPath, scope, source);
+    if (!inspection.encrypted || !inspection.activeKey) {
+      throw new Error(
+        "PRODUCTION_DATABASE_ENCRYPTION_FAILED: database is not protected by the active SQLCipher key.",
+      );
+    }
+  }
+  const verification = isProduction
+    ? openEncryptedDatabase(
+        resolvedPath,
+        scope,
+        { readonly: true, fileMustExist: true },
+        source,
+      )
+    : new Database(resolvedPath, {
+        readonly: true,
+        fileMustExist: true,
+      });
   try {
     const integrity = verification.pragma("integrity_check", { simple: true });
     if (integrity !== "ok") {
@@ -95,31 +125,57 @@ export function assertProductionStorageStartup(
     );
   }
 
+  for (const databasePath of [
+    environment.databasePath,
+    environment.trainingDatabasePath,
+  ]) {
+    removeStaleDatabaseEncryptionTemporary(databasePath);
+    assertPathConfined(persistentRoot, databasePath, {
+      allowMissing: false,
+      type: "file",
+    });
+  }
+  for (const directoryPath of [
+    environment.uploadPath,
+    environment.trainingUploadPath,
+    environment.backupPath,
+  ]) {
+    assertPathConfined(persistentRoot, directoryPath, {
+      allowMissing: true,
+      type: "directory",
+    });
+  }
+
   const verifyDatabase = options.verifyDatabase ?? verifyExistingSqliteDatabase;
-  verifyDatabase(environment.databasePath);
-  verifyDatabase(environment.trainingDatabasePath);
+  verifyDatabase(environment.databasePath, "operational");
+  verifyDatabase(environment.trainingDatabasePath, "training");
 }
 
 function openDatabase(
   databasePath: string,
+  scope: DatabaseStorageScope,
   options: { requireExisting?: boolean } = {},
 ): Database.Database {
   if (!options.requireExisting) {
     fs.mkdirSync(path.dirname(path.resolve(databasePath)), { recursive: true });
   }
-  const database = new Database(databasePath, {
-    fileMustExist: options.requireExisting ?? false,
-  });
+  const database = env.isProduction
+    ? openEncryptedDatabase(databasePath, scope, {
+        fileMustExist: options.requireExisting ?? false,
+      })
+    : new Database(databasePath, {
+        fileMustExist: options.requireExisting ?? false,
+      });
   database.pragma("foreign_keys = ON");
   database.pragma("journal_mode = WAL");
   return database;
 }
 
 assertProductionStorageStartup(env);
-export const operationalSqlite = openDatabase(env.databasePath, {
+export const operationalSqlite = openDatabase(env.databasePath, "operational", {
   requireExisting: env.isProduction,
 });
-export const trainingSqlite = openDatabase(env.trainingDatabasePath, {
+export const trainingSqlite = openDatabase(env.trainingDatabasePath, "training", {
   requireExisting: env.isProduction,
 });
 const dataScopeStorage = new AsyncLocalStorage<DataScope>();

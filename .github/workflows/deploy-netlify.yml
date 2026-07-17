@@ -45,8 +45,6 @@ jobs:
           UPLOAD_PATH: ${{ inputs.target_environment == 'production' && '/app/persistent/uploads/production' || '/app/uploads/staging' }}
           TRAINING_UPLOAD_PATH: ${{ inputs.target_environment == 'production' && '/app/persistent/uploads/production/training' || '/app/uploads/staging/training' }}
           BACKUP_PATH: ${{ inputs.target_environment == 'production' && '/app/persistent/backups/production' || '/app/data/staging/backups' }}
-          APP_SECRET: ${{ secrets.APP_SECRET }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
           DEPLOYMENT_APPROVAL_ID: ${{ inputs.approval_id }}
           DEPLOYMENT_CHANGE_REFERENCE: ${{ inputs.change_reference }}
           AMOS_ALLOWED_ORIGINS: ${{ vars.AMOS_ALLOWED_ORIGINS }}
@@ -54,6 +52,7 @@ jobs:
           MFA_POLICY: required-all
           AMOS_PRODUCTION_RELEASE_AUTHORIZED: ${{ inputs.target_environment == 'production' && 'true' || 'false' }}
           AMOS_PRODUCTION_RELEASE_ID: ${{ inputs.target_environment == 'production' && inputs.approval_id || '' }}
+          AMOS_VALIDATION_COMPONENT: frontend
       - run: npm run verify
         env:
           VITE_AMOS_API_ORIGIN: ${{ vars.AMOS_API_ORIGIN }}

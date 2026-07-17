@@ -33,6 +33,9 @@ function productionRuntime(root: string): EnvironmentConfig {
       root,
       "data/production/training/amos-ops-training.db",
     ),
+    uploadPath: path.join(root, "uploads/production"),
+    trainingUploadPath: path.join(root, "uploads/production/training"),
+    backupPath: path.join(root, "backups/production"),
   };
 }
 
@@ -75,6 +78,13 @@ describe("RM.1 Production storage startup gate", () => {
   it("verifies both existing Production databases only after proving the mount", () => {
     const runtime = productionRuntime(temporaryRoot());
     const verifyDatabase = vi.fn();
+    for (const databasePath of [
+      runtime.databasePath,
+      runtime.trainingDatabasePath,
+    ]) {
+      fs.mkdirSync(path.dirname(databasePath), { recursive: true });
+      fs.writeFileSync(databasePath, "placeholder");
+    }
 
     assertProductionStorageStartup(runtime, {
       mountInfo: mountInfoFor(runtime.persistentRoot),
@@ -82,9 +92,54 @@ describe("RM.1 Production storage startup gate", () => {
     });
 
     expect(verifyDatabase.mock.calls).toEqual([
-      [runtime.databasePath],
-      [runtime.trainingDatabasePath],
+      [runtime.databasePath, "operational"],
+      [runtime.trainingDatabasePath, "training"],
     ]);
+  });
+
+  it("removes an uncommitted database-encryption temporary before verification", () => {
+    const runtime = productionRuntime(temporaryRoot());
+    const verifyDatabase = vi.fn();
+    for (const databasePath of [
+      runtime.databasePath,
+      runtime.trainingDatabasePath,
+    ]) {
+      fs.mkdirSync(path.dirname(databasePath), { recursive: true });
+      fs.writeFileSync(databasePath, "placeholder");
+    }
+    const stale = `${runtime.databasePath}.amos-rm2-partial`;
+    fs.writeFileSync(stale, "uncommitted-temporary");
+
+    assertProductionStorageStartup(runtime, {
+      mountInfo: mountInfoFor(runtime.persistentRoot),
+      verifyDatabase,
+    });
+    expect(fs.existsSync(stale)).toBe(false);
+    expect(verifyDatabase).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects a database path that traverses a symbolic link", () => {
+    const root = temporaryRoot();
+    const outside = temporaryRoot();
+    const runtime = productionRuntime(root);
+    fs.mkdirSync(path.dirname(runtime.databasePath), { recursive: true });
+    fs.writeFileSync(runtime.databasePath, "placeholder");
+    fs.mkdirSync(path.dirname(runtime.trainingDatabasePath), {
+      recursive: true,
+    });
+    fs.rmSync(path.dirname(runtime.trainingDatabasePath), {
+      recursive: true,
+      force: true,
+    });
+    fs.symlinkSync(outside, path.dirname(runtime.trainingDatabasePath), "dir");
+    fs.writeFileSync(path.join(outside, "amos-ops-training.db"), "placeholder");
+
+    expect(() =>
+      assertProductionStorageStartup(runtime, {
+        mountInfo: mountInfoFor(root),
+        verifyDatabase: vi.fn(),
+      }),
+    ).toThrow(/Symbolic-link path component rejected/);
   });
 
   it("requires an existing, intact SQLite file", () => {

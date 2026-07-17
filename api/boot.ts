@@ -19,6 +19,14 @@ import { enforceDatabaseStartupPolicy } from "./startup-policy";
 import { createPublicRuntimeConfig } from "./runtime-mode";
 import { blockedProductionSyntheticProcedures } from "./lib/production-data-boundary";
 import { inheritResponseHeaders } from "./response-headers";
+import {
+  enforceEncryptedDirectory,
+  readEncryptedFile,
+  writeEncryptedFileAtomic,
+} from "./security/storage-encryption";
+import { assertPathConfined } from "./security/path-confinement";
+import { enforceDatabaseBackupDirectory } from "./data-lifecycle";
+import { isStorageEncryptionInventoryReady } from "./security/storage-readiness";
 
 const logger = createStructuredLogger("amos-ops-api");
 
@@ -52,6 +60,39 @@ if (!fs.existsSync(TRAINING_UPLOAD_DIR)) {
 if (!fs.existsSync(BACKUP_DIR)) {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
 }
+if (env.isProduction) {
+  for (const directoryPath of [
+    UPLOAD_DIR,
+    TRAINING_UPLOAD_DIR,
+    BACKUP_DIR,
+  ]) {
+    assertPathConfined(env.persistentRoot, directoryPath, {
+      allowMissing: false,
+      type: "directory",
+    });
+  }
+}
+const storageEncryptionReports = env.isProduction
+  ? [
+      enforceEncryptedDirectory(
+        UPLOAD_DIR,
+        "upload-operational",
+      ),
+      enforceEncryptedDirectory(
+        TRAINING_UPLOAD_DIR,
+        "upload-training",
+      ),
+    ]
+  : [];
+const databaseBackupEncryptionReport = env.isProduction
+  ? enforceDatabaseBackupDirectory(BACKUP_DIR)
+  : null;
+const storageEncryptionReady = isStorageEncryptionInventoryReady({
+  production: env.isProduction,
+  uploadReportCount: storageEncryptionReports.length,
+  databaseBackupInventoryCompleted:
+    databaseBackupEncryptionReport !== null,
+});
 logger.info("storage.paths.validated", {
   details: {
     persistentRoot: env.persistentRoot,
@@ -60,6 +101,25 @@ logger.info("storage.paths.validated", {
     uploadPath: env.uploadPath,
     trainingUploadPath: env.trainingUploadPath,
     backupPath: env.backupPath,
+    encryptionRequired: env.storageEncryptionEnabled,
+    keyProvider: env.storageKeyProvider,
+    encryptionInventory: storageEncryptionReports.map((report) => ({
+      purpose: report.purpose,
+      inspected: report.inspected,
+      encrypted: report.encrypted,
+      rewrapped: report.rewrapped,
+      alreadyProtected: report.alreadyProtected,
+    })),
+    databaseBackupInventory: databaseBackupEncryptionReport
+      ? {
+          inspected: databaseBackupEncryptionReport.inspected,
+          rewrapped: databaseBackupEncryptionReport.rewrapped,
+          outerKeyVersions:
+            databaseBackupEncryptionReport.outerBackupKeyIds.length,
+          innerDatabaseKeyVersions:
+            databaseBackupEncryptionReport.innerDatabaseKeyIds.length,
+        }
+      : null,
   },
 });
 
@@ -179,6 +239,10 @@ app.get("/api/health/ready", (c) => {
   const report = createReadinessReport(operationalSqlite, operationalMonitor, {
     environment: env.appEnvironment,
     initializationError: databaseInitializationError,
+    encryption: {
+      required: env.storageEncryptionEnabled,
+      ready: storageEncryptionReady,
+    },
   });
   return report.ready ? c.json(report, 200) : c.json(report, 503);
 });
@@ -187,6 +251,10 @@ app.get("/api/health", (c) => {
   const report = createReadinessReport(operationalSqlite, operationalMonitor, {
     environment: env.appEnvironment,
     initializationError: databaseInitializationError,
+    encryption: {
+      required: env.storageEncryptionEnabled,
+      ready: storageEncryptionReady,
+    },
   });
   return report.ready ? c.json(report, 200) : c.json(report, 503);
 });
@@ -241,7 +309,22 @@ app.post("/api/upload", async (c) => {
         : UPLOAD_DIR;
     const filePath = path.join(uploadDir, safeName);
     const buffer = Buffer.from(await file.arrayBuffer());
-    fs.writeFileSync(filePath, buffer);
+    try {
+      if (env.isProduction) {
+        writeEncryptedFileAtomic(
+          filePath,
+          buffer,
+          authorization.user.dataScope === "training"
+            ? "upload-training"
+            : "upload-operational",
+          uploadDir,
+        );
+      } else {
+        fs.writeFileSync(filePath, buffer);
+      }
+    } finally {
+      if (env.isProduction) buffer.fill(0);
+    }
 
     return c.json(
       {
@@ -289,7 +372,15 @@ app.get("/uploads/:filename", async (c) => {
     return c.json({ error: "File not found" }, 404);
   }
 
-  const fileBuffer = fs.readFileSync(filePath);
+  const fileBuffer = env.isProduction
+    ? readEncryptedFile(
+        filePath,
+        authorization.user.dataScope === "training"
+          ? "upload-training"
+          : "upload-operational",
+        uploadDir,
+      )
+    : fs.readFileSync(filePath);
   const ext = path.extname(safeFilename).toLowerCase();
   const mimeTypes: Record<string, string> = {
     ".pdf": "application/pdf",
@@ -302,7 +393,7 @@ app.get("/uploads/:filename", async (c) => {
     ".txt": "text/plain",
   };
   c.header("Content-Type", mimeTypes[ext] || "application/octet-stream");
-  return c.body(fileBuffer);
+  return c.body(new Uint8Array(fileBuffer));
 });
 
 // ─── tRPC API (lazy load to avoid env.ts at startup) ─────────
