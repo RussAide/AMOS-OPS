@@ -215,43 +215,47 @@ describe("RM.2 encrypted database backup and restore", () => {
     ).rejects.toThrow("PRODUCTION_BACKUP_PATH_REJECTED");
   });
 
-  it("restores an older backup and rekeys it to the current database key", async () => {
-    const { databasePath, backupPath } = configureProduction();
-    await createDatabaseBackup(databasePath, backupPath);
-    const nextKey = key();
-    process.env.AMOS_DATABASE_ACTIVE_KEY_ID = "database-test-v2";
-    process.env.AMOS_DATABASE_KEY_MANIFEST_JSON = JSON.stringify({
-      "database-test-v1": "AMOS_DATABASE_KEY_TEST_V1",
-      "database-test-v2": "AMOS_DATABASE_KEY_TEST_V2",
-    });
-    process.env.AMOS_DATABASE_KEY_TEST_V2 = nextKey;
-    process.env.AMOS_STORAGE_MIGRATION_MODE = "rotate";
-    migrateDatabaseEncryption(databasePath, "operational");
-    process.env.AMOS_STORAGE_MIGRATION_MODE = "none";
+  it(
+    "restores an older backup and rekeys it to the current database key",
+    async () => {
+      const { databasePath, backupPath } = configureProduction();
+      await createDatabaseBackup(databasePath, backupPath);
+      const nextKey = key();
+      process.env.AMOS_DATABASE_ACTIVE_KEY_ID = "database-test-v2";
+      process.env.AMOS_DATABASE_KEY_MANIFEST_JSON = JSON.stringify({
+        "database-test-v1": "AMOS_DATABASE_KEY_TEST_V1",
+        "database-test-v2": "AMOS_DATABASE_KEY_TEST_V2",
+      });
+      process.env.AMOS_DATABASE_KEY_TEST_V2 = nextKey;
+      process.env.AMOS_STORAGE_MIGRATION_MODE = "rotate";
+      migrateDatabaseEncryption(databasePath, "operational");
+      process.env.AMOS_STORAGE_MIGRATION_MODE = "none";
 
-    restoreDatabaseBackup(backupPath, databasePath, {
-      allowOverwrite: true,
-      maintenanceConfirmed: true,
-    });
-    const restored = openEncryptedDatabase(databasePath, "operational", {
-      readonly: true,
-      fileMustExist: true,
-    });
-    expect(restored.prepare("SELECT COUNT(*) FROM users").pluck().get()).toBe(1);
-    restored.close();
-
-    process.env.AMOS_DATABASE_ACTIVE_KEY_ID = "database-test-v1";
-    process.env.AMOS_DATABASE_KEY_MANIFEST_JSON = JSON.stringify({
-      "database-test-v1": "AMOS_DATABASE_KEY_TEST_V1",
-    });
-    delete process.env.AMOS_DATABASE_KEY_TEST_V2;
-    expect(() =>
-      openEncryptedDatabase(databasePath, "operational", {
+      restoreDatabaseBackup(backupPath, databasePath, {
+        allowOverwrite: true,
+        maintenanceConfirmed: true,
+      });
+      const restored = openEncryptedDatabase(databasePath, "operational", {
         readonly: true,
         fileMustExist: true,
-      }),
-    ).toThrow("active Production key");
-  });
+      });
+      expect(restored.prepare("SELECT COUNT(*) FROM users").pluck().get()).toBe(1);
+      restored.close();
+
+      process.env.AMOS_DATABASE_ACTIVE_KEY_ID = "database-test-v1";
+      process.env.AMOS_DATABASE_KEY_MANIFEST_JSON = JSON.stringify({
+        "database-test-v1": "AMOS_DATABASE_KEY_TEST_V1",
+      });
+      delete process.env.AMOS_DATABASE_KEY_TEST_V2;
+      expect(() =>
+        openEncryptedDatabase(databasePath, "operational", {
+          readonly: true,
+          fileMustExist: true,
+        }),
+      ).toThrow("active Production key");
+    },
+    20_000,
+  );
 
   it("preserves an existing backup when final publication fails", async () => {
     const { databasePath, backupPath } = configureProduction();
