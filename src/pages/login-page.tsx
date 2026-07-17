@@ -19,7 +19,7 @@ import {
   KeyRound,
   MailCheck,
 } from "lucide-react";
-import type { MfaPrompt } from "@/hooks/use-auth";
+import type { MfaPrompt, TotpSetup } from "@/hooks/use-auth";
 
 /* ─── Floating Particles Canvas ─────────────────────────── */
 function ParticleBackground() {
@@ -167,13 +167,11 @@ export function LoginPage() {
   const [showForm, setShowForm] = useState(true);
   const [mode, setMode] = useState<"login" | "register">("login");
   const [authStep, setAuthStep] = useState<
-    "credentials" | "mfa" | "recovery-request" | "recovery-reset"
+    "credentials" | "mfa" | "recovery-request" | "recovery-reset" | "totp-setup"
   >(invitationToken ? "recovery-reset" : "credentials");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(
-    invitationToken
-      ? "Create your password to activate your Training account."
-      : "",
+    invitationToken ? "Create your password to activate your account." : "",
   );
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
@@ -184,6 +182,7 @@ export function LoginPage() {
     department: "",
   });
   const [mfaPrompt, setMfaPrompt] = useState<MfaPrompt | null>(null);
+  const [totpSetup, setTotpSetup] = useState<TotpSetup | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [recoveryToken, setRecoveryToken] = useState(invitationToken ?? "");
   const [newPassword, setNewPassword] = useState("");
@@ -303,7 +302,25 @@ export function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      await resetPassword(recoveryToken, newPassword);
+      const setup = await resetPassword(recoveryToken, newPassword);
+      if (invitationToken) {
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+      if (setup) {
+        setTotpSetup(setup);
+        setForm((current) => ({
+          ...current,
+          email: setup.accountName,
+          password: "",
+        }));
+        setNotice(
+          "Password updated. Add AMOS-OPS to your authenticator before signing in.",
+        );
+        setRecoveryToken("");
+        setNewPassword("");
+        setAuthStep("totp-setup");
+        return;
+      }
       setNotice("Password updated. Sign in with your new password.");
       setForm((current) => ({ ...current, password: "" }));
       setRecoveryToken("");
@@ -758,8 +775,9 @@ export function LoginPage() {
                       className="text-[10px] mt-1"
                       style={{ color: "rgba(255,255,255,0.45)" }}
                     >
-                      Enter the six-digit code prepared for{" "}
-                      {mfaPrompt.destination}.
+                      {mfaPrompt.deliveryMethod === "totp"
+                        ? "Enter the current six-digit code from your authenticator app."
+                        : `Enter the six-digit code prepared for ${mfaPrompt.destination}.`}
                     </p>
                   </div>
                   {mfaPrompt.evaluationCode && (
@@ -950,6 +968,79 @@ export function LoginPage() {
                     Cancel
                   </button>
                 </form>
+              )}
+
+              {authStep === "totp-setup" && totpSetup && (
+                <div className="space-y-3">
+                  <div className="text-center">
+                    <ShieldCheck
+                      size={24}
+                      className="mx-auto mb-2"
+                      style={{ color: "#5BA8A5" }}
+                    />
+                    <h3 className="text-[14px] font-semibold text-white">
+                      Add your authenticator
+                    </h3>
+                    <p
+                      className="text-[10px] mt-1"
+                      style={{ color: "rgba(255,255,255,0.45)" }}
+                    >
+                      In Microsoft Authenticator, Google Authenticator,
+                      1Password, or another TOTP app, add an account manually.
+                    </p>
+                  </div>
+                  <div
+                    className="rounded-lg p-3"
+                    style={{
+                      backgroundColor: "rgba(91,168,165,0.12)",
+                      border: "1px solid rgba(91,168,165,0.25)",
+                    }}
+                  >
+                    <div
+                      className="text-[9px] uppercase tracking-widest"
+                      style={{ color: "rgba(255,255,255,0.45)" }}
+                    >
+                      Account
+                    </div>
+                    <div className="text-[11px] text-white mt-1 break-all">
+                      {totpSetup.accountName}
+                    </div>
+                    <div
+                      className="text-[9px] uppercase tracking-widest mt-3"
+                      style={{ color: "rgba(255,255,255,0.45)" }}
+                    >
+                      Setup key
+                    </div>
+                    <code
+                      className="block text-[14px] tracking-[0.12em] mt-1 break-all select-all"
+                      style={{ color: "#A7F3D0" }}
+                    >
+                      {totpSetup.secret}
+                    </code>
+                  </div>
+                  <p
+                    className="text-[10px] text-center"
+                    style={{ color: "rgba(255,255,255,0.45)" }}
+                  >
+                    Save this key now. It is shown once. The first code you
+                    enter will complete authenticator enrollment.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTotpSetup(null);
+                      setNotice(
+                        "Authenticator prepared. Sign in, then enter its current six-digit code.",
+                      );
+                      setAuthStep("credentials");
+                      setMode("login");
+                    }}
+                    className="w-full py-2.5 rounded-lg text-[13px] font-bold text-white"
+                    style={{ backgroundColor: "#245C5A" }}
+                  >
+                    Continue to sign in
+                  </button>
+                </div>
               )}
             </div>
 

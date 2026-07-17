@@ -180,6 +180,45 @@ describe("environment isolation controls", () => {
     ).toThrow(/Production is locked/);
   });
 
+  it("accepts only a complete, expiring production initial-admin invitation", () => {
+    const base = {
+      APP_ENV: "production",
+      AMOS_RUNTIME_MODE: "production",
+      NODE_ENV: "production",
+      DATABASE_PATH: "/data/production/amos-ops.db",
+      UPLOAD_PATH: "/uploads/production",
+      CREDENTIAL_NAMESPACE: "amos-ops/production",
+      APP_SECRET: testCredential("bootstrap-app"),
+      JWT_SECRET: testCredential("bootstrap-jwt"),
+      DEPLOYMENT_APPROVAL_ID: "INITIAL-ADMIN",
+      DEPLOYMENT_CHANGE_REFERENCE: "INITIAL-ADMIN-2026",
+      AMOS_ALLOWED_ORIGINS: "https://amos.example.invalid",
+      ALLOW_SELF_REGISTRATION: "false",
+      MFA_POLICY: "required-all",
+      AMOS_PRODUCTION_RELEASE_AUTHORIZED: "true",
+      AMOS_PRODUCTION_RELEASE_ID: "RG1-GO-2026-001",
+    };
+    expect(() =>
+      buildEnvironmentConfig({
+        ...base,
+        AMOS_INITIAL_ADMIN_EMAIL: "e.o.aideyan@adobicarebhc.com",
+      }),
+    ).toThrow(/requires email, first name, last name/);
+
+    const config = buildEnvironmentConfig({
+      ...base,
+      AMOS_INITIAL_ADMIN_EMAIL: "e.o.aideyan@adobicarebhc.com",
+      AMOS_INITIAL_ADMIN_FIRST_NAME: "Eghosa",
+      AMOS_INITIAL_ADMIN_LAST_NAME: "Aideyan",
+      AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH: "a".repeat(64),
+      AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT: new Date(
+        Date.now() + 60 * 60_000,
+      ).toISOString(),
+    });
+    expect(config.initialAdminEmail).toBe("e.o.aideyan@adobicarebhc.com");
+    expect(config.initialAdminInvitationTokenHash).toBe("a".repeat(64));
+  });
+
   it("accepts only a fully owner-bound staging review posture", () => {
     const review = buildEnvironmentConfig({
       APP_ENV: "staging",
@@ -207,9 +246,7 @@ describe("environment isolation controls", () => {
     expect(review.reviewDeployment).toBe(true);
     expect(review.runtimeMode).toBe("production");
     expect(review.productionReleaseAuthorized).toBe(false);
-    expect(review.finalGateOwnerEmail).toBe(
-      "owner@amos-ops.invalid",
-    );
+    expect(review.finalGateOwnerEmail).toBe("owner@amos-ops.invalid");
     expect(() => assertSyntheticScenarioRuntime(review)).not.toThrow();
   });
 
