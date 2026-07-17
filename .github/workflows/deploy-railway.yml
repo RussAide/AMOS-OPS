@@ -54,6 +54,10 @@ jobs:
           MFA_POLICY: required-all
           AMOS_PRODUCTION_RELEASE_AUTHORIZED: ${{ inputs.target_environment == 'production' && 'true' || 'false' }}
           AMOS_PRODUCTION_RELEASE_ID: ${{ inputs.target_environment == 'production' && inputs.approval_id || '' }}
+          AMOS_VALIDATION_COMPONENT: backend-ci
+          AMOS_STORAGE_ENCRYPTION_REQUIRED: ${{ inputs.target_environment == 'production' && 'true' || 'false' }}
+          AMOS_STORAGE_KEY_PROVIDER: ${{ inputs.target_environment == 'production' && 'railway-sealed-variables-v1' || 'none' }}
+          AMOS_STORAGE_MIGRATION_MODE: none
       - run: npm run verify
       - name: Install Railway CLI
         run: npm install -g @railway/cli

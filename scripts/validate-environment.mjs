@@ -59,6 +59,9 @@ const reviewDeployment = /^(?:1|true|yes|on)$/i.test(
 const controlled =
   appEnvironment === "staging" || appEnvironment === "production";
 const errors = [];
+const validationComponent =
+  process.env.AMOS_VALIDATION_COMPONENT?.trim().toLowerCase() || "backend";
+const storageKeyFingerprints = new Set();
 
 function isExactHttpOrigin(value) {
   try {
@@ -86,6 +89,72 @@ function isStrictPathDescendant(root, candidate) {
   );
 }
 
+function validateStorageKeyring(domain) {
+  const prefix = `AMOS_${domain.toUpperCase()}`;
+  const activeKeyId = process.env[`${prefix}_ACTIVE_KEY_ID`]?.trim() || "";
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$/.test(activeKeyId)) {
+    errors.push(`${prefix}_ACTIVE_KEY_ID is invalid.`);
+    return;
+  }
+  const manifestVariable = `${prefix}_KEY_MANIFEST_JSON`;
+  let manifest;
+  try {
+    manifest = JSON.parse(process.env[manifestVariable] || "");
+  } catch {
+    errors.push(`${manifestVariable} must be valid JSON.`);
+    return;
+  }
+  if (!manifest || Array.isArray(manifest) || typeof manifest !== "object") {
+    errors.push(`${manifestVariable} must be a JSON object.`);
+    return;
+  }
+  const slotPattern = new RegExp(
+    `^${prefix}_KEY_[A-Z][A-Z0-9_]{1,47}$`,
+    "u",
+  );
+  if (!Object.hasOwn(manifest, activeKeyId)) {
+    errors.push(
+      `${manifestVariable} must contain the configured active key ID.`,
+    );
+    return;
+  }
+  const usedSlots = new Set();
+  for (const [keyId, slotName] of Object.entries(manifest)) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$/.test(keyId)) {
+      errors.push(`${manifestVariable} contains an invalid key ID.`);
+      continue;
+    }
+    if (
+      typeof slotName !== "string" ||
+      !slotPattern.test(slotName) ||
+      slotName === manifestVariable
+    ) {
+      errors.push(
+        `${manifestVariable} must map each key ID to a dedicated ${prefix}_KEY_* variable.`,
+      );
+      continue;
+    }
+    if (usedSlots.has(slotName)) {
+      errors.push(`${manifestVariable} must not reuse a sealed key slot.`);
+      continue;
+    }
+    usedSlots.add(slotName);
+    const encoded = process.env[slotName]?.trim() || "";
+    const decoded = Buffer.from(encoded, "base64");
+    if (decoded.length !== 32 || decoded.toString("base64") !== encoded) {
+      errors.push(
+        `${slotName} must contain canonical base64 for exactly 32 bytes.`,
+      );
+      continue;
+    }
+    const normalized = decoded.toString("base64");
+    if (storageKeyFingerprints.has(normalized)) {
+      errors.push("Storage key material must not be reused across domains.");
+    }
+    storageKeyFingerprints.add(normalized);
+  }
+}
+
 if (!environments.has(appEnvironment))
   errors.push(`APP_ENV is invalid: ${appEnvironment}`);
 if (!new Set(["demo", "production"]).has(runtimeMode))
@@ -110,12 +179,14 @@ if (controlled && !credentialNamespace.toLowerCase().includes(appEnvironment))
   errors.push(`CREDENTIAL_NAMESPACE must include ${appEnvironment}.`);
 
 if (controlled) {
-  for (const name of ["APP_SECRET", "JWT_SECRET"]) {
-    const value = process.env[name] || "";
-    if (value.length < 32 || isPlaceholder(value)) {
-      errors.push(
-        `${name} must be a non-placeholder secret of at least 32 characters.`,
-      );
+  if (validationComponent !== "frontend") {
+    for (const name of ["APP_SECRET", "JWT_SECRET"]) {
+      const value = process.env[name] || "";
+      if (value.length < 32 || isPlaceholder(value)) {
+        errors.push(
+          `${name} must be a non-placeholder secret of at least 32 characters.`,
+        );
+      }
     }
   }
   for (const name of [
@@ -170,6 +241,35 @@ if (appEnvironment === "production") {
     errors.push(
       "Production is locked until explicit release authorization and a non-placeholder release ID are supplied.",
     );
+  if (
+    validationComponent === "backend" ||
+    validationComponent === "backend-ci"
+  ) {
+    if (
+      !/^(?:1|true|yes|on)$/i.test(
+        process.env.AMOS_STORAGE_ENCRYPTION_REQUIRED || "",
+      )
+    ) {
+      errors.push("Production requires AMOS_STORAGE_ENCRYPTION_REQUIRED=true.");
+    }
+    if (
+      (process.env.AMOS_STORAGE_KEY_PROVIDER || "") !==
+      "railway-sealed-variables-v1"
+    ) {
+      errors.push(
+        "Production requires AMOS_STORAGE_KEY_PROVIDER=railway-sealed-variables-v1.",
+      );
+    }
+    const migrationMode = process.env.AMOS_STORAGE_MIGRATION_MODE || "none";
+    if (!new Set(["none", "encrypt-plaintext", "rotate"]).has(migrationMode)) {
+      errors.push("AMOS_STORAGE_MIGRATION_MODE is invalid.");
+    }
+    if (validationComponent === "backend") {
+      for (const domain of ["database", "upload", "backup"]) {
+        validateStorageKeyring(domain);
+      }
+    }
+  }
 } else if (productionReleaseAuthorized || productionReleaseId) {
   errors.push(
     "Production release authorization may be supplied only for APP_ENV=production.",

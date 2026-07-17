@@ -96,6 +96,24 @@ describe("public runtime mode contract", () => {
       MFA_POLICY: "required-all",
       AMOS_PRODUCTION_RELEASE_AUTHORIZED: "true",
       AMOS_PRODUCTION_RELEASE_ID: "RG1-GO-2026-001",
+      AMOS_STORAGE_ENCRYPTION_REQUIRED: "true",
+      AMOS_STORAGE_KEY_PROVIDER: "railway-sealed-variables-v1",
+      AMOS_STORAGE_MIGRATION_MODE: "none",
+      AMOS_DATABASE_ACTIVE_KEY_ID: "database-test-v1",
+      AMOS_DATABASE_KEY_MANIFEST_JSON: JSON.stringify({
+        "database-test-v1": "AMOS_DATABASE_KEY_TEST_V1",
+      }),
+      AMOS_DATABASE_KEY_TEST_V1: Buffer.alloc(32, 31).toString("base64"),
+      AMOS_UPLOAD_ACTIVE_KEY_ID: "upload-test-v1",
+      AMOS_UPLOAD_KEY_MANIFEST_JSON: JSON.stringify({
+        "upload-test-v1": "AMOS_UPLOAD_KEY_TEST_V1",
+      }),
+      AMOS_UPLOAD_KEY_TEST_V1: Buffer.alloc(32, 32).toString("base64"),
+      AMOS_BACKUP_ACTIVE_KEY_ID: "backup-test-v1",
+      AMOS_BACKUP_KEY_MANIFEST_JSON: JSON.stringify({
+        "backup-test-v1": "AMOS_BACKUP_KEY_TEST_V1",
+      }),
+      AMOS_BACKUP_KEY_TEST_V1: Buffer.alloc(32, 33).toString("base64"),
     });
 
     expect(createPublicRuntimeConfig(environment, "build-001")).toMatchObject({

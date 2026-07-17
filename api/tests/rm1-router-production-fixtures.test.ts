@@ -23,6 +23,24 @@ const productionEnvironment = {
   MFA_POLICY: "required-all",
   AMOS_PRODUCTION_RELEASE_AUTHORIZED: "true",
   AMOS_PRODUCTION_RELEASE_ID: "RM1-TEST-RELEASE",
+  AMOS_STORAGE_ENCRYPTION_REQUIRED: "true",
+  AMOS_STORAGE_KEY_PROVIDER: "railway-sealed-variables-v1",
+  AMOS_STORAGE_MIGRATION_MODE: "none",
+  AMOS_DATABASE_ACTIVE_KEY_ID: "database-test-v1",
+  AMOS_DATABASE_KEY_MANIFEST_JSON: JSON.stringify({
+    "database-test-v1": "AMOS_DATABASE_KEY_TEST_V1",
+  }),
+  AMOS_DATABASE_KEY_TEST_V1: Buffer.alloc(32, 41).toString("base64"),
+  AMOS_UPLOAD_ACTIVE_KEY_ID: "upload-test-v1",
+  AMOS_UPLOAD_KEY_MANIFEST_JSON: JSON.stringify({
+    "upload-test-v1": "AMOS_UPLOAD_KEY_TEST_V1",
+  }),
+  AMOS_UPLOAD_KEY_TEST_V1: Buffer.alloc(32, 42).toString("base64"),
+  AMOS_BACKUP_ACTIVE_KEY_ID: "backup-test-v1",
+  AMOS_BACKUP_KEY_MANIFEST_JSON: JSON.stringify({
+    "backup-test-v1": "AMOS_BACKUP_KEY_TEST_V1",
+  }),
+  AMOS_BACKUP_KEY_TEST_V1: Buffer.alloc(32, 43).toString("base64"),
 };
 
 function setEnvironment(values: Record<string, string>): void {

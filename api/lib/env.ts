@@ -4,6 +4,11 @@ import {
   AMOS_RUNTIME_MODES,
   type AmosRuntimeMode,
 } from "@contracts/runtime-mode";
+import {
+  disposeStorageEncryptionConfiguration,
+  loadStorageEncryptionConfiguration,
+  type StorageMigrationMode,
+} from "../security/storage-encryption";
 
 export const APP_ENVIRONMENTS = [
   "development",
@@ -32,6 +37,12 @@ export interface EnvironmentConfig {
   uploadPath: string;
   trainingUploadPath: string;
   backupPath: string;
+  storageEncryptionEnabled: boolean;
+  storageKeyProvider: "railway-sealed-variables-v1" | "none";
+  storageMigrationMode: StorageMigrationMode;
+  databaseActiveKeyId: string | null;
+  uploadActiveKeyId: string | null;
+  backupActiveKeyId: string | null;
   evaluationMode: boolean;
   allowSelfRegistration: boolean;
   mfaPolicy: MfaPolicy;
@@ -263,6 +274,19 @@ export function buildEnvironmentConfig(
       ? path.join(persistentRoot, "backups", appEnvironment)
       : path.join("backups", appEnvironment));
   const evaluationMode = runtimeMode === "demo";
+  const storageEncryption = loadStorageEncryptionConfiguration(
+    source,
+    isProduction,
+  );
+  const storageEncryptionMetadata = {
+    storageEncryptionEnabled: storageEncryption.enabled,
+    storageKeyProvider: storageEncryption.provider,
+    storageMigrationMode: storageEncryption.migrationMode,
+    databaseActiveKeyId: storageEncryption.database?.activeKeyId ?? null,
+    uploadActiveKeyId: storageEncryption.upload?.activeKeyId ?? null,
+    backupActiveKeyId: storageEncryption.backup?.activeKeyId ?? null,
+  };
+  disposeStorageEncryptionConfiguration(storageEncryption);
   const appId = source.APP_ID?.trim() || "amos-ops";
   const appSecret = source.APP_SECRET?.trim() || "";
   const jwtSecret = source.JWT_SECRET?.trim() || "";
@@ -589,6 +613,7 @@ export function buildEnvironmentConfig(
     uploadPath,
     trainingUploadPath,
     backupPath,
+    ...storageEncryptionMetadata,
     evaluationMode,
     allowSelfRegistration,
     mfaPolicy,

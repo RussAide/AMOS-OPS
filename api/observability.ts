@@ -70,6 +70,7 @@ export interface ReadinessReport {
   uptimeSeconds: number;
   checks: {
     database: { status: "ok" | "failed"; detail: string };
+    encryption: { status: "ok" | "failed"; detail: string };
     auditStore: { status: "ok" | "failed"; detail: string };
     alertStore: { status: "ok" | "failed"; detail: string };
   };
@@ -311,7 +312,12 @@ function storeCheck(db: DatabaseHandle, tableName: string): { status: "ok" | "fa
 export function createReadinessReport(
   db: DatabaseHandle,
   monitor: OperationalMonitor,
-  options: { version?: string; environment?: string; initializationError?: unknown } = {},
+  options: {
+    version?: string;
+    environment?: string;
+    initializationError?: unknown;
+    encryption?: { required: boolean; ready: boolean };
+  } = {},
 ): ReadinessReport {
   let database: ReadinessReport["checks"]["database"];
   if (options.initializationError !== undefined) {
@@ -333,8 +339,22 @@ export function createReadinessReport(
   }
   const auditStore = storeCheck(db, "operational_audit_events");
   const alertStore = storeCheck(db, "operational_alerts");
+  const encryption = options.encryption?.required
+    ? options.encryption.ready
+      ? {
+          status: "ok" as const,
+          detail: "sqlcipher and authenticated file encryption active",
+        }
+      : {
+          status: "failed" as const,
+          detail: "required storage encryption is unavailable",
+        }
+    : { status: "ok" as const, detail: "not required in this environment" };
   const ready =
-    database.status === "ok" && auditStore.status === "ok" && alertStore.status === "ok";
+    database.status === "ok" &&
+    encryption.status === "ok" &&
+    auditStore.status === "ok" &&
+    alertStore.status === "ok";
   return {
     status: ready ? "ready" : "degraded",
     ready,
@@ -343,7 +363,7 @@ export function createReadinessReport(
     version: options.version ?? "1.0.0",
     environment: options.environment ?? process.env.NODE_ENV ?? "unknown",
     uptimeSeconds: Math.round(process.uptime()),
-    checks: { database, auditStore, alertStore },
+    checks: { database, encryption, auditStore, alertStore },
     metrics: monitor.snapshot(),
   };
 }

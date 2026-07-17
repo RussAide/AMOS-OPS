@@ -1,7 +1,24 @@
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
 import Database from "better-sqlite3";
+import {
+  decryptStoragePayload,
+  decryptStoragePayloadWithMetadata,
+  deriveStorageObjectId,
+  encryptStoragePayload,
+  inspectEncryptedDatabase,
+  isEncryptedStoragePayload,
+  migrateDatabaseEncryption,
+  openEncryptedDatabase,
+  rewrapEncryptedFileAtomic,
+  type DatabaseStorageScope,
+} from "./security/storage-encryption";
+import { assertPathConfined } from "./security/path-confinement";
+import {
+  decodeDatabaseBackupContainer,
+  encodeDatabaseBackupContainer,
+} from "./security/database-backup-container";
 
 type DatabaseHandle = InstanceType<typeof Database>;
 
@@ -71,6 +88,76 @@ export interface BaselineAdoptionReport {
 }
 
 const MIGRATION_TABLE = "_amos_migrations";
+
+function isStrictPathDescendant(root: string, candidate: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  return (
+    relative.length > 0 &&
+    relative !== ".." &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
+}
+
+function syncDirectory(directoryPath: string): void {
+  const descriptor = fs.openSync(directoryPath, "r");
+  try {
+    fs.fsyncSync(descriptor);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
+function syncFile(filePath: string): void {
+  const descriptor = fs.openSync(filePath, "r");
+  try {
+    fs.fsyncSync(descriptor);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
+function productionDatabaseScope(
+  databasePath: string,
+  options: { allowMissing?: boolean } = {},
+): DatabaseStorageScope | null {
+  if (process.env.APP_ENV?.trim().toLowerCase() !== "production") return null;
+  const resolved = path.resolve(databasePath);
+  const persistentRoot = process.env.PERSISTENT_ROOT?.trim();
+  if (!persistentRoot) {
+    throw new Error("PRODUCTION_PERSISTENT_ROOT_REQUIRED.");
+  }
+  assertPathConfined(persistentRoot, resolved, {
+    allowMissing: options.allowMissing ?? false,
+    type: "file",
+  });
+  if (resolved === path.resolve(process.env.DATABASE_PATH || "")) {
+    return "operational";
+  }
+  if (resolved === path.resolve(process.env.TRAINING_DATABASE_PATH || "")) {
+    return "training";
+  }
+  throw new Error(
+    "PRODUCTION_DATABASE_PATH_REJECTED: lifecycle operations are limited to canonical databases.",
+  );
+}
+
+function assertProductionBackupPath(
+  backupPath: string,
+  allowMissing: boolean,
+): void {
+  if (process.env.APP_ENV?.trim().toLowerCase() !== "production") return;
+  const backupRoot = process.env.BACKUP_PATH?.trim();
+  if (!backupRoot || !isStrictPathDescendant(backupRoot, backupPath)) {
+    throw new Error(
+      "PRODUCTION_BACKUP_PATH_REJECTED: backup artifacts must be stored beneath BACKUP_PATH.",
+    );
+  }
+  assertPathConfined(backupRoot, backupPath, {
+    allowMissing,
+    type: "file",
+  });
+}
 
 export const DEFAULT_REFERENTIAL_RULES: readonly ReferentialRule[] = [
   { childTable: "treatment_plans", childColumn: "patient_id", parentTable: "patients" },
@@ -255,7 +342,10 @@ export async function adoptExistingMigrationBaseline(options: {
     };
   } catch (error) {
     db.close();
-    restoreDatabaseBackup(checkpointPath, databasePath, { allowOverwrite: true });
+    restoreDatabaseBackup(checkpointPath, databasePath, {
+      allowOverwrite: true,
+      maintenanceConfirmed: true,
+    });
     throw error;
   } finally {
     if (db.open) db.close();
@@ -429,6 +519,8 @@ export async function createDatabaseBackup(
 ): Promise<string> {
   const sourcePath = path.resolve(databasePath);
   const destinationPath = path.resolve(backupPath);
+  const productionScope = productionDatabaseScope(sourcePath);
+  if (productionScope) assertProductionBackupPath(destinationPath, true);
   if (sourcePath === destinationPath) {
     throw new Error("Backup destination must differ from the source database");
   }
@@ -440,64 +532,386 @@ export async function createDatabaseBackup(
   }
 
   fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
-  const temporaryPath = `${destinationPath}.partial`;
+  const temporaryPath = `${destinationPath}.amos-backup-partial`;
+  const encryptedDatabasePath = `${temporaryPath}.amos-sqlcipher-partial`;
   fs.rmSync(temporaryPath, { force: true });
+  fs.rmSync(encryptedDatabasePath, { force: true });
 
-  const source = new Database(sourcePath, { readonly: true, fileMustExist: true });
+  const sourceInspection = productionScope
+    ? inspectEncryptedDatabase(sourcePath, productionScope)
+    : null;
+  if (
+    sourceInspection &&
+    (!sourceInspection.encrypted ||
+      !sourceInspection.activeKey ||
+      !sourceInspection.keyId)
+  ) {
+    throw new Error(
+      "PRODUCTION_BACKUP_DATABASE_KEY_INVALID: source must use the active database key.",
+    );
+  }
+  const backupObjectId = productionScope
+    ? deriveStorageObjectId(
+        process.env.BACKUP_PATH || "",
+        destinationPath,
+        "backup-files",
+      )
+    : null;
+
+  const source = productionScope
+    ? openEncryptedDatabase(sourcePath, productionScope, {
+        fileMustExist: true,
+      })
+    : new Database(sourcePath, { readonly: true, fileMustExist: true });
   try {
-    await source.backup(temporaryPath);
+    if (productionScope) {
+      source.prepare("VACUUM INTO ?").run(encryptedDatabasePath);
+      const encryptedDatabase = fs.readFileSync(encryptedDatabasePath);
+      const container = encodeDatabaseBackupContainer({
+        backupId: randomUUID(),
+        scope: productionScope,
+        databaseKeyId: sourceInspection?.keyId ?? "",
+        database: encryptedDatabase,
+      });
+      const protectedBackup = encryptStoragePayload(
+        container,
+        "backup-files",
+        backupObjectId ?? "",
+      );
+      try {
+        fs.writeFileSync(temporaryPath, protectedBackup, {
+          flag: "wx",
+          mode: 0o600,
+        });
+      } finally {
+        encryptedDatabase.fill(0);
+        container.fill(0);
+        protectedBackup.fill(0);
+      }
+    } else {
+      await source.backup(temporaryPath);
+    }
   } catch (error) {
     fs.rmSync(temporaryPath, { force: true });
+    fs.rmSync(encryptedDatabasePath, { force: true });
     removeDatabaseSidecars(temporaryPath);
     throw error;
   } finally {
     source.close();
   }
 
-  const verification = new Database(temporaryPath, { readonly: true, fileMustExist: true });
   try {
-    const result = verification.pragma("integrity_check", { simple: true });
-    if (result !== "ok") throw new Error(`Backup integrity check failed: ${String(result)}`);
+    let verificationPath = temporaryPath;
+    if (productionScope) {
+      const payload = fs.readFileSync(temporaryPath);
+      if (!isEncryptedStoragePayload(payload)) {
+        throw new Error("PRODUCTION_BACKUP_ENCRYPTION_FAILED.");
+      }
+      const decrypted = decryptStoragePayloadWithMetadata(
+        payload,
+        "backup-files",
+        backupObjectId ?? "",
+      );
+      try {
+        const decoded = decodeDatabaseBackupContainer(decrypted.plaintext);
+        try {
+          if (
+            decoded.manifest.scope !== productionScope ||
+            decoded.manifest.databaseKeyId !== sourceInspection?.keyId ||
+            decrypted.keyId !== process.env.AMOS_BACKUP_ACTIVE_KEY_ID
+          ) {
+            throw new Error("PRODUCTION_BACKUP_METADATA_MISMATCH.");
+          }
+          fs.writeFileSync(encryptedDatabasePath, decoded.database, {
+            mode: 0o600,
+          });
+        } finally {
+          decoded.database.fill(0);
+        }
+      } finally {
+        decrypted.plaintext.fill(0);
+      }
+      verificationPath = encryptedDatabasePath;
+    }
+    const verification = productionScope
+      ? openEncryptedDatabase(
+          verificationPath,
+          productionScope,
+          { readonly: true, fileMustExist: true },
+        )
+      : new Database(verificationPath, {
+          readonly: true,
+          fileMustExist: true,
+        });
+    try {
+      const result = verification.pragma("integrity_check", { simple: true });
+      if (result !== "ok") {
+        throw new Error(`Backup integrity check failed: ${String(result)}`);
+      }
+    } finally {
+      verification.close();
+    }
   } finally {
-    verification.close();
+    fs.rmSync(encryptedDatabasePath, { force: true });
   }
 
-  if (fs.existsSync(destinationPath)) fs.rmSync(destinationPath);
-  removeDatabaseSidecars(destinationPath);
-  fs.renameSync(temporaryPath, destinationPath);
+  try {
+    syncFile(temporaryPath);
+    fs.renameSync(temporaryPath, destinationPath);
+    syncDirectory(path.dirname(destinationPath));
+  } finally {
+    fs.rmSync(temporaryPath, { force: true });
+    removeDatabaseSidecars(temporaryPath);
+  }
   return destinationPath;
 }
 
 export function restoreDatabaseBackup(
   backupPath: string,
   targetPath: string,
-  options: { allowOverwrite?: boolean } = {},
+  options: { allowOverwrite?: boolean; maintenanceConfirmed?: boolean } = {},
 ): string {
   const sourcePath = path.resolve(backupPath);
   const destinationPath = path.resolve(targetPath);
+  const productionScope = productionDatabaseScope(destinationPath, {
+    allowMissing: true,
+  });
+  if (productionScope) assertProductionBackupPath(sourcePath, false);
   if (!fs.existsSync(sourcePath)) throw new Error(`Backup does not exist: ${sourcePath}`);
   if (sourcePath === destinationPath) throw new Error("Backup and restore target must differ");
   if (fs.existsSync(destinationPath) && !options.allowOverwrite) {
     throw new Error("Restore target exists; allowOverwrite must be explicitly enabled");
   }
-
-  const backup = new Database(sourcePath, { readonly: true, fileMustExist: true });
-  try {
-    const result = backup.pragma("integrity_check", { simple: true });
-    if (result !== "ok") throw new Error(`Backup integrity check failed: ${String(result)}`);
-  } finally {
-    backup.close();
+  if (
+    productionScope &&
+    fs.existsSync(destinationPath) &&
+    !options.maintenanceConfirmed
+  ) {
+    throw new Error(
+      "PRODUCTION_RESTORE_MAINTENANCE_REQUIRED: stop the application and explicitly confirm maintenance.",
+    );
+  }
+  if (
+    fs.existsSync(`${destinationPath}-wal`) ||
+    fs.existsSync(`${destinationPath}-shm`)
+  ) {
+    throw new Error(
+      "RESTORE_TARGET_NOT_CLEANLY_STOPPED: database sidecars must be absent.",
+    );
   }
 
-  fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
-  const temporaryPath = `${destinationPath}.restore-partial`;
+  const temporaryPath = `${destinationPath}.amos-restore-partial`;
   fs.rmSync(temporaryPath, { force: true });
   removeDatabaseSidecars(temporaryPath);
-  fs.copyFileSync(sourcePath, temporaryPath);
-  if (fs.existsSync(destinationPath)) fs.rmSync(destinationPath);
-  removeDatabaseSidecars(destinationPath);
-  fs.renameSync(temporaryPath, destinationPath);
+  if (productionScope) {
+    const payload = fs.readFileSync(sourcePath);
+    if (!isEncryptedStoragePayload(payload)) {
+      throw new Error("PLAINTEXT_PRODUCTION_BACKUP_REJECTED.");
+    }
+    const backupObjectId = deriveStorageObjectId(
+      process.env.BACKUP_PATH || "",
+      sourcePath,
+      "backup-files",
+    );
+    const decrypted = decryptStoragePayload(
+      payload,
+      "backup-files",
+      backupObjectId,
+    );
+    let declaredDatabaseKeyId: string;
+    try {
+      const decoded = decodeDatabaseBackupContainer(decrypted);
+      try {
+        if (decoded.manifest.scope !== productionScope) {
+          throw new Error("DATABASE_BACKUP_SCOPE_MISMATCH.");
+        }
+        declaredDatabaseKeyId = decoded.manifest.databaseKeyId;
+        fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
+        fs.writeFileSync(temporaryPath, decoded.database, {
+          flag: "wx",
+          mode: 0o600,
+        });
+      } finally {
+        decoded.database.fill(0);
+      }
+    } finally {
+      decrypted.fill(0);
+    }
+    const inspection = inspectEncryptedDatabase(
+      temporaryPath,
+      productionScope,
+    );
+    if (
+      !inspection.encrypted ||
+      inspection.keyId !== declaredDatabaseKeyId
+    ) {
+      fs.rmSync(temporaryPath, { force: true });
+      throw new Error("DATABASE_BACKUP_DECLARED_KEY_MISMATCH.");
+    }
+    if (!inspection.activeKey) {
+      migrateDatabaseEncryption(temporaryPath, productionScope, {
+        ...process.env,
+        AMOS_STORAGE_MIGRATION_MODE: "rotate",
+      });
+    }
+  } else {
+    fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
+    fs.copyFileSync(sourcePath, temporaryPath);
+  }
+
+  try {
+    const backup = productionScope
+      ? openEncryptedDatabase(
+          temporaryPath,
+          productionScope,
+          { readonly: true, fileMustExist: true },
+        )
+      : new Database(temporaryPath, {
+          readonly: true,
+          fileMustExist: true,
+        });
+    try {
+      const result = backup.pragma("integrity_check", { simple: true });
+      if (result !== "ok") {
+        throw new Error(`Backup integrity check failed: ${String(result)}`);
+      }
+    } finally {
+      backup.close();
+    }
+  } catch (error) {
+    fs.rmSync(temporaryPath, { force: true });
+    removeDatabaseSidecars(temporaryPath);
+    throw error;
+  }
+
+  try {
+    syncFile(temporaryPath);
+    fs.renameSync(temporaryPath, destinationPath);
+    syncDirectory(path.dirname(destinationPath));
+  } finally {
+    fs.rmSync(temporaryPath, { force: true });
+    removeDatabaseSidecars(temporaryPath);
+  }
   return destinationPath;
+}
+
+export interface DatabaseBackupDirectoryReport {
+  readonly directory: string;
+  readonly inspected: number;
+  readonly rewrapped: number;
+  readonly outerBackupKeyIds: readonly string[];
+  readonly innerDatabaseKeyIds: readonly string[];
+}
+
+function governedBackupFiles(directory: string): string[] {
+  const root = path.resolve(directory);
+  assertPathConfined(root, root, {
+    allowRoot: true,
+    allowMissing: false,
+    type: "directory",
+  });
+  const files: string[] = [];
+  const visit = (current: string): void => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const candidate = path.join(current, entry.name);
+      if (entry.isSymbolicLink()) {
+        throw new Error("BACKUP_SYMLINK_REJECTED.");
+      }
+      if (entry.isDirectory()) {
+        visit(candidate);
+      } else if (
+        entry.isFile() &&
+        /\.amos-(?:backup|restore|sqlcipher|encrypted)-partial$/u.test(
+          entry.name,
+        )
+      ) {
+        fs.rmSync(candidate);
+        syncDirectory(current);
+      } else if (entry.isFile()) {
+        assertPathConfined(root, candidate, {
+          allowMissing: false,
+          type: "file",
+        });
+        files.push(candidate);
+      }
+    }
+  };
+  visit(root);
+  return files.sort();
+}
+
+export function enforceDatabaseBackupDirectory(
+  directory: string,
+  source: NodeJS.ProcessEnv = process.env,
+): DatabaseBackupDirectoryReport {
+  const root = path.resolve(directory);
+  const outerBackupKeyIds = new Set<string>();
+  const innerDatabaseKeyIds = new Set<string>();
+  let rewrapped = 0;
+  const files = governedBackupFiles(root);
+
+  for (const filePath of files) {
+    if (source.AMOS_STORAGE_MIGRATION_MODE === "rotate") {
+      if (
+        rewrapEncryptedFileAtomic(
+          filePath,
+          "backup-files",
+          root,
+          source,
+        )
+      ) {
+        rewrapped += 1;
+      }
+    }
+    const payload = fs.readFileSync(filePath);
+    if (!isEncryptedStoragePayload(payload)) {
+      throw new Error("LEGACY_BACKUP_FORMAT_UNSUPPORTED.");
+    }
+    const decrypted = decryptStoragePayloadWithMetadata(
+      payload,
+      "backup-files",
+      deriveStorageObjectId(root, filePath, "backup-files"),
+      source,
+    );
+    const verificationPath = `${filePath}.amos-sqlcipher-partial`;
+    fs.rmSync(verificationPath, { force: true });
+    try {
+      const decoded = decodeDatabaseBackupContainer(decrypted.plaintext);
+      try {
+        fs.writeFileSync(verificationPath, decoded.database, {
+          flag: "wx",
+          mode: 0o600,
+        });
+        const inspection = inspectEncryptedDatabase(
+          verificationPath,
+          decoded.manifest.scope,
+          source,
+        );
+        if (
+          !inspection.encrypted ||
+          inspection.keyId !== decoded.manifest.databaseKeyId
+        ) {
+          throw new Error("DATABASE_BACKUP_DECLARED_KEY_MISMATCH.");
+        }
+        outerBackupKeyIds.add(decrypted.keyId);
+        innerDatabaseKeyIds.add(decoded.manifest.databaseKeyId);
+      } finally {
+        decoded.database.fill(0);
+      }
+    } finally {
+      decrypted.plaintext.fill(0);
+      fs.rmSync(verificationPath, { force: true });
+      removeDatabaseSidecars(verificationPath);
+    }
+  }
+
+  return {
+    directory: root,
+    inspected: files.length,
+    rewrapped,
+    outerBackupKeyIds: [...outerBackupKeyIds].sort(),
+    innerDatabaseKeyIds: [...innerDatabaseKeyIds].sort(),
+  };
 }
 
 export function validateDatabaseIntegrity(
@@ -591,10 +1005,17 @@ export function openLifecycleDatabase(
   options: { readonly?: boolean } = {},
 ): DatabaseHandle {
   const readonly = options.readonly ?? false;
-  const db = new Database(databasePath, {
-    readonly,
-    fileMustExist: readonly,
-  });
+  const productionScope =
+    databasePath === ":memory:" ? null : productionDatabaseScope(databasePath);
+  const db = productionScope
+    ? openEncryptedDatabase(databasePath, productionScope, {
+        readonly,
+        fileMustExist: readonly,
+      })
+    : new Database(databasePath, {
+        readonly,
+        fileMustExist: readonly,
+      });
   if (!readonly) db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   return db;

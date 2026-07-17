@@ -2,14 +2,51 @@ import { describe, expect, it } from "vitest";
 import {
   assertSyntheticDemoRuntime,
   assertSyntheticScenarioRuntime,
-  buildEnvironmentConfig,
+  buildEnvironmentConfig as buildRawEnvironmentConfig,
 } from "./env";
 
 const testCredential = (scope: string) =>
   `not-a-secret-test-fixture-${scope}-${"x".repeat(32)}`;
 const testMfaCode = () => ["48", "27", "31"].join("");
+const productionEncryption = {
+  AMOS_STORAGE_ENCRYPTION_REQUIRED: "true",
+  AMOS_STORAGE_KEY_PROVIDER: "railway-sealed-variables-v1",
+  AMOS_STORAGE_MIGRATION_MODE: "none",
+  AMOS_DATABASE_ACTIVE_KEY_ID: "database-test-v1",
+  AMOS_DATABASE_KEY_MANIFEST_JSON: JSON.stringify({
+    "database-test-v1": "AMOS_DATABASE_KEY_TEST_V1",
+  }),
+  AMOS_DATABASE_KEY_TEST_V1: Buffer.alloc(32, 23).toString("base64"),
+  AMOS_UPLOAD_ACTIVE_KEY_ID: "upload-test-v1",
+  AMOS_UPLOAD_KEY_MANIFEST_JSON: JSON.stringify({
+    "upload-test-v1": "AMOS_UPLOAD_KEY_TEST_V1",
+  }),
+  AMOS_UPLOAD_KEY_TEST_V1: Buffer.alloc(32, 24).toString("base64"),
+  AMOS_BACKUP_ACTIVE_KEY_ID: "backup-test-v1",
+  AMOS_BACKUP_KEY_MANIFEST_JSON: JSON.stringify({
+    "backup-test-v1": "AMOS_BACKUP_KEY_TEST_V1",
+  }),
+  AMOS_BACKUP_KEY_TEST_V1: Buffer.alloc(32, 25).toString("base64"),
+};
+
+function buildEnvironmentConfig(source: NodeJS.ProcessEnv) {
+  return buildRawEnvironmentConfig(
+    source.APP_ENV === "production"
+      ? { ...productionEncryption, ...source }
+      : source,
+  );
+}
 
 describe("environment isolation controls", () => {
+  it("rejects Production when RM.2 encryption is not configured", () => {
+    expect(() =>
+      buildRawEnvironmentConfig({
+        APP_ENV: "production",
+        NODE_ENV: "production",
+      }),
+    ).toThrow("PRODUCTION_STORAGE_ENCRYPTION_REQUIRED");
+  });
+
   it("derives separate database and credential namespaces", () => {
     const development = buildEnvironmentConfig({
       APP_ENV: "development",
