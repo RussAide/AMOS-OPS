@@ -448,6 +448,78 @@ describe("RM.2 stored-file migration gate", () => {
     ).toThrow("ENCRYPTED_STORAGE_OBJECT_MISMATCH");
   });
 
+  it("keeps a nested Training upload subtree out of operational encryption", () => {
+    const operationalRoot = temporaryDirectory();
+    const trainingRoot = path.join(operationalRoot, "training");
+    const operationalFile = path.join(operationalRoot, "operational.bin");
+    const trainingFile = path.join(trainingRoot, "training.bin");
+    fs.mkdirSync(trainingRoot, { recursive: true });
+    fs.writeFileSync(operationalFile, "operational-upload-marker");
+    fs.writeFileSync(trainingFile, "training-upload-marker");
+    const migrating = environment({ migrationMode: "encrypt-plaintext" });
+
+    const operationalReport = enforceEncryptedDirectory(
+      operationalRoot,
+      "upload-operational",
+      migrating,
+      [trainingRoot],
+    );
+    expect(operationalReport).toMatchObject({ inspected: 1, encrypted: 1 });
+    expect(isEncryptedStoragePayload(fs.readFileSync(operationalFile))).toBe(
+      true,
+    );
+    expect(isEncryptedStoragePayload(fs.readFileSync(trainingFile))).toBe(
+      false,
+    );
+
+    const trainingReport = enforceEncryptedDirectory(
+      trainingRoot,
+      "upload-training",
+      migrating,
+    );
+    expect(trainingReport).toMatchObject({ inspected: 1, encrypted: 1 });
+    expect(isEncryptedStoragePayload(fs.readFileSync(trainingFile))).toBe(true);
+    const normal = {
+      ...migrating,
+      AMOS_STORAGE_MIGRATION_MODE: "none",
+    };
+
+    expect(() =>
+      enforceEncryptedDirectory(
+        operationalRoot,
+        "upload-operational",
+        normal,
+        [trainingRoot],
+      ),
+    ).not.toThrow();
+    expect(() =>
+      enforceEncryptedDirectory(
+        trainingRoot,
+        "upload-training",
+        normal,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      enforceEncryptedDirectory(
+        trainingRoot,
+        "upload-operational",
+        normal,
+      ),
+    ).toThrow("ENCRYPTED_STORAGE_PURPOSE_MISMATCH");
+  });
+
+  it("rejects an excluded directory that is not a strict descendant", () => {
+    const directory = temporaryDirectory();
+    expect(() =>
+      enforceEncryptedDirectory(
+        directory,
+        "upload-operational",
+        environment(),
+        [directory],
+      ),
+    ).toThrow("STORAGE_EXCLUDED_DIRECTORY_INVALID");
+  });
+
   it("cleans only reserved crash temporaries and inventories ordinary partial files", () => {
     const directory = temporaryDirectory();
     const stale = path.join(directory, "record.bin.amos-encrypted-partial");

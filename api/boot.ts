@@ -77,6 +77,8 @@ const storageEncryptionReports = env.isProduction
       enforceEncryptedDirectory(
         UPLOAD_DIR,
         "upload-operational",
+        process.env,
+        [TRAINING_UPLOAD_DIR],
       ),
       enforceEncryptedDirectory(
         TRAINING_UPLOAD_DIR,

@@ -24,6 +24,12 @@ none of them.
 | Application backups | Whole-artifact AES-256-GCM envelope | backup |
 | Railway volume/snapshots | Railway-managed storage encryption plus AMOS ciphertext | platform |
 
+The RM.1 Training upload directory is a nested child of the operational upload
+root. Operational inventory explicitly excludes that child subtree; Training
+inventory processes it separately with the `upload-training` cryptographic
+purpose and Training-relative object identities. This separation is enforced
+at migration, normal startup, and evidence collection.
+
 The current provider is an exportable-key secret store, not a customer-managed
 HSM or KMS. A future external store can replace Railway only if it supplies the
 same 32-byte keys. A non-exportable KMS requires a new envelope version and a
@@ -98,17 +104,24 @@ Before staging them:
 The launcher then:
 
 1. Reconfirms the exact persistent mount.
-2. Checkpoints each SQLite WAL and closes the database.
-3. Creates an adjacent restrictive-permission temporary copy. No plaintext
+2. Rejects unsupported, legacy, malformed, or inaccessible application backup
+   artifacts before the first authoritative database is changed.
+3. Checkpoints each SQLite WAL and closes the database.
+4. Creates an adjacent restrictive-permission temporary copy. No plaintext
    rollback copy is retained on the volume.
-4. Encrypts and verifies the copy with SQLCipher.
-5. Verifies the approved SQLite3MC engine, cipher selection, and database
+5. Encrypts and verifies the copy with SQLCipher.
+6. Verifies the approved SQLite3MC engine, cipher selection, and database
    integrity with the authorized key.
-6. Atomically swaps the verified copy into the canonical path.
-7. Encrypts each existing upload through an adjacent authenticated temporary,
-   rejects unclassified legacy backups, and validates every supported backup.
-8. Starts the ordinary application only after both databases and all stored
+7. Atomically swaps the verified copy into the canonical path.
+8. Encrypts each existing upload through an adjacent authenticated temporary
+   and verifies it under the correct operational or Training purpose.
+9. Starts the ordinary application only after both databases and all stored
    files pass the encryption gate.
+
+Railway's health-check window is 300 seconds for this singleton-volume
+transition because the launcher intentionally finishes verification before it
+binds the HTTP listener. A timeout remains fail closed; it must be investigated
+or rolled back rather than bypassed.
 
 After the migration deployment is healthy, remove the confirmation and set
 `AMOS_STORAGE_MIGRATION_MODE=none`. Redeploy and verify readiness again.
