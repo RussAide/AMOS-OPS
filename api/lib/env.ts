@@ -43,6 +43,11 @@ export interface EnvironmentConfig {
   sourceDigest: string | null;
   reviewOwnerPasswordHash: string | null;
   reviewOwnerMfaCode: string | null;
+  initialAdminEmail: string | null;
+  initialAdminFirstName: string | null;
+  initialAdminLastName: string | null;
+  initialAdminInvitationTokenHash: string | null;
+  initialAdminInvitationExpiresAt: string | null;
   allowedOrigins: readonly string[];
   isDevelopment: boolean;
   isDemo: boolean;
@@ -240,6 +245,17 @@ export function buildEnvironmentConfig(
   const reviewOwnerPasswordHash =
     source.AMOS_REVIEW_OWNER_PASSWORD_HASH?.trim() || null;
   const reviewOwnerMfaCode = source.AMOS_REVIEW_OWNER_MFA_CODE?.trim() || null;
+  const initialAdminEmail =
+    source.AMOS_INITIAL_ADMIN_EMAIL?.trim().toLowerCase() || null;
+  const initialAdminFirstName =
+    source.AMOS_INITIAL_ADMIN_FIRST_NAME?.trim() || null;
+  const initialAdminLastName =
+    source.AMOS_INITIAL_ADMIN_LAST_NAME?.trim() || null;
+  const initialAdminInvitationTokenHash =
+    source.AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH?.trim().toLowerCase() ||
+    null;
+  const initialAdminInvitationExpiresAt =
+    source.AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT?.trim() || null;
   const allowSelfRegistration =
     source.ALLOW_SELF_REGISTRATION === undefined
       ? isDevelopment || isDemo
@@ -430,6 +446,51 @@ export function buildEnvironmentConfig(
     );
   }
 
+  const initialAdminValues = [
+    initialAdminEmail,
+    initialAdminFirstName,
+    initialAdminLastName,
+    initialAdminInvitationTokenHash,
+    initialAdminInvitationExpiresAt,
+  ];
+  const hasInitialAdminConfig = initialAdminValues.some(Boolean);
+  if (hasInitialAdminConfig && !initialAdminValues.every(Boolean)) {
+    throw new Error(
+      "Initial administrator bootstrap requires email, first name, last name, invitation token hash, and invitation expiry together.",
+    );
+  }
+  if (hasInitialAdminConfig) {
+    if (!isProduction || runtimeMode !== "production") {
+      throw new Error(
+        "Initial administrator bootstrap is available only in Production.",
+      );
+    }
+    if (!isEmail(initialAdminEmail!)) {
+      throw new Error(
+        "AMOS_INITIAL_ADMIN_EMAIL must be a valid email address.",
+      );
+    }
+    if (
+      initialAdminFirstName!.length > 80 ||
+      initialAdminLastName!.length > 80
+    ) {
+      throw new Error(
+        "Initial administrator names must not exceed 80 characters.",
+      );
+    }
+    if (!/^[a-f0-9]{64}$/.test(initialAdminInvitationTokenHash!)) {
+      throw new Error(
+        "AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH must be a lowercase SHA-256 HMAC digest.",
+      );
+    }
+    const invitationExpiry = Date.parse(initialAdminInvitationExpiresAt!);
+    if (!Number.isFinite(invitationExpiry) || invitationExpiry <= Date.now()) {
+      throw new Error(
+        "AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT must be a future ISO timestamp.",
+      );
+    }
+  }
+
   return Object.freeze({
     appEnvironment,
     runtimeMode,
@@ -460,6 +521,11 @@ export function buildEnvironmentConfig(
     sourceDigest,
     reviewOwnerPasswordHash,
     reviewOwnerMfaCode,
+    initialAdminEmail,
+    initialAdminFirstName,
+    initialAdminLastName,
+    initialAdminInvitationTokenHash,
+    initialAdminInvitationExpiresAt,
     allowedOrigins: Object.freeze(allowedOrigins),
     isDevelopment,
     isDemo,

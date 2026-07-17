@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { createHmac } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildEnvironmentConfig } from "../lib/env";
 import {
@@ -9,6 +10,7 @@ import {
   requiresMfa,
   validatePassword,
 } from "./identity";
+import { totpCodeForTest } from "./totp";
 
 const openDatabases: Database.Database[] = [];
 
@@ -118,6 +120,95 @@ describe("identity policy", () => {
 });
 
 describe("identity lifecycle", () => {
+  it("bootstraps the authorized production administrator through one-time TOTP enrollment", async () => {
+    const sqlite = new Database(":memory:");
+    openDatabases.push(sqlite);
+    const now = new Date();
+    const appSecret = `production-bootstrap-test-${"x".repeat(40)}`;
+    const invitationToken = "initial-admin-invitation-token-fixture-2026";
+    const invitationTokenHash = createHmac("sha256", appSecret)
+      .update(invitationToken)
+      .digest("hex");
+    const environment = buildEnvironmentConfig({
+      APP_ENV: "production",
+      AMOS_RUNTIME_MODE: "production",
+      NODE_ENV: "production",
+      DATABASE_PATH: "/data/production/amos-ops.db",
+      UPLOAD_PATH: "/uploads/production",
+      CREDENTIAL_NAMESPACE: "amos-ops/production",
+      APP_SECRET: appSecret,
+      JWT_SECRET: `production-bootstrap-jwt-${"y".repeat(40)}`,
+      DEPLOYMENT_APPROVAL_ID: "USER-AUTHORIZED-INITIAL-ADMIN",
+      DEPLOYMENT_CHANGE_REFERENCE: "AMOS-OPS-INITIAL-ADMIN",
+      AMOS_ALLOWED_ORIGINS: "https://amos-ops.example.invalid",
+      ALLOW_SELF_REGISTRATION: "false",
+      MFA_POLICY: "required-all",
+      AMOS_PRODUCTION_RELEASE_AUTHORIZED: "true",
+      AMOS_PRODUCTION_RELEASE_ID: "AMOS-OPS-V1.3.0",
+      AMOS_INITIAL_ADMIN_EMAIL: "e.o.aideyan@adobicarebhc.com",
+      AMOS_INITIAL_ADMIN_FIRST_NAME: "Eghosa",
+      AMOS_INITIAL_ADMIN_LAST_NAME: "Aideyan",
+      AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH: invitationTokenHash,
+      AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT: new Date(
+        now.getTime() + 60 * 60_000,
+      ).toISOString(),
+    });
+    const service = createIdentityService(sqlite, {
+      environment,
+      now: () => now,
+      policy: { passwordHashRounds: 4 },
+    });
+
+    expect(service.listUsers()).toEqual([
+      expect.objectContaining({
+        email: "e.o.aideyan@adobicarebhc.com",
+        firstName: "Eghosa",
+        lastName: "Aideyan",
+        role: "super-admin",
+        department: "Executive Office",
+        accessStatus: "cleared",
+        identityType: "workforce",
+        mfaEnabled: true,
+      }),
+    ]);
+
+    const reset = await service.resetPassword({
+      token: invitationToken,
+      newPassword: "Authorized!Admin2026",
+    });
+    expect(reset.totpSetup).toMatchObject({
+      accountName: "e.o.aideyan@adobicarebhc.com",
+      issuer: "AMOS-OPS",
+    });
+    expect(reset.totpSetup?.secret).toMatch(/^[A-Z2-7]{32}$/);
+
+    const login = await service.login({
+      email: "e.o.aideyan@adobicarebhc.com",
+      password: "Authorized!Admin2026",
+    });
+    expect(login).toMatchObject({
+      status: "mfa_required",
+      deliveryMethod: "totp",
+      destination: "your authenticator app",
+    });
+    if (login.status !== "mfa_required" || !reset.totpSetup) {
+      throw new Error("expected TOTP challenge");
+    }
+    const authenticated = await service.verifyMfa({
+      challengeId: login.challengeId,
+      code: totpCodeForTest(reset.totpSetup.secret, now),
+    });
+    expect(authenticated).toMatchObject({
+      status: "authenticated",
+      mfaVerified: true,
+      user: {
+        email: "e.o.aideyan@adobicarebhc.com",
+        role: "super-admin",
+        dataScope: "operational",
+      },
+    });
+  });
+
   it("keeps new accounts in Training and rejects Operational workspace requests", async () => {
     const service = makeService();
     const registered = await service.register({

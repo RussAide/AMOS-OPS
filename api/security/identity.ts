@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import {
+  createHash,
   createHmac,
   randomBytes,
   randomInt,
@@ -10,6 +11,13 @@ import type Database from "better-sqlite3";
 import { env, type EnvironmentConfig, type MfaPolicy } from "../lib/env";
 import { operationalSqlite as applicationDatabase } from "../queries/connection";
 import { ensureIdentitySchema } from "./identity-schema";
+import {
+  buildTotpUri,
+  decryptTotpSecret,
+  encryptTotpSecret,
+  generateTotpSecret,
+  matchTotpCounter,
+} from "./totp";
 import {
   ALL_ROLES,
   getRoleDef,
@@ -79,6 +87,9 @@ interface UserRow {
   must_change_password: number;
   mfa_enabled: number;
   mfa_method: string;
+  mfa_totp_secret: string | null;
+  mfa_totp_enrolled_at: string | null;
+  mfa_totp_last_counter: number | null;
   access_status: AccessStatus;
   identity_type: IdentityType;
   training_access: number;
@@ -220,13 +231,26 @@ export interface AuthenticatedResult {
 export interface MfaRequiredResult {
   status: "mfa_required";
   challengeId: string;
-  deliveryMethod: "email-otp";
+  deliveryMethod: "email-otp" | "totp";
   destination: string;
   expiresAt: string;
   evaluationCode?: string;
 }
 
 export type LoginResult = AuthenticatedResult | MfaRequiredResult;
+
+export interface TotpSetup {
+  secret: string;
+  accountName: string;
+  issuer: string;
+  otpauthUri: string;
+}
+
+export interface PasswordResetResult {
+  success: true;
+  sessionsRevoked: number;
+  totpSetup?: TotpSetup;
+}
 
 export class IdentityError extends Error {
   constructor(
@@ -377,7 +401,9 @@ export function createIdentityService(
       .prepare(
         `SELECT id, email, password_hash, first_name, last_name, role, department,
                 is_active, failed_login_count, locked_until, must_change_password,
-                mfa_enabled, mfa_method, access_status, identity_type,
+                mfa_enabled, mfa_method, mfa_totp_secret,
+                mfa_totp_enrolled_at, mfa_totp_last_counter,
+                access_status, identity_type,
                 training_access, sponsor_name, access_expires_at,
                 clearance_reviewed_by, clearance_reviewed_at,
                 clearance_evidence_reference
@@ -390,13 +416,125 @@ export function createIdentityService(
       .prepare(
         `SELECT id, email, password_hash, first_name, last_name, role, department,
                 is_active, failed_login_count, locked_until, must_change_password,
-                mfa_enabled, mfa_method, access_status, identity_type,
+                mfa_enabled, mfa_method, mfa_totp_secret,
+                mfa_totp_enrolled_at, mfa_totp_last_counter,
+                access_status, identity_type,
                 training_access, sponsor_name, access_expires_at,
                 clearance_reviewed_by, clearance_reviewed_at,
                 clearance_evidence_reference
            FROM users WHERE id = ?`,
       )
       .get(id) as UserRow | undefined;
+
+  const bootstrapInitialAdministrator = (): void => {
+    if (!environment.initialAdminEmail) return;
+
+    const existing = getUserByEmail(environment.initialAdminEmail);
+    const administratorCount = (
+      sqlite
+        .prepare(
+          "SELECT COUNT(*) AS count FROM users WHERE role = 'super-admin'",
+        )
+        .get() as {
+        count: number;
+      }
+    ).count;
+    if (existing) {
+      if (
+        existing.role !== "super-admin" ||
+        existing.is_active !== 1 ||
+        existing.access_status !== "cleared" ||
+        existing.identity_type !== "workforce"
+      ) {
+        throw new Error(
+          "INITIAL_ADMIN_ACCOUNT_CONFLICT: the configured account is not an active, cleared workforce super-admin.",
+        );
+      }
+      return;
+    }
+    if (administratorCount !== 0) {
+      throw new Error(
+        "INITIAL_ADMIN_BOOTSTRAP_REFUSED: a different super-administrator already exists.",
+      );
+    }
+
+    const now = clock();
+    const userId = `AMOS-INITIAL-ADMIN-${createHash("sha256")
+      .update(environment.initialAdminEmail)
+      .digest("hex")
+      .slice(0, 24)}`;
+    const unusablePasswordHash = bcrypt.hashSync(
+      randomBytes(48).toString("base64url"),
+      policy.passwordHashRounds,
+    );
+    const nextReviewAt = nowIso(addDays(now, policy.accessReviewDays));
+    const clearanceReference = "AMOS-INITIAL-ADMIN-BOOTSTRAP";
+    sqlite.transaction(() => {
+      sqlite
+        .prepare(
+          `INSERT INTO users
+             (id, email, password_hash, first_name, last_name, role, department,
+              is_active, must_change_password, mfa_enabled, mfa_method,
+              access_status, identity_type, training_access,
+              next_access_review_at, clearance_reviewed_by,
+              clearance_reviewed_at, clearance_evidence_reference,
+              created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 'super-admin', 'Executive Office',
+                   1, 1, 1, 'totp', 'cleared', 'workforce', 1,
+                   ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          userId,
+          environment.initialAdminEmail,
+          unusablePasswordHash,
+          environment.initialAdminFirstName,
+          environment.initialAdminLastName,
+          nextReviewAt,
+          userId,
+          nowIso(now),
+          clearanceReference,
+          nowIso(now),
+          nowIso(now),
+        );
+      sqlite
+        .prepare(
+          `INSERT INTO identity_password_reset_tokens
+             (id, user_id, token_hash, created_at, expires_at, requested_ip)
+           VALUES (?, ?, ?, ?, ?, 'controlled-initial-admin-bootstrap')`,
+        )
+        .run(
+          randomUUID(),
+          userId,
+          environment.initialAdminInvitationTokenHash,
+          nowIso(now),
+          environment.initialAdminInvitationExpiresAt,
+        );
+      sqlite
+        .prepare(
+          `INSERT INTO identity_access_reviews
+             (id, user_id, due_at, status, created_at)
+           VALUES (?, ?, ?, 'pending', ?)`,
+        )
+        .run(randomUUID(), userId, nextReviewAt, nowIso(now));
+      sqlite
+        .prepare(
+          `INSERT INTO identity_access_profile_events
+             (id, user_id, actor_id, previous_status, new_status,
+              previous_identity_type, new_identity_type, evidence_reference,
+              rationale, occurred_at)
+           VALUES (?, ?, NULL, NULL, 'cleared', NULL, 'workforce', ?, ?, ?)`,
+        )
+        .run(
+          randomUUID(),
+          userId,
+          clearanceReference,
+          "User-authorized controlled initial production administrator bootstrap.",
+          nowIso(now),
+        );
+    })();
+  };
+
+  bootstrapInitialAdministrator();
 
   const recordAttempt = (
     email: string,
@@ -474,13 +612,21 @@ export function createIdentityService(
   const issueMfaChallenge = (user: UserRow): MfaRequiredResult => {
     const now = clock();
     const challengeId = randomUUID();
+    const usesTotp =
+      user.mfa_method === "totp" && Boolean(user.mfa_totp_secret);
     const reviewOwner =
+      !usesTotp &&
       environment.reviewDeployment &&
       environment.finalGateOwnerEmail === normalizeEmail(user.email);
-    const code = reviewOwner
-      ? environment.reviewOwnerMfaCode!
-      : randomInt(0, 1_000_000).toString().padStart(6, "0");
+    const code = usesTotp
+      ? null
+      : reviewOwner
+        ? environment.reviewOwnerMfaCode!
+        : randomInt(0, 1_000_000).toString().padStart(6, "0");
     const expiresAt = nowIso(addMinutes(now, policy.mfaChallengeMinutes));
+    const destination = usesTotp
+      ? "your authenticator app"
+      : maskEmail(user.email);
     sqlite
       .prepare(
         `UPDATE identity_mfa_challenges
@@ -497,18 +643,20 @@ export function createIdentityService(
       .run(
         challengeId,
         user.id,
-        hashOpaqueValue(`${challengeId}:${code}`),
+        usesTotp
+          ? hashOpaqueValue(`${challengeId}:totp`)
+          : hashOpaqueValue(`${challengeId}:${code}`),
         nowIso(now),
         expiresAt,
-        maskEmail(user.email),
+        destination,
       );
     return {
       status: "mfa_required",
       challengeId,
-      deliveryMethod: "email-otp",
-      destination: maskEmail(user.email),
+      deliveryMethod: usesTotp ? "totp" : "email-otp",
+      destination,
       expiresAt,
-      ...(environment.isDemo && environment.evaluationMode
+      ...(code && environment.isDemo && environment.evaluationMode
         ? { evaluationCode: code }
         : {}),
     };
@@ -603,10 +751,38 @@ export function createIdentityService(
         "The verification challenge is invalid or expired.",
       );
     }
-    const suppliedHash = hashOpaqueValue(
-      `${challenge.id}:${input.code.trim()}`,
-    );
-    if (!safeCompare(challenge.code_hash, suppliedHash)) {
+    const user = getUserById(challenge.user_id);
+    if (!user || !user.is_active || !accountAccessAvailable(user, now)) {
+      throw new IdentityError(
+        "ACCOUNT_UNAVAILABLE",
+        "The account is unavailable.",
+      );
+    }
+    let acceptedTotpCounter: number | null = null;
+    let codeValid = false;
+    if (user.mfa_method === "totp" && user.mfa_totp_secret) {
+      try {
+        const secret = decryptTotpSecret(user.mfa_totp_secret, hashKey);
+        acceptedTotpCounter = matchTotpCounter(
+          secret,
+          input.code.trim(),
+          now,
+          user.mfa_totp_last_counter,
+        );
+        codeValid = acceptedTotpCounter !== null;
+      } catch {
+        throw new IdentityError(
+          "MFA_CONFIGURATION_INVALID",
+          "Authenticator configuration is unavailable.",
+        );
+      }
+    } else {
+      const suppliedHash = hashOpaqueValue(
+        `${challenge.id}:${input.code.trim()}`,
+      );
+      codeValid = safeCompare(challenge.code_hash, suppliedHash);
+    }
+    if (!codeValid) {
       sqlite
         .prepare(
           "UPDATE identity_mfa_challenges SET failed_attempts = failed_attempts + 1 WHERE id = ?",
@@ -617,18 +793,24 @@ export function createIdentityService(
         "The verification code is invalid.",
       );
     }
-    const user = getUserById(challenge.user_id);
-    if (!user || !user.is_active || !accountAccessAvailable(user, now)) {
-      throw new IdentityError(
-        "ACCOUNT_UNAVAILABLE",
-        "The account is unavailable.",
-      );
-    }
-    sqlite
-      .prepare(
-        "UPDATE identity_mfa_challenges SET consumed_at = ? WHERE id = ?",
-      )
-      .run(nowIso(now), challenge.id);
+    sqlite.transaction(() => {
+      sqlite
+        .prepare(
+          "UPDATE identity_mfa_challenges SET consumed_at = ? WHERE id = ?",
+        )
+        .run(nowIso(now), challenge.id);
+      if (acceptedTotpCounter !== null) {
+        sqlite
+          .prepare(
+            `UPDATE users
+                SET mfa_totp_last_counter = ?,
+                    mfa_totp_enrolled_at = COALESCE(mfa_totp_enrolled_at, ?),
+                    updated_at = ?
+              WHERE id = ?`,
+          )
+          .run(acceptedTotpCounter, nowIso(now), nowIso(now), user.id);
+      }
+    })();
     recordAttempt(user.email, true, "mfa_verified", input, user.id);
     return issueSession(user, input, true);
   };
@@ -646,6 +828,7 @@ export function createIdentityService(
                 u.id, u.email, u.password_hash, u.first_name, u.last_name,
                 u.role, u.department, u.is_active, u.failed_login_count,
                 u.locked_until, u.must_change_password, u.mfa_enabled, u.mfa_method,
+                u.mfa_totp_secret, u.mfa_totp_enrolled_at, u.mfa_totp_last_counter,
                 u.access_status, u.identity_type, u.training_access, u.sponsor_name,
                 u.access_expires_at, u.clearance_reviewed_by, u.clearance_reviewed_at,
                 u.clearance_evidence_reference
@@ -884,7 +1067,7 @@ export function createIdentityService(
   const resetPassword = async (input: {
     token: string;
     newPassword: string;
-  }): Promise<{ success: true; sessionsRevoked: number }> => {
+  }): Promise<PasswordResetResult> => {
     const issues = validatePassword(
       input.newPassword,
       policy.passwordMinimumLength,
@@ -909,6 +1092,21 @@ export function createIdentityService(
         "The password recovery token is invalid or expired.",
       );
     }
+    const user = getUserById(row.user_id);
+    if (!user || !user.is_active || !accountAccessAvailable(user, now)) {
+      throw new IdentityError(
+        "ACCOUNT_UNAVAILABLE",
+        "The account is unavailable.",
+      );
+    }
+    const issuer = "AMOS-OPS";
+    const totpSecret =
+      user.mfa_method === "totp" && !user.mfa_totp_secret
+        ? generateTotpSecret()
+        : null;
+    const encryptedTotpSecret = totpSecret
+      ? encryptTotpSecret(totpSecret, hashKey)
+      : null;
     const passwordHash = await bcrypt.hash(
       input.newPassword,
       policy.passwordHashRounds,
@@ -919,10 +1117,21 @@ export function createIdentityService(
         .prepare(
           `UPDATE users
               SET password_hash = ?, password_changed_at = ?, must_change_password = 0,
-                  failed_login_count = 0, locked_until = NULL, updated_at = ?
+                  failed_login_count = 0, locked_until = NULL,
+                  mfa_totp_secret = COALESCE(?, mfa_totp_secret),
+                  mfa_totp_last_counter = CASE WHEN ? IS NULL
+                    THEN mfa_totp_last_counter ELSE NULL END,
+                  updated_at = ?
             WHERE id = ?`,
         )
-        .run(passwordHash, nowIso(now), nowIso(now), row.user_id);
+        .run(
+          passwordHash,
+          nowIso(now),
+          encryptedTotpSecret,
+          encryptedTotpSecret,
+          nowIso(now),
+          row.user_id,
+        );
       sqlite
         .prepare(
           "UPDATE identity_password_reset_tokens SET consumed_at = ? WHERE id = ?",
@@ -930,7 +1139,20 @@ export function createIdentityService(
         .run(nowIso(now), row.id);
       revoked = revokeAllSessions(row.user_id, "password_reset");
     })();
-    return { success: true, sessionsRevoked: revoked };
+    return {
+      success: true,
+      sessionsRevoked: revoked,
+      ...(totpSecret
+        ? {
+            totpSetup: {
+              secret: totpSecret,
+              accountName: user.email,
+              issuer,
+              otpauthUri: buildTotpUri(totpSecret, user.email, issuer),
+            },
+          }
+        : {}),
+    };
   };
 
   const changePassword = async (input: {
@@ -988,9 +1210,16 @@ export function createIdentityService(
     }
     sqlite
       .prepare(
-        "UPDATE users SET mfa_enabled = ?, mfa_method = 'email-otp', updated_at = ? WHERE id = ?",
+        `UPDATE users
+            SET mfa_enabled = ?,
+                mfa_method = CASE
+                  WHEN ? = 1 AND mfa_totp_secret IS NOT NULL THEN 'totp'
+                  ELSE 'email-otp'
+                END,
+                updated_at = ?
+          WHERE id = ?`,
       )
-      .run(enabled ? 1 : 0, nowIso(clock()), userId);
+      .run(enabled ? 1 : 0, enabled ? 1 : 0, nowIso(clock()), userId);
     return { enabled };
   };
 

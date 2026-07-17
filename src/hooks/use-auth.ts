@@ -55,9 +55,17 @@ interface AuthUser {
 
 export interface MfaPrompt {
   challengeId: string;
+  deliveryMethod: "email-otp" | "totp";
   destination: string;
   expiresAt: string;
   evaluationCode?: string;
+}
+
+export interface TotpSetup {
+  secret: string;
+  accountName: string;
+  issuer: string;
+  otpauthUri: string;
 }
 
 export interface PasswordResetPrompt {
@@ -79,7 +87,10 @@ interface AuthContextValue {
     department?: string;
   }) => Promise<MfaPrompt | null>;
   requestPasswordReset: (email: string) => Promise<PasswordResetPrompt>;
-  resetPassword: (token: string, newPassword: string) => Promise<void>;
+  resetPassword: (
+    token: string,
+    newPassword: string,
+  ) => Promise<TotpSetup | null>;
   enterEvaluation: () => Promise<void>;
   logout: () => void;
   // Role/permission system
@@ -351,6 +362,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           clearLocalSession();
           return {
             challengeId: result.challengeId,
+            deliveryMethod: result.deliveryMethod,
             destination: result.destination,
             expiresAt: result.expiresAt,
             ...(result.evaluationCode
@@ -415,6 +427,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           clearLocalSession();
           return {
             challengeId: result.challengeId,
+            deliveryMethod: result.deliveryMethod,
             destination: result.destination,
             expiresAt: result.expiresAt,
             ...(result.evaluationCode
@@ -477,12 +490,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const resetPassword = useCallback(
-    async (resetToken: string, newPassword: string) => {
-      await resetPasswordMutation.mutateAsync({
+    async (
+      resetToken: string,
+      newPassword: string,
+    ): Promise<TotpSetup | null> => {
+      const result = await resetPasswordMutation.mutateAsync({
         token: resetToken,
         newPassword,
       });
       clearLocalSession();
+      return result.totpSetup ?? null;
     },
     [clearLocalSession, resetPasswordMutation],
   );
