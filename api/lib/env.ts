@@ -14,6 +14,7 @@ export const APP_ENVIRONMENTS = [
 
 export type AppEnvironment = (typeof APP_ENVIRONMENTS)[number];
 export type MfaPolicy = "optional" | "required-privileged" | "required-all";
+export const PRODUCTION_PERSISTENT_ROOT = "/app/persistent";
 
 export interface EnvironmentConfig {
   appEnvironment: AppEnvironment;
@@ -25,10 +26,12 @@ export interface EnvironmentConfig {
   appId: string;
   appSecret: string;
   jwtSecret: string;
+  persistentRoot: string;
   databasePath: string;
   trainingDatabasePath: string;
   uploadPath: string;
   trainingUploadPath: string;
+  backupPath: string;
   evaluationMode: boolean;
   allowSelfRegistration: boolean;
   mfaPolicy: MfaPolicy;
@@ -166,6 +169,16 @@ function containsEnvironmentSegment(
   );
 }
 
+function isStrictPathDescendant(root: string, candidate: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  return (
+    relative.length > 0 &&
+    relative !== ".." &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
+}
+
 function assertDemoIsolation(
   environmentId: string,
   credentialNamespace: string,
@@ -213,17 +226,42 @@ export function buildEnvironmentConfig(
     source.AMOS_ENVIRONMENT_ID?.trim() || `amos-ops-${appEnvironment}`;
   const credentialNamespace =
     source.CREDENTIAL_NAMESPACE?.trim() || `amos-ops/${appEnvironment}`;
+  const persistentRoot =
+    source.PERSISTENT_ROOT?.trim() ||
+    (isProduction
+      ? PRODUCTION_PERSISTENT_ROOT
+      : path.join("data", appEnvironment));
   const databasePath =
     source.DATABASE_PATH?.trim() ||
-    path.join("data", appEnvironment, "amos-ops.db");
+    (isProduction
+      ? path.join(persistentRoot, "data", appEnvironment, "amos-ops.db")
+      : path.join("data", appEnvironment, "amos-ops.db"));
   const trainingDatabasePath =
     source.TRAINING_DATABASE_PATH?.trim() ||
-    path.join("data", appEnvironment, "training", "amos-ops-training.db");
+    (isProduction
+      ? path.join(
+          persistentRoot,
+          "data",
+          appEnvironment,
+          "training",
+          "amos-ops-training.db",
+        )
+      : path.join("data", appEnvironment, "training", "amos-ops-training.db"));
   const uploadPath =
-    source.UPLOAD_PATH?.trim() || path.join("uploads", appEnvironment);
+    source.UPLOAD_PATH?.trim() ||
+    (isProduction
+      ? path.join(persistentRoot, "uploads", appEnvironment)
+      : path.join("uploads", appEnvironment));
   const trainingUploadPath =
     source.TRAINING_UPLOAD_PATH?.trim() ||
-    path.join("uploads", appEnvironment, "training");
+    (isProduction
+      ? path.join(persistentRoot, "uploads", appEnvironment, "training")
+      : path.join("uploads", appEnvironment, "training"));
+  const backupPath =
+    source.BACKUP_PATH?.trim() ||
+    (isProduction
+      ? path.join(persistentRoot, "backups", appEnvironment)
+      : path.join("backups", appEnvironment));
   const evaluationMode = runtimeMode === "demo";
   const appId = source.APP_ID?.trim() || "amos-ops";
   const appSecret = source.APP_SECRET?.trim() || "";
@@ -292,6 +330,48 @@ export function buildEnvironmentConfig(
   }
   if (isProduction && nodeEnvironment !== "production") {
     throw new Error("APP_ENV=production requires NODE_ENV=production.");
+  }
+  if (isProduction) {
+    if (
+      !path.isAbsolute(persistentRoot) ||
+      path.resolve(persistentRoot) !== path.resolve(PRODUCTION_PERSISTENT_ROOT)
+    ) {
+      throw new Error(
+        `Production PERSISTENT_ROOT must resolve to ${PRODUCTION_PERSISTENT_ROOT}.`,
+      );
+    }
+    const railwayVolumeMountPath =
+      source.RAILWAY_VOLUME_MOUNT_PATH?.trim() || null;
+    if (
+      source.RAILWAY_PROJECT_ID &&
+      (!railwayVolumeMountPath ||
+        path.resolve(railwayVolumeMountPath) !== path.resolve(persistentRoot))
+    ) {
+      throw new Error(
+        "Production PERSISTENT_ROOT must match RAILWAY_VOLUME_MOUNT_PATH.",
+      );
+    }
+    for (const [name, value] of [
+      ["DATABASE_PATH", databasePath],
+      ["TRAINING_DATABASE_PATH", trainingDatabasePath],
+      ["UPLOAD_PATH", uploadPath],
+      ["TRAINING_UPLOAD_PATH", trainingUploadPath],
+      ["BACKUP_PATH", backupPath],
+    ] as const) {
+      if (
+        !path.isAbsolute(value) ||
+        !isStrictPathDescendant(persistentRoot, value)
+      ) {
+        throw new Error(
+          `${name} for production must be an absolute path beneath PERSISTENT_ROOT ${PRODUCTION_PERSISTENT_ROOT}.`,
+        );
+      }
+    }
+    if (!containsEnvironmentSegment(backupPath, appEnvironment)) {
+      throw new Error(
+        "BACKUP_PATH for production must include the production environment segment.",
+      );
+    }
   }
   if (allowedOrigins.some((origin) => !isExactHttpOrigin(origin))) {
     throw new Error(
@@ -503,10 +583,12 @@ export function buildEnvironmentConfig(
     jwtSecret:
       jwtSecret ||
       "development-only-secret-not-valid-for-staging-or-production",
+    persistentRoot,
     databasePath,
     trainingDatabasePath,
     uploadPath,
     trainingUploadPath,
+    backupPath,
     evaluationMode,
     allowSelfRegistration,
     mfaPolicy,

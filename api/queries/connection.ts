@@ -4,22 +4,124 @@ import fs from "node:fs";
 import path from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
 import * as schema from "@db/schema";
-import { env } from "../lib/env";
+import { env, type EnvironmentConfig } from "../lib/env";
 
 // ─── SQLite evaluation-build database ─────────────────────
 
 export type DataScope = "operational" | "training";
 
-function openDatabase(databasePath: string): Database.Database {
-  fs.mkdirSync(path.dirname(path.resolve(databasePath)), { recursive: true });
-  const database = new Database(databasePath);
+export interface ProductionStorageStartupOptions {
+  mountInfo?: string;
+  verifyDatabase?: (databasePath: string) => void;
+}
+
+function decodeMountInfoPath(value: string): string {
+  return value.replace(/\\(040|011|012|134)/g, (_match, code: string) => {
+    switch (code) {
+      case "040":
+        return " ";
+      case "011":
+        return "\t";
+      case "012":
+        return "\n";
+      default:
+        return "\\";
+    }
+  });
+}
+
+export function mountPointsFromProcMountInfo(mountInfo: string): Set<string> {
+  const mountPoints = new Set<string>();
+  for (const line of mountInfo.split("\n")) {
+    if (!line.trim()) continue;
+    const fields = line.split(" - ", 1)[0]?.split(" ") ?? [];
+    if (fields.length < 5) continue;
+    mountPoints.add(path.resolve(decodeMountInfoPath(fields[4])));
+  }
+  return mountPoints;
+}
+
+export function verifyExistingSqliteDatabase(databasePath: string): void {
+  const resolvedPath = path.resolve(databasePath);
+  if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isFile()) {
+    throw new Error(
+      `PRODUCTION_DATABASE_MISSING: expected an existing SQLite file at ${resolvedPath}.`,
+    );
+  }
+
+  const verification = new Database(resolvedPath, {
+    readonly: true,
+    fileMustExist: true,
+  });
+  try {
+    const integrity = verification.pragma("integrity_check", { simple: true });
+    if (integrity !== "ok") {
+      throw new Error(
+        `PRODUCTION_DATABASE_INTEGRITY_FAILED: ${resolvedPath}: ${String(integrity)}`,
+      );
+    }
+    const usersTable = verification
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'users'",
+      )
+      .get();
+    if (!usersTable) {
+      throw new Error(
+        `PRODUCTION_DATABASE_IDENTITY_FAILED: ${resolvedPath} does not contain the AMOS users schema.`,
+      );
+    }
+  } finally {
+    verification.close();
+  }
+}
+
+/**
+ * Fail closed before any directory creation or read-write database open. A
+ * Production path with the right spelling is not evidence that Railway
+ * attached the persistent volume there.
+ */
+export function assertProductionStorageStartup(
+  environment: EnvironmentConfig,
+  options: ProductionStorageStartupOptions = {},
+): void {
+  if (!environment.isProduction) return;
+
+  const persistentRoot = path.resolve(environment.persistentRoot);
+  const mountInfo =
+    options.mountInfo ?? fs.readFileSync("/proc/self/mountinfo", "utf8");
+  if (!mountPointsFromProcMountInfo(mountInfo).has(persistentRoot)) {
+    throw new Error(
+      `PRODUCTION_PERSISTENT_VOLUME_NOT_MOUNTED: ${persistentRoot} is not an active mount point.`,
+    );
+  }
+
+  const verifyDatabase = options.verifyDatabase ?? verifyExistingSqliteDatabase;
+  verifyDatabase(environment.databasePath);
+  verifyDatabase(environment.trainingDatabasePath);
+}
+
+function openDatabase(
+  databasePath: string,
+  options: { requireExisting?: boolean } = {},
+): Database.Database {
+  if (!options.requireExisting) {
+    fs.mkdirSync(path.dirname(path.resolve(databasePath)), { recursive: true });
+  }
+  const database = new Database(databasePath, {
+    fileMustExist: options.requireExisting ?? false,
+  });
   database.pragma("foreign_keys = ON");
   database.pragma("journal_mode = WAL");
   return database;
 }
 
-export const operationalSqlite = openDatabase(env.databasePath);
-export const trainingSqlite = openDatabase(env.trainingDatabasePath);
+assertProductionStorageStartup(env);
+export const operationalSqlite = openDatabase(env.databasePath, {
+  requireExisting: env.isProduction,
+});
+export const trainingSqlite = openDatabase(env.trainingDatabasePath, {
+  requireExisting: env.isProduction,
+});
 const dataScopeStorage = new AsyncLocalStorage<DataScope>();
 
 export function currentDataScope(): DataScope {

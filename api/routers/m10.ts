@@ -1,15 +1,36 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createRouter, authedQuery, adminQuery } from "../middleware";
 import { sqlite } from "../queries/connection";
 import { randomUUID } from "crypto";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 export const M41C_ANALYTICS_UNGOVERNED_DERIVATIONS_REMOVED =
   "M41C_ANALYTICS_UNGOVERNED_DERIVATIONS_REMOVED" as const;
 
+const syntheticAnalyticsEnabled = (() => {
+  try {
+    assertSyntheticScenarioRuntime(env);
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+function assertSyntheticAnalyticsWrite(): void {
+  if (!syntheticAnalyticsEnabled) {
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message:
+        "Analytics writes are unavailable because no authoritative Production provider is configured.",
+    });
+  }
+}
+
 // ─── M10: Analytics ────────────────────────────────────────
 
 export const m10Router = createRouter({
-  workforceOverview: authedQuery.query(() => ({
+  workforceOverview: authedQuery.query(() => syntheticAnalyticsEnabled ? ({
     total: 42,
     employees: 38,
     contractors: 4,
@@ -31,9 +52,16 @@ export const m10Router = createRouter({
       "on-leave": 2,
       terminated: 3,
     },
+  }) : ({
+    total: 0,
+    employees: 0,
+    contractors: 0,
+    byLane: {},
+    byDepartment: {},
+    byStatus: {},
   })),
 
-  moduleCompletionRates: authedQuery.query(() => [
+  moduleCompletionRates: authedQuery.query(() => syntheticAnalyticsEnabled ? [
     {
       moduleId: "mod-hr-policies",
       moduleName: "HR Policies & Procedures",
@@ -104,9 +132,9 @@ export const m10Router = createRouter({
       pending: 2,
       rate: 95,
     },
-  ]),
+  ] : []),
 
-  documentCompliance: authedQuery.query(() => [
+  documentCompliance: authedQuery.query(() => syntheticAnalyticsEnabled ? [
     {
       moduleId: "personnel-file",
       verified: 35,
@@ -163,11 +191,14 @@ export const m10Router = createRouter({
       rejected: 0,
       complianceRate: 95,
     },
-  ]),
+  ] : []),
 
   transitionActivity: authedQuery
     .input(z.object({ days: z.number().default(30) }))
     .query(() => {
+      if (!syntheticAnalyticsEnabled) {
+        return { recent: 0, byDay: [], byModule: [] };
+      }
       const byDay = [
         { date: "2026-05-30", count: 2 },
         { date: "2026-05-31", count: 1 },
@@ -216,7 +247,7 @@ export const m10Router = createRouter({
       };
     }),
 
-  timeToClearMetrics: authedQuery.query(() => ({
+  timeToClearMetrics: authedQuery.query(() => syntheticAnalyticsEnabled ? ({
     averageDays: 14,
     medianDays: 12,
     byLane: {
@@ -233,9 +264,9 @@ export const m10Router = createRouter({
       Executive: { avgDays: 8, count: 3 },
       Operations: { avgDays: 14, count: 8 },
     },
-  })),
+  }) : ({ averageDays: 0, medianDays: 0, byLane: {}, byDepartment: {} })),
 
-  alertSummary: authedQuery.query(() => ({
+  alertSummary: authedQuery.query(() => syntheticAnalyticsEnabled ? ({
     activeWithoutClearance: 2,
     expiredCredentials: 3,
     pendingOrientation: 5,
@@ -244,11 +275,20 @@ export const m10Router = createRouter({
     pendingOffers: 2,
     pendingReviews: 3,
     expiringSoon: 6,
+  }) : ({
+    activeWithoutClearance: 0,
+    expiredCredentials: 0,
+    pendingOrientation: 0,
+    incompletePersonnelFiles: 0,
+    restrictedClearance: 0,
+    pendingOffers: 0,
+    pendingReviews: 0,
+    expiringSoon: 0,
   })),
 
   // ─── Cross-Module Operational KPIs ───────────────────────
 
-  clinicalOverview: authedQuery.query(() => ({
+  clinicalOverview: authedQuery.query(() => syntheticAnalyticsEnabled ? ({
     totalYouth: 4,
     activeYouth: 4,
     admissionsThisMonth: 2,
@@ -259,9 +299,14 @@ export const m10Router = createRouter({
     humanReviewsCompleted: 3,
     byWorkflowStage: { intake: 1, active_care: 3, aftercare: 0 },
     byReviewStatus: { current: 2, due: 1, escalated: 1 },
+  }) : ({
+    totalYouth: 0, activeYouth: 0, admissionsThisMonth: 0,
+    dischargesThisMonth: 0, assessmentsPending: 0, sessionsThisWeek: 0,
+    governedReviewsPending: 0, humanReviewsCompleted: 0,
+    byWorkflowStage: {}, byReviewStatus: {},
   })),
 
-  residentialOverview: authedQuery.query(() => ({
+  residentialOverview: authedQuery.query(() => syntheticAnalyticsEnabled ? ({
     campusCapacity: 48,
     operationalBeds: 12,
     occupiedBeds: 7,
@@ -305,9 +350,15 @@ export const m10Router = createRouter({
         rate: 0,
       },
     ],
+  }) : ({
+    campusCapacity: 0, operationalBeds: 0, occupiedBeds: 0, occupancyRate: 0,
+    shiftsThisWeek: 0, observationsThisWeek: 0, familyContactsThisWeek: 0,
+    medicationsScheduled: 0, medicationsAdministered: 0,
+    medicationsRefused: 0, medicationsHeld: 0,
+    behavioralIncidentsThisWeek: 0, prnAdministrations: 0, byFacility: [],
   })),
 
-  revenueOverview: authedQuery.query(() => ({
+  revenueOverview: authedQuery.query(() => syntheticAnalyticsEnabled ? ({
     totalClaims: 24,
     claimsPending: 6,
     claimsApproved: 14,
@@ -325,9 +376,14 @@ export const m10Router = createRouter({
       { reason: "Authorization Required", count: 1 },
       { reason: "Coding Error", count: 1 },
     ],
+  }) : ({
+    totalClaims: 0, claimsPending: 0, claimsApproved: 0, claimsDenied: 0,
+    claimsAppealed: 0, totalBilled: 0, totalCollected: 0, collectionRate: 0,
+    avgDaysToPayment: 0, authorizationsActive: 0, authorizationsPending: 0,
+    authorizationsExpiring: 0, denialsByReason: [],
   })),
 
-  complianceOverview: authedQuery.query(() => ({
+  complianceOverview: authedQuery.query(() => syntheticAnalyticsEnabled ? ({
     openIncidents: 2,
     incidentsThisMonth: 4,
     openAudits: 1,
@@ -347,9 +403,15 @@ export const m10Router = createRouter({
       { result: "pass", count: 1 },
       { result: "pass_with_notes", count: 1 },
     ],
+  }) : ({
+    openIncidents: 0, incidentsThisMonth: 0, openAudits: 0,
+    auditsThisQuarter: 0, correctiveActionsOpen: 0,
+    correctiveActionsOverdue: 0, chartAuditPassRate: 0,
+    chartAuditsThisMonth: 0, hhscReportsDue: 0, hhscReportsOverdue: 0,
+    byIncidentType: [], byAuditResult: [],
   })),
 
-  gadOverview: authedQuery.query(() => ({
+  gadOverview: authedQuery.query(() => syntheticAnalyticsEnabled ? ({
     openWorkOrders: 3,
     inProgressWorkOrders: 2,
     completedThisMonth: 2,
@@ -369,11 +431,16 @@ export const m10Router = createRouter({
       { type: "it", count: 1 },
       { type: "maintenance", count: 1 },
     ],
+  }) : ({
+    openWorkOrders: 0, inProgressWorkOrders: 0, completedThisMonth: 0,
+    overdueWorkOrders: 0, urgentHighCount: 0, vendorCount: 0,
+    vendorContractsExpiring: 0, facilities: 0, totalEstimatedSpend: 0,
+    totalActualSpend: 0, byWorkType: [],
   })),
 
   // ─── Enterprise Executive Summary ────────────────────────
 
-  executiveSummary: authedQuery.query(() => ({
+  executiveSummary: authedQuery.query(() => syntheticAnalyticsEnabled ? ({
     timestamp: new Date().toISOString(),
     operationalStatus: "stable",
     criticalAlerts: 2,
@@ -387,6 +454,12 @@ export const m10Router = createRouter({
     incidentsOpen: 2,
     complianceScore: 78,
     riskLevel: "moderate",
+  }) : ({
+    timestamp: new Date().toISOString(), operationalStatus: "unavailable",
+    criticalAlerts: 0, modulesOnline: 0, modulesTotal: 13,
+    youthServedMTD: 0, revenueMTD: 0, expensesMTD: 0,
+    headcountActive: 0, openPositions: 0, incidentsOpen: 0,
+    complianceScore: 0, riskLevel: "unknown",
   })),
 
   // ═══════════════════════════════════════════════════════════
@@ -398,8 +471,7 @@ export const m10Router = createRouter({
     try {
       return sqlite.prepare("SELECT * FROM strategic_projects").all();
     } catch {
-      // Return seed data if table doesn't exist
-      return STRATEGIC_PROJECTS_SEED;
+      return syntheticAnalyticsEnabled ? STRATEGIC_PROJECTS_SEED : [];
     }
   }),
 
@@ -407,7 +479,17 @@ export const m10Router = createRouter({
   getStrategicProject: authedQuery
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
-      const project = STRATEGIC_PROJECTS_SEED.find((p) => p.id === input.id);
+      try {
+        const project = sqlite
+          .prepare("SELECT * FROM strategic_projects WHERE id = ?")
+          .get(input.id);
+        if (project) return project;
+      } catch {
+        // The synthetic fallback below is limited to isolated scenario runtimes.
+      }
+      const project = syntheticAnalyticsEnabled
+        ? STRATEGIC_PROJECTS_SEED.find((p) => p.id === input.id)
+        : null;
       if (!project) return null;
       return { ...project, milestones: project.milestones ?? [] };
     }),
@@ -457,8 +539,14 @@ export const m10Router = createRouter({
             now,
             now,
           );
-      } catch {
-        // Return mock success if table doesn't exist
+      } catch (error) {
+        if (!syntheticAnalyticsEnabled) {
+          throw new TRPCError({
+            code: "SERVICE_UNAVAILABLE",
+            message: "The authoritative strategic-project store is unavailable.",
+            cause: error,
+          });
+        }
       }
       return { success: true, id, ...input, progress: 0 };
     }),
@@ -475,6 +563,7 @@ export const m10Router = createRouter({
       }),
     )
     .mutation(async ({ input }) => {
+      assertSyntheticAnalyticsWrite();
       return {
         success: true,
         id: input.id,
@@ -488,14 +577,16 @@ export const m10Router = createRouter({
   // ═══════════════════════════════════════════════════════════
 
   /** List all SOPs and policies */
-  listSOPs: authedQuery.query(() => SOP_ITEMS_SEED),
+  listSOPs: authedQuery.query(() => syntheticAnalyticsEnabled ? SOP_ITEMS_SEED : []),
 
   /** List regulatory references */
-  listRegulatoryRefs: authedQuery.query(() => REGULATORY_REFS_SEED),
+  listRegulatoryRefs: authedQuery.query(() => syntheticAnalyticsEnabled ? REGULATORY_REFS_SEED : []),
 
   /** Get SOP detail by ID */
   getSOP: authedQuery.input(z.object({ id: z.string() })).query(({ input }) => {
-    return SOP_ITEMS_SEED.find((s) => s.id === input.id) ?? null;
+    return syntheticAnalyticsEnabled
+      ? SOP_ITEMS_SEED.find((s) => s.id === input.id) ?? null
+      : null;
   }),
 
   // ═══════════════════════════════════════════════════════════
@@ -503,7 +594,7 @@ export const m10Router = createRouter({
   // ═══════════════════════════════════════════════════════════
 
   /** Get marketing site review summary */
-  marketingSiteReview: authedQuery.query(() => ({
+  marketingSiteReview: authedQuery.query(() => syntheticAnalyticsEnabled ? ({
     overallScore: 72,
     lastReviewed: "2026-06-28",
     reviewer: "AMOS-Sentinel",
@@ -637,10 +728,19 @@ export const m10Router = createRouter({
         reportedAt: "2026-06-25",
       },
     ],
+  }) : ({
+    overallScore: 0,
+    lastReviewed: null,
+    reviewer: null,
+    categories: [],
+    pages: [],
+    recentIssues: [],
+    status: "unavailable",
   })),
 
   /** Run a marketing site scan (mock) */
   runMarketingScan: adminQuery.mutation(async () => {
+    assertSyntheticAnalyticsWrite();
     return {
       scanId: randomUUID(),
       startedAt: new Date().toISOString(),

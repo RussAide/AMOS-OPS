@@ -15,9 +15,13 @@ import {
   M22_SYNTHETIC_WORKSPACE,
   type M22SyntheticWorkspace,
 } from "../../data/m22-synthetic-data";
+import { runtimeConfig } from "@/config/runtime";
+import { mayUseIsolatedFixtures } from "@/context/onboarding-context";
+import { useAuth } from "@/hooks/use-auth";
 
 interface M22WorkspaceProps {
   data?: M22SyntheticWorkspace;
+  syntheticDataAllowed?: boolean;
 }
 
 function StatusPill({ children }: { children: React.ReactNode }) {
@@ -68,15 +72,60 @@ function MetricCard({
   );
 }
 
-export function M22Workspace({
-  data = M22_SYNTHETIC_WORKSPACE,
-}: M22WorkspaceProps) {
+function M22Unavailable() {
+  return (
+    <main className="min-h-screen bg-slate-50 p-6 text-slate-950">
+      <section className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+        <ShieldCheck className="h-8 w-8 text-cyan-700" aria-hidden="true" />
+        <h1 className="mt-4 text-2xl font-bold">
+          MHTCM operational data unavailable
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          No authoritative case-management records are available. Production
+          does not substitute demonstration cases or completion evidence.
+        </p>
+      </section>
+    </main>
+  );
+}
+
+export function M22Workspace(props: M22WorkspaceProps) {
+  if (props.syntheticDataAllowed !== undefined) {
+    return (
+      <M22WorkspaceContent
+        {...props}
+        syntheticDataAllowed={props.syntheticDataAllowed ?? true}
+      />
+    );
+  }
+  return <AuthenticatedM22Workspace {...props} />;
+}
+
+function AuthenticatedM22Workspace(props: M22WorkspaceProps) {
+  const { workspace } = useAuth();
+  return (
+    <M22WorkspaceContent
+      {...props}
+      syntheticDataAllowed={mayUseIsolatedFixtures(
+        runtimeConfig.evaluationMode,
+        workspace,
+      )}
+    />
+  );
+}
+
+function M22WorkspaceContent({
+  data,
+  syntheticDataAllowed,
+}: M22WorkspaceProps & { syntheticDataAllowed: boolean }) {
+  const model = syntheticDataAllowed ? (data ?? M22_SYNTHETIC_WORKSPACE) : null;
   const [selectedFunction, setSelectedFunction] = useState<
-    M22SyntheticWorkspace["functions"][number]["id"]
-  >(data.functions[2].id);
+    M22SyntheticWorkspace["functions"][number]["id"] | ""
+  >(model?.functions[2]?.id ?? "");
+  if (!model) return <M22Unavailable />;
   const activeFunction =
-    data.functions.find((item) => item.id === selectedFunction) ??
-    data.functions[0];
+    model.functions.find((item) => item.id === selectedFunction) ??
+    model.functions[0];
 
   return (
     <main
@@ -107,7 +156,7 @@ export function M22Workspace({
             <MetricCard label="Plan" value="Approved v2" accent />
             <MetricCard
               label="Billing"
-              value={data.controls.billingDecision}
+              value={model.controls.billingDecision}
               accent
             />
             <MetricCard label="Evidence" value="8 / 8" accent />
@@ -124,18 +173,19 @@ export function M22Workspace({
                   Controlled case
                 </p>
                 <h2 className="mt-1 text-2xl font-bold">
-                  {data.case.youthLabel}
+                  {model.case.youthLabel}
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  {data.case.id} · Age {data.case.ageYears} · {data.case.source}
+                  {model.case.id} · Age {model.case.ageYears} ·{" "}
+                  {model.case.source}
                 </p>
               </div>
-              <StatusPill>{data.case.status}</StatusPill>
+              <StatusPill>{model.case.status}</StatusPill>
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-2 rounded-2xl bg-slate-50 p-4 text-sm font-medium text-slate-700">
               <span>M2.1 referral + CANS</span>
               <ArrowRight className="h-4 w-4 text-cyan-700" />
-              <span>{data.case.plan}</span>
+              <span>{model.case.plan}</span>
               <ArrowRight className="h-4 w-4 text-cyan-700" />
               <span>Aftercare complete</span>
             </div>
@@ -152,7 +202,7 @@ export function M22Workspace({
               </div>
             </div>
             <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {data.functions.map((item, index) => (
+              {model.functions.map((item, index) => (
                 <button
                   key={item.id}
                   type="button"
@@ -199,7 +249,7 @@ export function M22Workspace({
                 Approved v2 preserves v1 and the exact M2.1 lineage.
               </p>
               <div className="mt-4 divide-y divide-slate-100">
-                {data.planComponents.map(([label, value]) => (
+                {model.planComponents.map(([label, value]) => (
                   <div
                     key={label}
                     className="flex items-center justify-between gap-4 py-3 text-sm"
@@ -219,16 +269,16 @@ export function M22Workspace({
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <MetricCard
                   label="Discharge lead"
-                  value={data.controls.dischargeLead}
+                  value={model.controls.dischargeLead}
                 />
                 <MetricCard
                   label="Aftercare due"
-                  value={data.controls.aftercareDue}
+                  value={model.controls.aftercareDue}
                 />
               </div>
               <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900">
                 <p className="font-semibold">
-                  Aftercare completed {data.controls.aftercareCompleted}
+                  Aftercare completed {model.controls.aftercareCompleted}
                 </p>
                 <p className="mt-1 text-emerald-800">
                   Follow-up occurred inside the controlled 30-day window.
@@ -249,7 +299,7 @@ export function M22Workspace({
                   </p>
                 </div>
               </div>
-              <StatusPill>{data.controls.handoff}</StatusPill>
+              <StatusPill>{model.controls.handoff}</StatusPill>
             </div>
             <div className="mt-5 overflow-x-auto">
               <table className="w-full min-w-[620px] text-left text-sm">
@@ -261,7 +311,7 @@ export function M22Workspace({
                   </tr>
                 </thead>
                 <tbody>
-                  {data.gates.map(([gate, evidence, result]) => (
+                  {model.gates.map(([gate, evidence, result]) => (
                     <tr
                       key={gate}
                       className="border-b border-slate-100 last:border-0"
@@ -289,10 +339,10 @@ export function M22Workspace({
               Renewal due
             </p>
             <p className="mt-1 text-xl font-bold text-amber-950">
-              {data.controls.renewalDue}
+              {model.controls.renewalDue}
             </p>
             <p className="mt-3 rounded-xl bg-white/70 p-3 text-sm font-semibold text-amber-900">
-              {data.controls.alert}
+              {model.controls.alert}
             </p>
           </section>
 
@@ -314,7 +364,7 @@ export function M22Workspace({
               </div>
               <div className="rounded-xl bg-slate-50 p-3">
                 <p className="font-semibold">
-                  {data.controls.auditEvents} audit events
+                  {model.controls.auditEvents} audit events
                 </p>
                 <p className="text-slate-500">Stable case correlation</p>
               </div>
@@ -349,7 +399,7 @@ export function M22Workspace({
           <section className="rounded-3xl bg-slate-950 p-5 text-white">
             <h2 className="font-bold">M2.2 acceptance criteria</h2>
             <ul className="mt-4 space-y-3 text-sm text-slate-300">
-              {data.criteria.map((criterion, index) => (
+              {model.criteria.map((criterion, index) => (
                 <li key={criterion} className="flex gap-2">
                   <span className="font-bold text-cyan-300">{index + 1}</span>
                   <span>{criterion}</span>

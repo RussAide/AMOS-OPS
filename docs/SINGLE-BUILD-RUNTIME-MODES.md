@@ -5,11 +5,11 @@
 AMOS-OPS uses one immutable application build. The deployment selects one of
 two modes at process startup with `AMOS_RUNTIME_MODE`:
 
-| Mode | Data boundary | Evaluation fallback | External/live writes | Current release state |
-|---|---|---:|---:|---|
-| `demo` | Fictional and isolated demo data only | Allowed for eligible reads | Blocked | Available for controlled demonstration |
-| `production` + isolated review | Isolated review data | Blocked | Blocked | Available for owner experience review |
-| `production` + live authorization | Authorized production data | Blocked | Allowed only after the production release gate | **Locked / NO-GO** |
+| Mode                              | Data boundary                         |        Evaluation fallback |                           External/live writes | Current release state                  |
+| --------------------------------- | ------------------------------------- | -------------------------: | ---------------------------------------------: | -------------------------------------- |
+| `demo`                            | Fictional and isolated demo data only | Allowed for eligible reads |                                        Blocked | Available for controlled demonstration |
+| `production` + isolated review    | Isolated review data                  |                    Blocked |                                        Blocked | Available for owner experience review  |
+| `production` + live authorization | Authorized production data            |                    Blocked | Allowed only after the production release gate | **Locked / NO-GO**                     |
 
 The mode is not an in-app user setting. Changing it requires a restart or a new
 deployment using the same verified image digest. Demo and Production must never
@@ -47,7 +47,9 @@ workflows.
 - [ ] Record the owner's decision outside AMOS.
 - [ ] Discuss and separately authorize the deployment strategy outside AMOS.
 - [ ] Close every RG.1 P0 release gate and record the formal GO decision.
-- [ ] Provision separate Production secrets, database, uploads, credentials, and exact origins.
+- [ ] Attach the Railway persistent volume at `/app/persistent`.
+- [ ] Provision separate Production secrets, database, uploads, application backups, credentials, and exact origins.
+- [ ] Keep all Production database, upload, and backup paths beneath `/app/persistent`.
 - [ ] Require MFA for all users and keep self-registration disabled.
 - [ ] Use the exact same verified image digest that passed release testing.
 - [ ] Set `APP_ENV=production` and `AMOS_RUNTIME_MODE=production`.
@@ -68,6 +70,7 @@ AMOS_ENVIRONMENT_ID=amos-ops-demo
 CREDENTIAL_NAMESPACE=amos-ops/demo
 DATABASE_PATH=/app/data/demo/amos-ops.db
 UPLOAD_PATH=/app/uploads/demo
+BACKUP_PATH=/app/data/demo/backups
 ALLOW_SELF_REGISTRATION=true
 MFA_POLICY=required-all
 ```
@@ -82,6 +85,7 @@ AMOS_ENVIRONMENT_ID=amos-ops-staging-review
 CREDENTIAL_NAMESPACE=amos-ops/staging
 DATABASE_PATH=/app/data/staging/amos-ops.db
 UPLOAD_PATH=/app/uploads/staging
+BACKUP_PATH=/app/data/staging/backups
 ALLOW_SELF_REGISTRATION=false
 MFA_POLICY=required-all
 AMOS_FINAL_GATE_OWNER_EMAIL=owner@amos-ops.invalid
@@ -100,8 +104,12 @@ APP_ENV=production
 AMOS_RUNTIME_MODE=production
 AMOS_ENVIRONMENT_ID=amos-ops-production
 CREDENTIAL_NAMESPACE=amos-ops/production
-DATABASE_PATH=/app/data/production/amos-ops.db
-UPLOAD_PATH=/app/uploads/production
+PERSISTENT_ROOT=/app/persistent
+DATABASE_PATH=/app/persistent/data/production/amos-ops.db
+TRAINING_DATABASE_PATH=/app/persistent/data/production/training/amos-ops-training.db
+UPLOAD_PATH=/app/persistent/uploads/production
+TRAINING_UPLOAD_PATH=/app/persistent/uploads/production/training
+BACKUP_PATH=/app/persistent/backups/production
 ALLOW_SELF_REGISTRATION=false
 MFA_POLICY=required-all
 DEPLOYMENT_APPROVAL_ID=<approved-id>
@@ -112,3 +120,5 @@ AMOS_PRODUCTION_RELEASE_ID=<approved-rg1-go-release-id>
 
 Production authorization variables are release evidence, not a substitute for
 the RG.1 gate. They must remain unset or false while the gate decision is NO-GO.
+The exact Production storage and rollback requirements are defined in
+[RM.1 Production persistence](RM1-PERSISTENCE.md).

@@ -7,6 +7,16 @@ import {
 } from "@db/schema";
 import { eq, like, and, or, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
+
+const syntheticComplianceFixturesEnabled = (() => {
+  try {
+    assertSyntheticScenarioRuntime(env);
+    return true;
+  } catch {
+    return false;
+  }
+})();
 
 // ─── M3: QA & Compliance — AMOS-Sentinel ───────────────────
 
@@ -378,6 +388,7 @@ export const m3Router = createRouter({
 
   // ─── Compliance Scores ─────────────────────────────────────
   complianceScores: publicQuery.query(async () => {
+    if (!syntheticComplianceFixturesEnabled) return [];
     // In a real system, these would be calculated from audit findings
     // For now, return structured compliance area data
     return [

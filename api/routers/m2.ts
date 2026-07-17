@@ -4,6 +4,7 @@ import { getDb, sqlite } from "../queries/connection";
 import { dmsDocuments, documentCategories, documentVersions, documentAuditLog } from "@db/schema";
 import { eq, like, and, or, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ═══════════════════════════════════════════════════════════════
 
@@ -1204,6 +1205,7 @@ export const m2Router = createRouter({
   }),
 
   seedCategories: adminQuery.mutation(async ({ ctx }) => {
+    assertSyntheticScenarioRuntime(env);
     const db = getDb();
     const actor = ctx.user?.email ?? "unknown";
     const categories = [
@@ -1600,6 +1602,7 @@ export const m2Router = createRouter({
   // ════════════════════════════════════════════════════════════
 
   seedDocuments: adminQuery.mutation(async () => {
+    assertSyntheticScenarioRuntime(env);
     const db = getDb();
     const now = new Date().toISOString();
 

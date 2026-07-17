@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { createRouter, authedQuery, adminQuery, auditLog } from "../middleware";
 import { randomUUID } from "crypto";
+import { TRPCError } from "@trpc/server";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ─── M8: Workflow Engine ───────────────────────────────────
 
@@ -71,6 +73,32 @@ const auditStore: WorkflowAuditEntry[] = [
   { id: "wl10", action: "instance.triggered", actor: "gad.ops@amos-ops.invalid", details: "Equipment failure: Network switch (server closet)", created_at: "2026-06-28T16:00:00Z" },
 ];
 
+const volatileWorkflowStoreEnabled = (() => {
+  try {
+    assertSyntheticScenarioRuntime(env);
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+if (!volatileWorkflowStoreEnabled) {
+  rulesStore.length = 0;
+  instancesStore.length = 0;
+  approvalsStore.length = 0;
+  auditStore.length = 0;
+}
+
+function assertWorkflowWriteProvider(): void {
+  if (!volatileWorkflowStoreEnabled) {
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message:
+        "Workflow writes are unavailable because no durable Production provider is configured.",
+    });
+  }
+}
+
 export const m8Router = createRouter({
   listRules: authedQuery.query(() => rulesStore),
 
@@ -120,6 +148,7 @@ export const m8Router = createRouter({
   trigger: adminQuery
     .input(z.object({ ruleId: z.string(), triggerData: z.string() }))
     .mutation(({ ctx, input }) => {
+      assertWorkflowWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const rule = rulesStore.find((r) => r.id === input.ruleId);
       if (!rule) throw new Error("Rule not found");
@@ -173,6 +202,7 @@ export const m8Router = createRouter({
       approverId: z.string().optional(),
     }))
     .mutation(({ ctx, input }) => {
+      assertWorkflowWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const approverId = ctx.user.id;
       const approval = approvalsStore.find((a) => a.id === input.approvalId);

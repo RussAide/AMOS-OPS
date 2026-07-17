@@ -8,6 +8,7 @@ import {
 } from "@db/schema";
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ══════════════════════════════════════════════════════════════
 // MHRS: Mental Health Rehabilitative Services Router (T-005)
@@ -464,6 +465,7 @@ export const mhrsRouter = createRouter({
   // ════════════════════════════════════════════════════════════
 
   seedMhrsData: adminQuery.mutation(async () => {
+    assertSyntheticScenarioRuntime(env);
     const db = getDb();
     const now = new Date().toISOString();
 

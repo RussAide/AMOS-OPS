@@ -6,6 +6,7 @@ import {
 } from "@db/schema";
 import { eq, and, desc, type InferInsertModel } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ══════════════════════════════════════════════════════════════
 // 42 CFR Part 2: SUD Confidentiality Compliance Router (T-007)
@@ -519,6 +520,7 @@ export const part2Router = createRouter({
   // ════════════════════════════════════════════════════════════
 
   seedPart2Data: adminQuery.mutation(async () => {
+    assertSyntheticScenarioRuntime(env);
     const db = getDb();
     const now = new Date().toISOString();
 

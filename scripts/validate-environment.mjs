@@ -8,10 +8,43 @@ const appEnvironment =
 const runtimeMode =
   process.env.AMOS_RUNTIME_MODE ||
   (appEnvironment === "demo" ? "demo" : "production");
+const productionPersistentRoot = "/app/persistent";
+const persistentRoot =
+  process.env.PERSISTENT_ROOT ||
+  (appEnvironment === "production"
+    ? productionPersistentRoot
+    : path.join("data", appEnvironment));
 const databasePath =
-  process.env.DATABASE_PATH || path.join("data", appEnvironment, "amos-ops.db");
+  process.env.DATABASE_PATH ||
+  (appEnvironment === "production"
+    ? path.join(persistentRoot, "data", appEnvironment, "amos-ops.db")
+    : path.join("data", appEnvironment, "amos-ops.db"));
+const trainingDatabasePath =
+  process.env.TRAINING_DATABASE_PATH ||
+  (appEnvironment === "production"
+    ? path.join(
+        persistentRoot,
+        "data",
+        appEnvironment,
+        "training",
+        "amos-ops-training.db",
+      )
+    : path.join("data", appEnvironment, "training", "amos-ops-training.db"));
 const uploadPath =
-  process.env.UPLOAD_PATH || path.join("uploads", appEnvironment);
+  process.env.UPLOAD_PATH ||
+  (appEnvironment === "production"
+    ? path.join(persistentRoot, "uploads", appEnvironment)
+    : path.join("uploads", appEnvironment));
+const trainingUploadPath =
+  process.env.TRAINING_UPLOAD_PATH ||
+  (appEnvironment === "production"
+    ? path.join(persistentRoot, "uploads", appEnvironment, "training")
+    : path.join("uploads", appEnvironment, "training"));
+const backupPath =
+  process.env.BACKUP_PATH ||
+  (appEnvironment === "production"
+    ? path.join(persistentRoot, "backups", appEnvironment)
+    : path.join("backups", appEnvironment));
 const credentialNamespace =
   process.env.CREDENTIAL_NAMESPACE || `amos-ops/${appEnvironment}`;
 const evaluationMode = runtimeMode === "demo";
@@ -40,8 +73,16 @@ function isExactHttpOrigin(value) {
 }
 
 function isPlaceholder(value) {
-  return /^(?:change|replace|example|placeholder|your[-_])/i.test(
-    value.trim(),
+  return /^(?:change|replace|example|placeholder|your[-_])/i.test(value.trim());
+}
+
+function isStrictPathDescendant(root, candidate) {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  return (
+    relative.length > 0 &&
+    relative !== ".." &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
   );
 }
 
@@ -71,10 +112,7 @@ if (controlled && !credentialNamespace.toLowerCase().includes(appEnvironment))
 if (controlled) {
   for (const name of ["APP_SECRET", "JWT_SECRET"]) {
     const value = process.env[name] || "";
-    if (
-      value.length < 32 ||
-      isPlaceholder(value)
-    ) {
+    if (value.length < 32 || isPlaceholder(value)) {
       errors.push(
         `${name} must be a non-placeholder secret of at least 32 characters.`,
       );
@@ -98,6 +136,28 @@ if (controlled) {
 }
 
 if (appEnvironment === "production") {
+  if (
+    !path.isAbsolute(persistentRoot) ||
+    path.resolve(persistentRoot) !== path.resolve(productionPersistentRoot)
+  )
+    errors.push(
+      `Production PERSISTENT_ROOT must resolve to ${productionPersistentRoot}.`,
+    );
+  for (const [name, value] of [
+    ["DATABASE_PATH", databasePath],
+    ["TRAINING_DATABASE_PATH", trainingDatabasePath],
+    ["UPLOAD_PATH", uploadPath],
+    ["TRAINING_UPLOAD_PATH", trainingUploadPath],
+    ["BACKUP_PATH", backupPath],
+  ]) {
+    if (
+      !path.isAbsolute(value) ||
+      !isStrictPathDescendant(persistentRoot, value)
+    )
+      errors.push(
+        `${name} for production must be an absolute path beneath PERSISTENT_ROOT ${productionPersistentRoot}.`,
+      );
+  }
   if (/^(?:1|true|yes|on)$/i.test(process.env.ALLOW_SELF_REGISTRATION || ""))
     errors.push("Production requires ALLOW_SELF_REGISTRATION=false.");
   if ((process.env.MFA_POLICY || "required-privileged") !== "required-all")
@@ -119,8 +179,7 @@ if (appEnvironment === "production") {
 if (reviewDeployment) {
   const ownerEmail =
     process.env.AMOS_FINAL_GATE_OWNER_EMAIL?.trim().toLowerCase() || "";
-  const candidateId =
-    process.env.AMOS_FINAL_GATE_CANDIDATE_ID?.trim() || "";
+  const candidateId = process.env.AMOS_FINAL_GATE_CANDIDATE_ID?.trim() || "";
   const buildId = process.env.AMOS_BUILD_ID?.trim() || "";
   const sourceDigest =
     process.env.AMOS_SOURCE_DIGEST?.trim().toLowerCase() || "";
@@ -149,7 +208,9 @@ if (reviewDeployment) {
     !/^\d{6}$/.test(mfaCode) ||
     new Set(["000000", "111111", "123456", "654321"]).has(mfaCode)
   )
-    errors.push("AMOS_REVIEW_OWNER_MFA_CODE must be a non-trivial six-digit code.");
+    errors.push(
+      "AMOS_REVIEW_OWNER_MFA_CODE must be a non-trivial six-digit code.",
+    );
 } else if (
   [
     "AMOS_FINAL_GATE_OWNER_EMAIL",
@@ -184,8 +245,12 @@ console.log(
       environmentId:
         process.env.AMOS_ENVIRONMENT_ID || `amos-ops-${appEnvironment}`,
       credentialNamespace,
+      persistentRoot,
       databasePath,
+      trainingDatabasePath,
       uploadPath,
+      trainingUploadPath,
+      backupPath,
       evaluationMode,
       productionReleaseAuthorized,
       productionReleaseId: productionReleaseId || null,

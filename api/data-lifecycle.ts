@@ -18,6 +18,14 @@ export interface MigrationPlanItem {
   state: "pending" | "applied";
 }
 
+export type MigrationDataMode = "include" | "schema-only";
+
+interface SqliteSchemaObject {
+  type: "table" | "index" | "trigger";
+  name: string;
+  sql: string;
+}
+
 export interface ReferentialRule {
   childTable: string;
   childColumn: string;
@@ -298,10 +306,14 @@ export function planMigrations(db: DatabaseHandle, migrationsDirectory: string):
 export function applyPendingMigrations(
   db: DatabaseHandle,
   migrationsDirectory: string,
+  options: { dataMode?: MigrationDataMode } = {},
 ): MigrationRecord[] {
   db.pragma("foreign_keys = ON");
   ensureMigrationControl(db);
   const pending = planMigrations(db, migrationsDirectory).filter((item) => item.state === "pending");
+  if ((options.dataMode ?? "include") === "schema-only") {
+    return applyFreshSchemaOnlyMigrations(db, migrationsDirectory, pending);
+  }
   const applied: MigrationRecord[] = [];
 
   for (const migration of pending) {
@@ -318,6 +330,96 @@ export function applyPendingMigrations(
   }
 
   return applied;
+}
+
+/**
+ * Apply immutable migration history to a fresh database without copying any
+ * migration DML into the target. The migrations execute normally in an
+ * isolated in-memory database, then SQLite's canonical schema definitions are
+ * replayed into the empty target and the original migration checksums are
+ * recorded. This avoids maintaining a second migration history or attempting
+ * to parse trigger bodies as ordinary semicolon-delimited SQL.
+ */
+function applyFreshSchemaOnlyMigrations(
+  db: DatabaseHandle,
+  migrationsDirectory: string,
+  pending: MigrationPlanItem[],
+): MigrationRecord[] {
+  if (listAppliedMigrations(db).length > 0) {
+    throw new Error(
+      "SCHEMA_ONLY_MIGRATIONS_REQUIRE_FRESH_DATABASE: existing migration history must use normal migrations.",
+    );
+  }
+
+  const existingApplicationObjects = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM sqlite_master
+         WHERE name NOT LIKE 'sqlite_%'
+           AND name <> ?
+           AND type IN ('table', 'index', 'trigger')`,
+      )
+      .get(MIGRATION_TABLE) as { count: number }
+  ).count;
+  if (existingApplicationObjects > 0) {
+    throw new Error(
+      "SCHEMA_ONLY_MIGRATIONS_REQUIRE_FRESH_DATABASE: application schema already exists.",
+    );
+  }
+
+  if (pending.length === 0) return [];
+
+  const staging = new Database(":memory:");
+  try {
+    const stagedRecords = applyPendingMigrations(staging, migrationsDirectory, {
+      dataMode: "include",
+    });
+    const schemaObjects = staging
+      .prepare(
+        `SELECT type, name, sql
+         FROM sqlite_master
+         WHERE sql IS NOT NULL
+           AND name NOT LIKE 'sqlite_%'
+           AND name <> ?
+           AND type IN ('table', 'index', 'trigger')
+         ORDER BY CASE type
+           WHEN 'table' THEN 1
+           WHEN 'index' THEN 2
+           WHEN 'trigger' THEN 3
+           ELSE 4
+         END, name`,
+      )
+      .all(MIGRATION_TABLE) as SqliteSchemaObject[];
+
+    const stagedByName = new Map(
+      stagedRecords.map((record) => [record.name, record]),
+    );
+    const applied = pending.map((migration) => {
+      const staged = stagedByName.get(migration.name);
+      if (!staged || staged.checksum !== migration.checksum) {
+        throw new Error(
+          `SCHEMA_ONLY_MIGRATION_HISTORY_MISMATCH: ${migration.name}`,
+        );
+      }
+      return staged;
+    });
+
+    const installSchema = db.transaction(() => {
+      for (const schemaObject of schemaObjects) {
+        db.exec(schemaObject.sql);
+      }
+      for (const migration of applied) {
+        db.prepare(
+          `INSERT INTO ${MIGRATION_TABLE} (name, checksum, applied_at) VALUES (?, ?, ?)`,
+        ).run(migration.name, migration.checksum, migration.appliedAt);
+      }
+    });
+    installSchema();
+    return applied;
+  } finally {
+    staging.close();
+  }
 }
 
 export async function createDatabaseBackup(

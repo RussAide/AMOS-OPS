@@ -10,8 +10,14 @@ import {
   runM22RepresentativeScenario,
 } from "../services/mhtcm";
 import { createRouter, publicQuery } from "../middleware";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
-const engine = createM22SeededEngine();
+type M22Engine = ReturnType<typeof createM22SeededEngine>;
+let engine: M22Engine | undefined;
+
+function getM22Engine(): M22Engine {
+  return (engine ??= createM22SeededEngine());
+}
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const isoTimestamp = z.string().datetime({ offset: true });
@@ -162,6 +168,16 @@ function actorFromContext(user: {
 
 function execute<T>(operation: () => T): T {
   try {
+    assertSyntheticScenarioRuntime(env);
+  } catch (error) {
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message:
+        "MHTCM prototype operations are unavailable because no durable Production provider is configured.",
+      cause: error,
+    });
+  }
+  try {
     return operation();
   } catch (error) {
     if (!(error instanceof M22DomainError)) throw error;
@@ -179,14 +195,14 @@ function execute<T>(operation: () => T): T {
 
 export const m22Router = createRouter({
   representativeScenario: publicQuery.query(() =>
-    runM22RepresentativeScenario(),
+    execute(() => runM22RepresentativeScenario()),
   ),
 
   getCaseSnapshot: publicQuery
     .input(z.object({ caseId: z.string().min(1), accessedAt: isoTimestamp }))
     .query(({ ctx, input }) =>
       execute(() =>
-        engine.getSnapshot(
+        getM22Engine().getSnapshot(
           actorFromContext(ctx.user),
           input.caseId,
           input.accessedAt,
@@ -198,7 +214,7 @@ export const m22Router = createRouter({
     .input(z.object({ caseId: z.string().min(1), accessedAt: isoTimestamp }))
     .query(({ ctx, input }) =>
       execute(() =>
-        engine.getBillingProjection(
+        getM22Engine().getBillingProjection(
           actorFromContext(ctx.user),
           input.caseId,
           input.accessedAt,
@@ -225,7 +241,7 @@ export const m22Router = createRouter({
       }),
     )
     .mutation(({ ctx, input }) =>
-      execute(() => engine.openCase(actorFromContext(ctx.user), input)),
+      execute(() => getM22Engine().openCase(actorFromContext(ctx.user), input)),
     ),
 
   createPlanVersion: publicQuery
@@ -246,7 +262,7 @@ export const m22Router = createRouter({
     )
     .mutation(({ ctx, input }) =>
       execute(() =>
-        engine.createPlanVersion(actorFromContext(ctx.user), {
+        getM22Engine().createPlanVersion(actorFromContext(ctx.user), {
           ...input,
           components: input.components as M22PlanComponents,
         }),
@@ -264,7 +280,7 @@ export const m22Router = createRouter({
     )
     .mutation(({ ctx, input }) =>
       execute(() =>
-        engine.approveCurrentPlan(
+        getM22Engine().approveCurrentPlan(
           actorFromContext(ctx.user),
           input.caseId,
           input.expectedVersion,
@@ -285,7 +301,7 @@ export const m22Router = createRouter({
     )
     .mutation(({ ctx, input }) =>
       execute(() =>
-        engine.completeLifecycleFunction(
+        getM22Engine().completeLifecycleFunction(
           actorFromContext(ctx.user),
           input.caseId,
           input.function,
@@ -308,7 +324,9 @@ export const m22Router = createRouter({
       }),
     )
     .mutation(({ ctx, input }) =>
-      execute(() => engine.planDischarge(actorFromContext(ctx.user), input)),
+      execute(() =>
+        getM22Engine().planDischarge(actorFromContext(ctx.user), input),
+      ),
     ),
 
   recordDischarge: publicQuery
@@ -322,7 +340,7 @@ export const m22Router = createRouter({
     )
     .mutation(({ ctx, input }) =>
       execute(() =>
-        engine.recordDischarge(
+        getM22Engine().recordDischarge(
           actorFromContext(ctx.user),
           input.caseId,
           input.dischargedOn,
@@ -342,7 +360,7 @@ export const m22Router = createRouter({
     )
     .mutation(({ ctx, input }) =>
       execute(() =>
-        engine.scheduleAftercare(
+        getM22Engine().scheduleAftercare(
           actorFromContext(ctx.user),
           input.caseId,
           input.scheduledFor,
@@ -362,7 +380,7 @@ export const m22Router = createRouter({
     )
     .mutation(({ ctx, input }) =>
       execute(() =>
-        engine.completeAftercare(
+        getM22Engine().completeAftercare(
           actorFromContext(ctx.user),
           input.caseId,
           input.completedAt,
@@ -397,7 +415,7 @@ export const m22Router = createRouter({
     )
     .mutation(({ ctx, input }) =>
       execute(() =>
-        engine.recordAuthorization(actorFromContext(ctx.user), input),
+        getM22Engine().recordAuthorization(actorFromContext(ctx.user), input),
       ),
     ),
 
@@ -405,7 +423,7 @@ export const m22Router = createRouter({
     .input(z.object({ asOf: isoDate }))
     .mutation(({ ctx, input }) =>
       execute(() =>
-        engine.generateAuthorizationAlerts(
+        getM22Engine().generateAuthorizationAlerts(
           actorFromContext(ctx.user),
           input.asOf,
         ),
@@ -443,7 +461,9 @@ export const m22Router = createRouter({
       }),
     )
     .mutation(({ ctx, input }) =>
-      execute(() => engine.createEncounter(actorFromContext(ctx.user), input)),
+      execute(() =>
+        getM22Engine().createEncounter(actorFromContext(ctx.user), input),
+      ),
     ),
 
   signEncounter: publicQuery
@@ -457,7 +477,7 @@ export const m22Router = createRouter({
     )
     .mutation(({ ctx, input }) =>
       execute(() =>
-        engine.signEncounter(
+        getM22Engine().signEncounter(
           actorFromContext(ctx.user),
           input.encounterId,
           input.expectedRevision,
@@ -479,7 +499,9 @@ export const m22Router = createRouter({
       }),
     )
     .mutation(({ ctx, input }) =>
-      execute(() => engine.reviseEncounter(actorFromContext(ctx.user), input)),
+      execute(() =>
+        getM22Engine().reviseEncounter(actorFromContext(ctx.user), input),
+      ),
     ),
 
   evaluateEncounter: publicQuery
@@ -488,7 +510,7 @@ export const m22Router = createRouter({
     )
     .mutation(({ ctx, input }) =>
       execute(() =>
-        engine.evaluateEncounter(
+        getM22Engine().evaluateEncounter(
           actorFromContext(ctx.user),
           input.encounterId,
           input.evaluatedAt,
@@ -502,7 +524,7 @@ export const m22Router = createRouter({
     )
     .mutation(({ ctx, input }) =>
       execute(() =>
-        engine.createClaimHandoff(
+        getM22Engine().createClaimHandoff(
           actorFromContext(ctx.user),
           input.encounterId,
           input.handedOffAt,

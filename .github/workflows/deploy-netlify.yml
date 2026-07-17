@@ -35,33 +35,27 @@ jobs:
       - run: npm run env:validate
         env:
           APP_ENV: ${{ inputs.target_environment }}
+          AMOS_RUNTIME_MODE: production
           AMOS_ENVIRONMENT_ID: amos-ops-${{ inputs.target_environment }}
           CREDENTIAL_NAMESPACE: amos-ops/${{ inputs.target_environment }}
           NODE_ENV: production
-          DATABASE_PATH: /app/data/${{ inputs.target_environment }}/amos-ops.db
-          TRAINING_DATABASE_PATH: /app/data/${{ inputs.target_environment }}/training/amos-ops-training.db
-          UPLOAD_PATH: /app/uploads/${{ inputs.target_environment }}
-          TRAINING_UPLOAD_PATH: /app/uploads/${{ inputs.target_environment }}/training
+          PERSISTENT_ROOT: ${{ inputs.target_environment == 'production' && '/app/persistent' || '/app/data/staging' }}
+          DATABASE_PATH: ${{ inputs.target_environment == 'production' && '/app/persistent/data/production/amos-ops.db' || '/app/data/staging/amos-ops.db' }}
+          TRAINING_DATABASE_PATH: ${{ inputs.target_environment == 'production' && '/app/persistent/data/production/training/amos-ops-training.db' || '/app/data/staging/training/amos-ops-training.db' }}
+          UPLOAD_PATH: ${{ inputs.target_environment == 'production' && '/app/persistent/uploads/production' || '/app/uploads/staging' }}
+          TRAINING_UPLOAD_PATH: ${{ inputs.target_environment == 'production' && '/app/persistent/uploads/production/training' || '/app/uploads/staging/training' }}
+          BACKUP_PATH: ${{ inputs.target_environment == 'production' && '/app/persistent/backups/production' || '/app/data/staging/backups' }}
           APP_SECRET: ${{ secrets.APP_SECRET }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           DEPLOYMENT_APPROVAL_ID: ${{ inputs.approval_id }}
           DEPLOYMENT_CHANGE_REFERENCE: ${{ inputs.change_reference }}
           AMOS_ALLOWED_ORIGINS: ${{ vars.AMOS_ALLOWED_ORIGINS }}
+          ALLOW_SELF_REGISTRATION: "false"
+          MFA_POLICY: required-all
+          AMOS_PRODUCTION_RELEASE_AUTHORIZED: ${{ inputs.target_environment == 'production' && 'true' || 'false' }}
+          AMOS_PRODUCTION_RELEASE_ID: ${{ inputs.target_environment == 'production' && inputs.approval_id || '' }}
       - run: npm run verify
         env:
-          APP_ENV: ${{ inputs.target_environment }}
-          AMOS_ENVIRONMENT_ID: amos-ops-${{ inputs.target_environment }}
-          CREDENTIAL_NAMESPACE: amos-ops/${{ inputs.target_environment }}
-          NODE_ENV: production
-          DATABASE_PATH: ./data/${{ inputs.target_environment }}/amos-ops-ci.db
-          TRAINING_DATABASE_PATH: ./data/${{ inputs.target_environment }}/training/amos-ops-training-ci.db
-          UPLOAD_PATH: ./uploads/${{ inputs.target_environment }}
-          TRAINING_UPLOAD_PATH: ./uploads/${{ inputs.target_environment }}/training
-          APP_SECRET: ${{ secrets.APP_SECRET }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          DEPLOYMENT_APPROVAL_ID: ${{ inputs.approval_id }}
-          DEPLOYMENT_CHANGE_REFERENCE: ${{ inputs.change_reference }}
-          AMOS_ALLOWED_ORIGINS: ${{ vars.AMOS_ALLOWED_ORIGINS }}
           VITE_AMOS_API_ORIGIN: ${{ vars.AMOS_API_ORIGIN }}
       - name: Deploy to Netlify
         uses: nwtgck/actions-netlify@v3.0

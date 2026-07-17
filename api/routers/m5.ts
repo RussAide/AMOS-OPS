@@ -5,6 +5,7 @@ import { getDb } from "../queries/connection";
 import { patients, clinicalSessions, treatmentPlans, outcomeMeasures, insurancePlans } from "@db/schema";
 import { eq, like, and, or, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ─── M5: Clinical — AMOS-Clinical ──────────────────────────
 
@@ -284,6 +285,7 @@ export const m5Router = createRouter({
 
   // ─── Seed Data ─────────────────────────────────────────────
   seedClinicalData: publicQuery.mutation(async () => {
+    assertSyntheticScenarioRuntime(env);
     const db = getDb();
     const now = new Date().toISOString();
 

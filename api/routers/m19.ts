@@ -7,6 +7,7 @@ import {
   censusAlerts, censusSnapshots,
 } from "@db/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ─── M19: 48-Bed Facility Architecture Router ────────────────
 
@@ -393,6 +394,7 @@ export const m19Router = createRouter({
 
   // ─── Seed Demo Data ──────────────────────────────────────
   seedFacilityData: publicQuery.mutation(async () => {
+    assertSyntheticScenarioRuntime(env);
     // Seed facilities
     await getDb().insert(facilities).values([
       { id: "fac-001", name: "Main Residence", code: "MR", type: "main_residence", address: "123 Cypress Lane", city: "Cypress", state: "TX", zipCode: "77429", licensedCapacity: 10, operationalCapacity: 4, totalRooms: 4, totalBeds: 4, status: "active", activationDate: "2024-01-15", notes: "Primary residence. 4 rooms, 4 beds. Licensed capacity 10." },

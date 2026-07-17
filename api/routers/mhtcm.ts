@@ -8,6 +8,7 @@ import {
 } from "@db/schema";
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ══════════════════════════════════════════════════════════════
 // MHTCM: Mental Health Targeted Case Management Router (T-004)
@@ -843,6 +844,7 @@ export const mhtcmRouter = createRouter({
   // ════════════════════════════════════════════════════════════
 
   seedMhtcmData: adminQuery.mutation(async () => {
+    assertSyntheticScenarioRuntime(env);
     const db = getDb();
     const now = new Date().toISOString();
 

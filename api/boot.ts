@@ -17,6 +17,7 @@ import { evaluateCorsOrigin } from "./cors-policy";
 import { env } from "./lib/env";
 import { enforceDatabaseStartupPolicy } from "./startup-policy";
 import { createPublicRuntimeConfig } from "./runtime-mode";
+import { blockedProductionSyntheticProcedures } from "./lib/production-data-boundary";
 import { inheritResponseHeaders } from "./response-headers";
 
 const logger = createStructuredLogger("amos-ops-api");
@@ -37,6 +38,7 @@ const app = new Hono();
 const operationalMonitor = new OperationalMonitor(operationalSqlite, logger);
 const UPLOAD_DIR = path.resolve(process.cwd(), env.uploadPath);
 const TRAINING_UPLOAD_DIR = path.resolve(process.cwd(), env.trainingUploadPath);
+const BACKUP_DIR = path.resolve(process.cwd(), env.backupPath);
 const DIST_DIR = path.join(process.cwd(), "dist", "public");
 const INDEX_HTML = path.join(DIST_DIR, "index.html");
 const publicRuntimeConfig = createPublicRuntimeConfig(env);
@@ -47,6 +49,19 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 if (!fs.existsSync(TRAINING_UPLOAD_DIR)) {
   fs.mkdirSync(TRAINING_UPLOAD_DIR, { recursive: true });
 }
+if (!fs.existsSync(BACKUP_DIR)) {
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+}
+logger.info("storage.paths.validated", {
+  details: {
+    persistentRoot: env.persistentRoot,
+    databasePath: env.databasePath,
+    trainingDatabasePath: env.trainingDatabasePath,
+    uploadPath: env.uploadPath,
+    trainingUploadPath: env.trainingUploadPath,
+    backupPath: env.backupPath,
+  },
+});
 
 // ─── Request correlation, tracing, metrics, alerts, and audit ─
 app.use("*", async (c, next) => {
@@ -292,6 +307,22 @@ app.get("/uploads/:filename", async (c) => {
 
 // ─── tRPC API (lazy load to avoid env.ts at startup) ─────────
 app.use("/api/trpc/*", async (c) => {
+  const blockedSyntheticProcedures = blockedProductionSyntheticProcedures(
+    c.req.path,
+    env.isProduction,
+  );
+  if (blockedSyntheticProcedures.length > 0) {
+    logger.warn("production.synthetic_only_route_blocked", {
+      details: { procedures: blockedSyntheticProcedures },
+    });
+    return c.json(
+      {
+        error: "Authoritative Production data is unavailable for this module.",
+        code: "PRODUCTION_DATA_UNAVAILABLE",
+      },
+      503,
+    );
+  }
   try {
     const { fetchRequestHandler } = await import("@trpc/server/adapters/fetch");
     const { appRouter } = await import("./router");

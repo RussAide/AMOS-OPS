@@ -13,6 +13,7 @@ import {
 } from "../lib/m24-gro/engine";
 import { runM24AcceptanceSuite } from "../lib/m24-gro/scenarios";
 import { authedQuery, createRouter } from "../middleware";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 const id = z.string().trim().min(1).max(240);
 const detail = z.string().trim().min(1).max(4_000);
@@ -48,6 +49,16 @@ function translateM24Error(error: unknown): never {
 }
 
 function callM24<T>(operation: () => T): T {
+  try {
+    assertSyntheticScenarioRuntime(env);
+  } catch (error) {
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message:
+        "GRO prototype operations are unavailable because no durable Production provider is configured.",
+      cause: error,
+    });
+  }
   try {
     return operation();
   } catch (error) {
@@ -115,9 +126,11 @@ export const m24GroRouter = createRouter({
     .input(z.object({ asOf: timestamp.optional() }).optional())
     .query(({ input }) => callM24(() => m24GroEngine.dashboard(input?.asOf))),
 
-  state: authedQuery.query(() => m24GroEngine.getState()),
+  state: authedQuery.query(() => callM24(() => m24GroEngine.getState())),
 
-  acceptanceEvidence: authedQuery.query(() => runM24AcceptanceSuite()),
+  acceptanceEvidence: authedQuery.query(() =>
+    callM24(() => runM24AcceptanceSuite()),
+  ),
 
   resetSyntheticPrototype: authedQuery.mutation(({ ctx }) =>
     callM24(() => {

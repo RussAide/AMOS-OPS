@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery, authedQuery, auditLog } from "../middleware";
 import { randomUUID } from "crypto";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ─── M6: GRO — Growth & Outreach ───────────────────────────
 
@@ -89,7 +91,29 @@ function seedGRO() {
     );
   }
 }
-seedGRO();
+
+const volatileGroStoreEnabled = (() => {
+  try {
+    assertSyntheticScenarioRuntime(env);
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+if (volatileGroStoreEnabled) {
+  seedGRO();
+}
+
+function assertGroWriteProvider(): void {
+  if (!volatileGroStoreEnabled) {
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message:
+        "Growth and Outreach writes are unavailable because no durable Production provider is configured.",
+    });
+  }
+}
 
 export const m6Router = createRouter({
   // ─── Referrals ─────────────────────────────────────────────
@@ -125,6 +149,7 @@ export const m6Router = createRouter({
       assignedTo: z.string().optional(), notes: z.string().optional(),
     }))
     .mutation(({ ctx, input }) => {
+      assertGroWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const id = randomUUID();
       const referralNumber = `REF-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
@@ -152,6 +177,7 @@ export const m6Router = createRouter({
       outcome: z.string().optional(), convertedPatientId: z.string().optional(),
     }))
     .mutation(({ ctx, input }) => {
+      assertGroWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const ref = referralsStore.find((r) => r.id === input.id);
       if (!ref) throw new Error("Referral not found");
@@ -185,6 +211,7 @@ export const m6Router = createRouter({
       renewalDate: z.string().optional(),
     }))
     .mutation(({ ctx, input }) => {
+      assertGroWriteProvider();
       const actor = ctx.user?.email ?? "unknown";
       const id = randomUUID();
 

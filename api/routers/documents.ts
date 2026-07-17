@@ -4,6 +4,7 @@ import { getDb } from "../queries/connection";
 import { documentTemplates, generatedDocuments, documents as personnelDocuments } from "@db/schema";
 import { eq, and, desc, type InferInsertModel } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 
 // ══════════════════════════════════════════════════════════════
 // Document Generation Pipeline Router (T-010)
@@ -260,6 +261,7 @@ export const documentsRouter = createRouter({
   // ════════════════════════════════════════════════════════════
 
   seedDocumentTemplates: publicQuery.mutation(async () => {
+    assertSyntheticScenarioRuntime(env);
     const db = getDb();
     const now = new Date().toISOString();
 

@@ -1,4 +1,7 @@
 import { useMemo, useState } from "react";
+import { runtimeConfig } from "@/config/runtime";
+import { mayUseIsolatedFixtures } from "@/context/onboarding-context";
+import { useAuth } from "@/hooks/use-auth";
 import {
   AlertTriangle,
   BookOpenCheck,
@@ -37,7 +40,49 @@ const OUTCOME_STYLE = {
   review: { color: "#B45309", background: "#FFFBEB", label: "REVIEW" },
 };
 
-export function RegulatoryFrameworkPage() {
+interface RegulatoryFrameworkPageProps {
+  readonly syntheticDataAllowed?: boolean;
+}
+
+function RegulatoryDataUnavailable() {
+  return (
+    <main className="min-h-screen bg-slate-50 p-6 text-slate-950">
+      <section className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+        <ShieldCheck className="h-8 w-8 text-cyan-700" aria-hidden="true" />
+        <h1 className="mt-4 text-2xl font-bold">
+          Regulatory framework operational data unavailable
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          No authoritative controlled regulatory register is available.
+          Production does not substitute prototype rules, synthetic review
+          records, exceptions, or demonstration scenarios.
+        </p>
+      </section>
+    </main>
+  );
+}
+
+export function RegulatoryFrameworkPage(props: RegulatoryFrameworkPageProps) {
+  if (props.syntheticDataAllowed !== undefined) {
+    return props.syntheticDataAllowed ? (
+      <SyntheticRegulatoryFramework />
+    ) : (
+      <RegulatoryDataUnavailable />
+    );
+  }
+  return <AuthenticatedRegulatoryFramework />;
+}
+
+function AuthenticatedRegulatoryFramework() {
+  const { workspace } = useAuth();
+  return mayUseIsolatedFixtures(runtimeConfig.evaluationMode, workspace) ? (
+    <SyntheticRegulatoryFramework />
+  ) : (
+    <RegulatoryDataUnavailable />
+  );
+}
+
+function SyntheticRegulatoryFramework() {
   const [domain, setDomain] = useState<DomainFilter>("ALL");
   const [query, setQuery] = useState("");
   const summary = regulatoryRegisterSummary();
