@@ -124,7 +124,12 @@ const databases = [
 });
 
 const uploadReports = [
-  enforceEncryptedDirectory(env.uploadPath, "upload-operational"),
+  enforceEncryptedDirectory(
+    env.uploadPath,
+    "upload-operational",
+    process.env,
+    [env.trainingUploadPath],
+  ),
   enforceEncryptedDirectory(env.trainingUploadPath, "upload-training"),
 ];
 const backupReport = enforceDatabaseBackupDirectory(env.backupPath);
@@ -137,6 +142,7 @@ const uploadWrongKeyDenied =
             env.uploadPath,
             "upload-operational",
             wrongKeySource("UPLOAD"),
+            [env.trainingUploadPath],
           );
           if (uploadReports[0].inspected > 0) return false;
           enforceEncryptedDirectory(

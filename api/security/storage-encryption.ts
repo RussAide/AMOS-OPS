@@ -975,7 +975,10 @@ export function readEncryptedFile(
   );
 }
 
-function storedFiles(directory: string): string[] {
+function storedFiles(
+  directory: string,
+  excludedDirectories: readonly string[] = [],
+): string[] {
   if (!fs.existsSync(directory)) return [];
   const root = path.resolve(directory);
   assertPathConfined(root, root, {
@@ -983,12 +986,32 @@ function storedFiles(directory: string): string[] {
     allowMissing: false,
     type: "directory",
   });
+  const excludedRoots = new Set(
+    excludedDirectories.map((directoryPath) => {
+      const excluded = path.resolve(directoryPath);
+      const relative = path.relative(root, excluded);
+      if (
+        relative === "" ||
+        relative.startsWith(`..${path.sep}`) ||
+        relative === ".." ||
+        path.isAbsolute(relative)
+      ) {
+        throw new Error(
+          `STORAGE_EXCLUDED_DIRECTORY_INVALID: ${excluded} must be a strict descendant of ${root}.`,
+        );
+      }
+      return excluded;
+    }),
+  );
   const files: string[] = [];
   const visit = (current: string): void => {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const candidate = path.join(current, entry.name);
       if (entry.isSymbolicLink()) {
         throw new Error(`STORAGE_SYMLINK_REJECTED: ${candidate}`);
+      }
+      if (entry.isDirectory() && excludedRoots.has(path.resolve(candidate))) {
+        continue;
       }
       if (entry.isDirectory()) visit(candidate);
       else if (
@@ -1076,6 +1099,7 @@ export function enforceEncryptedDirectory(
   directory: string,
   purpose: EncryptedStoragePurpose,
   source: NodeJS.ProcessEnv = process.env,
+  excludedDirectories: readonly string[] = [],
 ): DirectoryEncryptionReport {
   const configuration = loadStorageEncryptionConfiguration(source);
   const keyring = keyringForPurpose(configuration, purpose);
@@ -1088,7 +1112,7 @@ export function enforceEncryptedDirectory(
     alreadyProtected: 0,
   };
   try {
-    for (const filePath of storedFiles(directory)) {
+    for (const filePath of storedFiles(directory, excludedDirectories)) {
       report.inspected += 1;
       const objectId = deriveStorageObjectId(directory, filePath, purpose);
       const payload = fs.readFileSync(filePath);

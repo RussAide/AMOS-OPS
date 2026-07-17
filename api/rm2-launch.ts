@@ -55,15 +55,23 @@ function migrateProductionStorage(): void {
   }
   assertProductionMount(env.persistentRoot);
 
+  // Legacy or malformed application backups cannot be inferred or converted.
+  // Validate them before the first authoritative database is changed so this
+  // predictable late-stage failure cannot leave a partially migrated volume.
+  const databaseBackupReport = enforceDatabaseBackupDirectory(env.backupPath);
   const databaseReports = [
     migrateDatabaseEncryption(env.databasePath, "operational"),
     migrateDatabaseEncryption(env.trainingDatabasePath, "training"),
   ];
   const directoryReports = [
-    enforceEncryptedDirectory(env.uploadPath, "upload-operational"),
+    enforceEncryptedDirectory(
+      env.uploadPath,
+      "upload-operational",
+      process.env,
+      [env.trainingUploadPath],
+    ),
     enforceEncryptedDirectory(env.trainingUploadPath, "upload-training"),
   ];
-  const databaseBackupReport = enforceDatabaseBackupDirectory(env.backupPath);
 
   process.stdout.write(
     `${JSON.stringify({

@@ -9,7 +9,10 @@ dockerfilePath = "Dockerfile"
 # the sealed-key, SQLCipher, envelope-encryption, migration, and rotation gates.
 [deploy]
 healthcheckPath = "/api/health"
-healthcheckTimeout = 30
+# RM.2 performs a gated, verified in-place encryption pass before the HTTP
+# listener starts. Allow the singleton volume migration to finish without
+# Railway replacing the process during the one-time transition.
+healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 numReplicas = 1
