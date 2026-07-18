@@ -18,9 +18,9 @@ env:
   SOURCE_DIGEST: 66c6097086a9b571260665ec639ade38e62dc81e7c2803164e1b64513e50445a
   PREVIEW_ORIGIN: https://route-hotfix-pr10--amos-ops.netlify.app
   PREVIEW_API_ORIGIN: https://amos-ops-dms1-review-production.up.railway.app
-  RAILWAY_PROJECT_ID: 1fcdaa39-f1ef-449a-94a6-fb96f544a6dc
-  RAILWAY_ENVIRONMENT_ID: 99bd68e2-472f-4ee8-b690-614c7670765f
-  RAILWAY_SERVICE_ID: 8d9e326d-6ec3-4bf4-8f99-8107d20afa9c
+  PREVIEW_RAILWAY_PROJECT_ID: 1fcdaa39-f1ef-449a-94a6-fb96f544a6dc
+  PREVIEW_RAILWAY_ENVIRONMENT_ID: 99bd68e2-472f-4ee8-b690-614c7670765f
+  PREVIEW_RAILWAY_SERVICE_ID: 8d9e326d-6ec3-4bf4-8f99-8107d20afa9c
   VITE_AMOS_API_ORIGIN: https://amos-ops-dms1-review-production.up.railway.app
 
 jobs:
@@ -86,9 +86,9 @@ jobs:
             DEPLOYMENT_CHANGE_REFERENCE=GITHUB-PR-10 \
             ALLOW_SELF_REGISTRATION=false \
             MFA_POLICY=required-all \
-            --project "$RAILWAY_PROJECT_ID" \
-            --environment "$RAILWAY_ENVIRONMENT_ID" \
-            --service "$RAILWAY_SERVICE_ID" \
+            --project "$PREVIEW_RAILWAY_PROJECT_ID" \
+            --environment "$PREVIEW_RAILWAY_ENVIRONMENT_ID" \
+            --service "$PREVIEW_RAILWAY_SERVICE_ID" \
             --skip-deploys \
             --json
 
@@ -98,9 +98,9 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           railway up \
-            --project "$RAILWAY_PROJECT_ID" \
-            --environment "$RAILWAY_ENVIRONMENT_ID" \
-            --service "$RAILWAY_SERVICE_ID" \
+            --project "$PREVIEW_RAILWAY_PROJECT_ID" \
+            --environment "$PREVIEW_RAILWAY_ENVIRONMENT_ID" \
+            --service "$PREVIEW_RAILWAY_SERVICE_ID" \
             --detach \
             --json \
             --message "Route hotfix PR10 isolated preview $CANDIDATE_SHA"
