@@ -18,6 +18,17 @@ function registeredApplicationRoutes(): ReadonlySet<string> {
   );
 }
 
+function matchesRegisteredRoute(target: string, route: string): boolean {
+  const targetParts = target.split("/").filter(Boolean);
+  const routeParts = route.split("/").filter(Boolean);
+  return (
+    targetParts.length === routeParts.length &&
+    routeParts.every(
+      (part, index) => part.startsWith(":") || part === targetParts[index],
+    )
+  );
+}
+
 describe("sidebar route integrity", () => {
   it("registers every production and demo sidebar destination", () => {
     const routes = registeredApplicationRoutes();
@@ -25,7 +36,12 @@ describe("sidebar route integrity", () => {
       getSidebarNavigation("super-admin", "demo"),
     );
     const missing = links
-      .filter((link) => !routes.has(link.href))
+      .filter(
+        (link) =>
+          ![...routes].some((route) =>
+            matchesRegisteredRoute(link.href, route),
+          ),
+      )
       .map((link) => `${link.label}: ${link.href}`);
 
     expect(missing).toEqual([]);

@@ -87,7 +87,7 @@ describe("M1.2 controlled regulatory register", () => {
   });
 
   it("publishes the command-center route and navigation entry", () => {
-    const routes = fs.readFileSync(path.resolve("src/components/shell/app-shell-routes.tsx"), "utf8");
+    const routes = fs.readFileSync(path.resolve("src/components/shell/app-shell.tsx"), "utf8");
     const navigation = fs.readFileSync(path.resolve("src/data/navData.ts"), "utf8");
     const page = fs.readFileSync(path.resolve("src/pages/compliance/regulatory-framework-page.tsx"), "utf8");
     const apiRouter = fs.readFileSync(path.resolve("api/router.ts"), "utf8");

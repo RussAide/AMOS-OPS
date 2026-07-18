@@ -70,17 +70,12 @@ describe("M4.1C mounted outcome-measure experience quarantine", () => {
     expect(boundary).toContain('to="/clinical/intelligence-fabric"');
   });
 
-  it("keeps the governed page mounted in both route trees with accurate metadata", () => {
-    const activeRoutes = readSource(
-      "../../components/shell/app-shell-routes.tsx",
-    );
-    const retainedRoutes = readSource("../../components/shell/app-shell.tsx");
+  it("keeps the governed page mounted in the canonical route tree with accurate metadata", () => {
+    const routes = readSource("../../components/shell/app-shell.tsx");
     const navigation = readSource("../../data/navData.ts");
 
-    for (const routes of [activeRoutes, retainedRoutes]) {
-      expect(routes).toContain('path="/clinical/outcome-measures"');
-      expect(routes).toContain("<OutcomeMeasuresPage />");
-    }
+    expect(routes).toContain('path="/clinical/outcome-measures"');
+    expect(routes).toContain("<OutcomeMeasuresPage />");
     expect(navigation).toContain('title: "Outcome Measure Governance"');
     expect(navigation).toContain("Metadata-only evaluation boundary");
   });

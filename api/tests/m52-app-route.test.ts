@@ -6,22 +6,16 @@ import { getBreadcrumbs, heroConfigs, navItems } from "../../src/data/navData";
 const route = "/operations-hub/mobile-offline";
 
 describe("M5.2 mobile and offline application route", () => {
-  it("mounts the experience in the active and retained shell trees", () => {
-    const activeShell = fs.readFileSync(
+  it("mounts the experience in the canonical shell route tree", () => {
+    const routes = fs.readFileSync(
       path.resolve("src/components/shell/app-shell.tsx"),
       "utf8",
     );
-    const retainedRoutes = fs.readFileSync(
-      path.resolve("src/components/shell/app-shell-routes.tsx"),
-      "utf8",
+    expect(routes).toContain('path="/operations-hub/mobile-offline"');
+    expect(routes).toContain("M52MobileOfflinePage");
+    expect(routes).toContain(
+      "@/pages/operations-hub/m52-mobile-offline-page",
     );
-    for (const source of [activeShell, retainedRoutes]) {
-      expect(source).toContain('path="/operations-hub/mobile-offline"');
-      expect(source).toContain("M52MobileOfflinePage");
-      expect(source).toContain(
-        "@/pages/operations-hub/m52-mobile-offline-page",
-      );
-    }
   });
 
   it("publishes exactly one navigation item and governed metadata", () => {

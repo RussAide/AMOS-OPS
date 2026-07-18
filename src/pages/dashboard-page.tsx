@@ -160,19 +160,19 @@ export function DashboardPage({ focus = "overview" }: DashboardPageProps) {
   if ((d?.revenue?.deniedClaims ?? 0) > 0) alerts.push({ level: "warning", message: `${d?.revenue?.deniedClaims ?? 0} denied claim(s) requiring follow-up`, route: "/revenue/claims" });
   if ((d?.part2?.expiredConsents ?? 0) > 0) alerts.push({ level: "critical", message: `${d?.part2?.expiredConsents ?? 0} expired Part 2 consent(s)`, route: "/compliance/part2" });
   if (overdueWorkOrders > 0) alerts.push({ level: "warning", message: `${overdueWorkOrders} overdue work order(s)`, route: "/gad" });
-  if ((d?.bhc?.highRiskCount ?? 0) > 0) alerts.push({ level: "critical", message: `${d?.bhc?.highRiskCount ?? 0} high-risk flag(s) active`, route: "/clinical/bhc" });
+  if ((d?.bhc?.highRiskCount ?? 0) > 0) alerts.push({ level: "critical", message: `${d?.bhc?.highRiskCount ?? 0} high-risk flag(s) active`, route: "/bhc" });
   if ((c?.overdueItems ?? 0) > 0) alerts.push({ level: "warning", message: `${c?.overdueItems ?? 0} overdue compliance item(s)`, route: "/qa" });
   if ((c?.expiringCredentials ?? 0) > 0) alerts.push({ level: "info", message: `${c?.expiringCredentials ?? 0} credential(s) expiring soon`, route: "/hr/credentials" });
 
   // ── Module Cards ──
   const modules = [
-    { label: "BHC Clinical", route: "/clinical/bhc", icon: Stethoscope, color: "#059669", bg: "#ecfdf5",
+    { label: "BHC Clinical", route: "/bhc", icon: Stethoscope, color: "#059669", bg: "#ecfdf5",
       kpi: `${ccmg?.mhtcm?.activePlans ?? 0} MHTCM \u00b7 ${ccmg?.mhrs?.activePrograms ?? 0} MHRS`,
       detail: `${d?.bhc?.activePatients ?? 0} patients \u00b7 ${d?.bhc?.sessionsThisWeek ?? 0} sessions/wk` },
     { label: "Revenue Cycle", route: "/revenue", icon: DollarSign, color: "#2563EB", bg: "#eff6ff",
       kpi: `${d?.revenue?.totalClaims ?? 0} claims \u00b7 ${d?.revenue?.collectionRate ?? 0}% collected`,
       detail: `$${((d?.revenue?.totalBilled ?? 0) / 1000).toFixed(0)}k billed \u00b7 $${((d?.revenue?.totalCollected ?? 0) / 1000).toFixed(0)}k collected` },
-    { label: "GRO Compliance", route: "/compliance/gro", icon: ShieldCheck, color: "#7C3AED", bg: "#f5f3ff",
+    { label: "GRO Compliance", route: "/gro/compliance", icon: ShieldCheck, color: "#7C3AED", bg: "#f5f3ff",
       kpi: `${d?.campus?.occupiedBeds ?? 0} residents \u00b7 ${d?.campus?.occupancyRate ?? 0}% occupancy`,
       detail: `${d?.campus?.totalBeds ?? 0} beds \u00b7 ${d?.campus?.facilityCount ?? 0} facilities` },
     { label: "MGMA Scorecard", route: "/mgma", icon: Target, color: "#245C5A", bg: "#f0f9f6",

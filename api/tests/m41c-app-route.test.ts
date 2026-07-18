@@ -6,38 +6,25 @@ import { getBreadcrumbs, heroConfigs, navItems } from "../../src/data/navData";
 const route = "/clinical/intelligence-fabric";
 
 describe("M4.1C Clinical Intelligence Fabric application route", () => {
-  it("mounts the page in the active and retained AppShell route trees", () => {
-    const activeShell = fs.readFileSync(
+  it("mounts the page in the canonical AppShell route tree", () => {
+    const routes = fs.readFileSync(
       path.resolve("src/components/shell/app-shell.tsx"),
       "utf8",
     );
-    const retainedRoutes = fs.readFileSync(
-      path.resolve("src/components/shell/app-shell-routes.tsx"),
-      "utf8",
+    expect(routes).toContain('path="/clinical/intelligence-fabric"');
+    expect(routes).toContain("M41cClinicalIntelligencePage");
+    expect(routes).toContain(
+      "@/pages/clinical/m41c-clinical-intelligence-page",
     );
-    for (const source of [activeShell, retainedRoutes]) {
-      expect(source).toContain('path="/clinical/intelligence-fabric"');
-      expect(source).toContain("M41cClinicalIntelligencePage");
-      expect(source).toContain(
-        "@/pages/clinical/m41c-clinical-intelligence-page",
-      );
-    }
   });
 
-  it("routes both shell trees to the narrative-only intake assessment", () => {
-    const activeShell = fs.readFileSync(
+  it("routes the canonical shell to the narrative-only intake assessment", () => {
+    const routes = fs.readFileSync(
       path.resolve("src/components/shell/app-shell.tsx"),
       "utf8",
     );
-    const retainedRoutes = fs.readFileSync(
-      path.resolve("src/components/shell/app-shell-routes.tsx"),
-      "utf8",
-    );
-
-    for (const source of [activeShell, retainedRoutes]) {
-      expect(source).toContain("@/pages/intake/assessment-page");
-      expect(source).not.toContain("@/pages/intake-assessment-page");
-    }
+    expect(routes).toContain("@/pages/intake/assessment-page");
+    expect(routes).not.toContain("@/pages/intake-assessment-page");
   });
 
   it("publishes one navigation item and governed page metadata", () => {

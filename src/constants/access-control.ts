@@ -879,6 +879,10 @@ const CLIENT_ROUTE_ACCESS: readonly [
 ][] = [
   ["/home", { domain: "dashboard" }],
   ["/operations-hub", { domain: "self-service" }],
+  ["/my-work-today", { domain: "self-service" }],
+  ["/my-shift", { domain: "self-service" }],
+  ["/meetings-escalations", { domain: "self-service" }],
+  ["/authorization", { domain: "self-service" }],
   ["/clinical/intelligence-fabric", { domain: "self-service" }],
   ["/executive/decision-intelligence", { domain: "decision-intelligence" }],
   [
@@ -936,6 +940,10 @@ const CLIENT_ROUTE_ACCESS: readonly [
   ],
   ["/medications", { domain: "clinical" }],
   ["/mobile-mar", { domain: "clinical" }],
+  [
+    "/mar-facility",
+    { domain: "gro", division: "gro", divisionCategory: "profit-center" },
+  ],
   [
     "/revenue",
     { domain: "revenue", division: "eo", divisionCategory: "corporate-office" },
@@ -1000,6 +1008,28 @@ const CLIENT_ROUTE_ACCESS: readonly [
   ["/knowledge", { domain: "knowledge" }],
   ["/nil", { domain: "knowledge" }],
   ["/analytics", { domain: "reports" }],
+  ["/mgma", { domain: "reports" }],
+  ["/sop-knowledge", { domain: "knowledge" }],
+  [
+    "/escalation-ladder",
+    { domain: "gro", division: "gro", divisionCategory: "profit-center" },
+  ],
+  [
+    "/strategic-projects",
+    {
+      domain: "executive",
+      division: "eo",
+      divisionCategory: "corporate-office",
+    },
+  ],
+  [
+    "/site-review",
+    {
+      domain: "executive",
+      division: "eo",
+      divisionCategory: "corporate-office",
+    },
+  ],
   ["/", { domain: "dashboard" }],
 ];
 

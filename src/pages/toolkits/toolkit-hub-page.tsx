@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Link } from "react-router-dom";
 
 const TOOLKITS = [
   {
@@ -153,12 +154,12 @@ export function ToolkitHubPage() {
                     {tk.desc}
                   </p>
                   <div className="flex items-center gap-2 mt-2 text-xs">
-                    <a
-                      href={`#${tk.href}`}
+                    <Link
+                      to={tk.href}
                       className="text-[#2e8b8b] font-medium hover:underline"
                     >
                       Open {tk.module} →
-                    </a>
+                    </Link>
                   </div>
                 </div>
               </div>
