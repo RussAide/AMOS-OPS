@@ -64,13 +64,11 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           AMOS_ADMIN_RECOVERY_TOKEN: ${{ secrets.AMOS_ADMIN_RECOVERY_TOKEN }}
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         run: |
           missing=()
           test -n "$RAILWAY_TOKEN" || missing+=(RAILWAY_TOKEN)
           test -n "$AMOS_ADMIN_RECOVERY_TOKEN" || missing+=(AMOS_ADMIN_RECOVERY_TOKEN)
           test -n "$NETLIFY_AUTH_TOKEN" || missing+=(NETLIFY_AUTH_TOKEN)
-          test -n "$NETLIFY_SITE_ID" || missing+=(NETLIFY_SITE_ID)
           if (( ${#missing[@]} )); then
             printf 'Missing amos-production GitHub environment credential: %s\n' "${missing[@]}" >&2
             exit 1
@@ -164,12 +162,28 @@ jobs:
           jq --raw-output '.[0].id' /tmp/amos-railway-baseline-deployments.json \
             > /tmp/amos-railway-rollback-deployment-id
 
+          site_id="${NETLIFY_SITE_ID:-}"
+          if test -z "$site_id"; then
+            curl --fail --silent --show-error --max-time 30 \
+              --header "Authorization: Bearer $NETLIFY_AUTH_TOKEN" \
+              "https://api.netlify.com/api/v1/sites?per_page=100" \
+              --output /tmp/amos-netlify-sites.json
+            jq --exit-status \
+              '[.[] | select(.custom_domain == "amos-ops.com")] | length == 1' \
+              /tmp/amos-netlify-sites.json >/dev/null
+            site_id="$(jq --raw-output \
+              '.[] | select(.custom_domain == "amos-ops.com") | .id' \
+              /tmp/amos-netlify-sites.json)"
+          fi
+          test -n "$site_id"
+          printf 'NETLIFY_SITE_ID=%s\n' "$site_id" >> "$GITHUB_ENV"
+
           curl --fail --silent --show-error --max-time 30 \
             --header "Authorization: Bearer $NETLIFY_AUTH_TOKEN" \
-            "https://api.netlify.com/api/v1/sites/$NETLIFY_SITE_ID" \
+            "https://api.netlify.com/api/v1/sites/$site_id" \
             --output /tmp/amos-netlify-baseline-site.json
           jq --exit-status \
-            --arg site "$NETLIFY_SITE_ID" \
+            --arg site "$site_id" \
             '.id == $site
              and (.published_deploy.id | type == "string" and length > 0)' \
             /tmp/amos-netlify-baseline-site.json >/dev/null
@@ -393,14 +407,12 @@ jobs:
           overwrites-pull-request-comment: false
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
 
       - name: Verify Production frontend, backend, CORS, routes, and recovery posture
         id: production-verified
         shell: bash
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         run: |
           local_sha="$(cat /tmp/amos-local-asset-sha)"
           for attempt in $(seq 1 60); do
@@ -529,7 +541,6 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         run: |
           if test -f /tmp/amos-railway-mutation-started; then
             invalidation_hash="$(openssl rand -hex 32)"
