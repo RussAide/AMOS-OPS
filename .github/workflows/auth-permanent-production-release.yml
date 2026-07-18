@@ -1,0 +1,406 @@
+name: Permanent Authentication Production Release
+
+on:
+  push:
+    branches:
+      - agent/production-auth-permanent-release-20260718
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: amos-ops-auth-permanent-production
+  cancel-in-progress: false
+
+env:
+  BASELINE_SHA: ceb5d8ed175fdd0daf0e13e05076130437f2604d
+  CANDIDATE_SHA: 79a95d1196745985a556dc0ad8f93573570e4342
+  CANDIDATE_TREE: e0db8c0221e7d50bb21db3fce3784f2c61efc516
+  SOURCE_DIGEST: c7054f71982ca4d71df098401c4314a89566da909996db345aa6f09f35fe2a28
+  RELEASE_ID: AMOS-OPS-AUTH-PERMANENT-20260718-79a95d1
+  APPROVAL_ID: AMOS-OPS-AUTH-PERMANENT-20260718
+  CHANGE_REFERENCE: USER-AUTHORIZED-AUTH-REMEDIATION-20260718
+  PRODUCTION_ORIGIN: https://amos-ops.com
+  PRODUCTION_API_ORIGIN: https://amos-ops-production.up.railway.app
+  PROD_RAILWAY_PROJECT_ID: f9357da4-00c4-4f25-a52d-5c53f6ce07dc
+  PROD_RAILWAY_ENVIRONMENT_ID: 7c22d214-abac-478f-983b-1418a7cbac77
+  PROD_RAILWAY_SERVICE_ID: 8fdf6d7e-c7ba-412d-95f0-8b980ba612ba
+  NETLIFY_SITE_ID: 53a02d95-9cd5-4d22-8c17-8ed2378b91e8
+  ROLLBACK_RAILWAY_DEPLOYMENT_ID: 5c5730f5-0972-4979-9fb5-ceb6a5d72891
+  ROLLBACK_RAILWAY_BUILD_ID: ceb5d8ed175fdd0daf0e13e05076130437f2604d
+  ROLLBACK_RELEASE_ID: AMOS-OPS-ROUTE-HOTFIX-20260718-ceb5d8e
+  ROLLBACK_NETLIFY_DEPLOY_ID: 6a5b693da625a7b56eec51bf
+  VITE_AMOS_API_ORIGIN: https://amos-ops-production.up.railway.app
+
+jobs:
+  verify-and-deploy-production:
+    name: Verify and release immutable authentication repair
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    environment: amos-production
+    steps:
+      - name: Mark candidate release pending
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          payload="$(jq --null-input --compact-output \
+            --arg state pending \
+            --arg context "AMOS-OPS Production Auth Release" \
+            --arg description "Permanent authentication release is running" \
+            --arg target_url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            '{state:$state, context:$context, description:$description, target_url:$target_url}')"
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --data "$payload" \
+            "https://api.github.com/repos/${{ github.repository }}/statuses/$CANDIDATE_SHA" \
+            >/dev/null
+
+      - name: Preflight Production deployment credentials
+        shell: bash
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        run: |
+          missing=()
+          test -n "$RAILWAY_TOKEN" || missing+=(RAILWAY_TOKEN)
+          test -n "$NETLIFY_AUTH_TOKEN" || missing+=(NETLIFY_AUTH_TOKEN)
+          if (( ${#missing[@]} )); then
+            printf 'Missing amos-production GitHub environment credential: %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+
+      - name: Check out the exact authentication candidate
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: 79a95d1196745985a556dc0ad8f93573570e4342
+          fetch-depth: 3
+
+      - name: Assert immutable source identity
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          test "$(git rev-parse "$CANDIDATE_SHA^")" = "$BASELINE_SHA"
+          test "$(git archive --format=tar HEAD | sha256sum | cut -d' ' -f1)" = "$SOURCE_DIGEST"
+          git diff --check "$BASELINE_SHA" "$CANDIDATE_SHA"
+          test "$(cat public/_redirects)" = "/* /index.html 200"
+          test -f src/pages/admin/account-recovery-page.tsx
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run complete verification
+        run: npm run verify
+
+      - name: Verify built runtime safety
+        run: npm run test:dms1:built-runtime
+
+      - name: Install pinned Railway CLI
+        run: npm install --global @railway/cli@5.27.0
+
+      - name: Verify current live baseline and rollback artifacts
+        shell: bash
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        run: |
+          runtime="$(curl --fail --silent --show-error --max-time 20 "$PRODUCTION_API_ORIGIN/api/runtime-config")"
+          jq --exit-status \
+            --arg build "$ROLLBACK_RAILWAY_BUILD_ID" \
+            --arg release "$ROLLBACK_RELEASE_ID" \
+            '.buildId == $build
+             and .productionReleaseId == $release
+             and .appEnvironment == "production"
+             and .deploymentPosture == "live"
+             and .productionReleaseAuthorized == true
+             and .reviewDeployment == false' \
+            <<<"$runtime" >/dev/null
+
+          curl --fail --silent --show-error --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" |
+            jq --exit-status '.ready == true and .checks.database.status == "ok"' >/dev/null
+
+          curl --fail --silent --show-error --max-time 20 \
+            --header "Authorization: Bearer $NETLIFY_AUTH_TOKEN" \
+            "https://api.netlify.com/api/v1/deploys/$ROLLBACK_NETLIFY_DEPLOY_ID" |
+            jq --exit-status \
+              --arg deploy "$ROLLBACK_NETLIFY_DEPLOY_ID" \
+              '.id == $deploy and .state == "ready"' >/dev/null
+
+          curl --fail --silent --show-error --max-time 20 "$PRODUCTION_ORIGIN/" |
+            grep --ignore-case '<!doctype html>' >/dev/null
+          curl --fail --silent --show-error --max-time 20 "$PRODUCTION_ORIGIN/login" |
+            grep --ignore-case '<!doctype html>' >/dev/null
+
+      - name: Capture current Railway release metadata
+        shell: bash
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          variables_file="$(mktemp)"
+          railway variable list \
+            --project "$PROD_RAILWAY_PROJECT_ID" \
+            --environment "$PROD_RAILWAY_ENVIRONMENT_ID" \
+            --service "$PROD_RAILWAY_SERVICE_ID" \
+            --json >"$variables_file"
+          jq --exit-status \
+            'all(
+               .AMOS_BUILD_ID,
+               .AMOS_PRODUCTION_RELEASE_ID,
+               .DEPLOYMENT_APPROVAL_ID,
+               .DEPLOYMENT_CHANGE_REFERENCE,
+               .APP_SECRET,
+               .JWT_SECRET;
+               type == "string" and length > 0
+             )
+             and .DATABASE_PATH == "/app/persistent/data/production/amos-ops.db"
+             and .UPLOAD_PATH == "/app/persistent/uploads/production"
+             and .CREDENTIAL_NAMESPACE == "amos-ops/production"' \
+            "$variables_file" >/dev/null
+          jq \
+            '{AMOS_BUILD_ID,
+              AMOS_PRODUCTION_RELEASE_ID,
+              DEPLOYMENT_APPROVAL_ID,
+              DEPLOYMENT_CHANGE_REFERENCE}' \
+            "$variables_file" > /tmp/amos-production-release-metadata.json
+          chmod 600 /tmp/amos-production-release-metadata.json
+          rm -f "$variables_file"
+
+      - name: Stage Production release identity without deploying
+        id: stage-metadata
+        shell: bash
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway variable set \
+            "AMOS_BUILD_ID=$CANDIDATE_SHA" \
+            "AMOS_PRODUCTION_RELEASE_ID=$RELEASE_ID" \
+            "DEPLOYMENT_APPROVAL_ID=$APPROVAL_ID" \
+            "DEPLOYMENT_CHANGE_REFERENCE=$CHANGE_REFERENCE" \
+            --project "$PROD_RAILWAY_PROJECT_ID" \
+            --environment "$PROD_RAILWAY_ENVIRONMENT_ID" \
+            --service "$PROD_RAILWAY_SERVICE_ID" \
+            --skip-deploys \
+            --json >/dev/null
+
+      - name: Deploy exact candidate to Production Railway
+        id: backend-deploy
+        shell: bash
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway up \
+            --project "$PROD_RAILWAY_PROJECT_ID" \
+            --environment "$PROD_RAILWAY_ENVIRONMENT_ID" \
+            --service "$PROD_RAILWAY_SERVICE_ID" \
+            --detach \
+            --json \
+            --message "AMOS-OPS permanent authentication repair $CANDIDATE_SHA"
+
+      - name: Wait for exact Railway build and live safety posture
+        id: backend-verified
+        shell: bash
+        run: |
+          for attempt in $(seq 1 120); do
+            runtime="$(curl --fail --silent --show-error --max-time 20 "$PRODUCTION_API_ORIGIN/api/runtime-config" || true)"
+            if jq --exit-status \
+              --arg build "$CANDIDATE_SHA" \
+              --arg release "$RELEASE_ID" \
+              '.buildId == $build
+               and .productionReleaseId == $release
+               and .appEnvironment == "production"
+               and .deploymentPosture == "live"
+               and .productionReleaseAuthorized == true
+               and .reviewDeployment == false
+               and .safeguards.productionDataAllowed == true' \
+              <<<"$runtime" >/dev/null 2>&1; then
+              curl --fail --silent --show-error --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" |
+                jq --exit-status '.ready == true and .checks.database.status == "ok"' >/dev/null
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Exact Production Railway release did not become ready in time." >&2
+          exit 1
+
+      - name: Build matching Production browser artifact
+        shell: bash
+        run: |
+          npm run build:client
+          test "$(cat dist/public/_redirects)" = "/* /index.html 200"
+
+      - name: Deploy matching artifact to Production Netlify
+        id: frontend-deploy
+        uses: nwtgck/actions-netlify@4cbaf4c08f1a7bfa537d6113472ef4424e4eb654
+        with:
+          publish-dir: ./dist/public
+          production-deploy: true
+          production-branch: main
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-message: "AMOS-OPS permanent authentication repair ${{ env.CANDIDATE_SHA }}"
+          enable-pull-request-comment: false
+          enable-commit-comment: false
+          overwrites-pull-request-comment: false
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ env.NETLIFY_SITE_ID }}
+
+      - name: Verify live Production frontend, backend, CORS, and refresh
+        id: production-verified
+        shell: bash
+        run: |
+          local_asset="$(find dist/public/assets -maxdepth 1 -type f -name 'index-*.js' -print -quit)"
+          test -n "$local_asset"
+          local_sha="$(sha256sum "$local_asset" | cut -d' ' -f1)"
+
+          matched=false
+          for attempt in $(seq 1 30); do
+            index_html="$(curl --fail --silent --show-error --max-time 20 "$PRODUCTION_ORIGIN/" || true)"
+            asset_path="$(grep -oE 'src="/assets/index-[^"]+\.js"' <<<"$index_html" | head -1 | cut -d'"' -f2 || true)"
+            if test -n "$asset_path" && \
+               curl --fail --silent --show-error --max-time 30 \
+                 "$PRODUCTION_ORIGIN$asset_path" --output /tmp/amos-live-index.js && \
+               test "$(sha256sum /tmp/amos-live-index.js | cut -d' ' -f1)" = "$local_sha"; then
+              matched=true
+              break
+            fi
+            sleep 5
+          done
+          test "$matched" = true
+          grep --fixed-strings "$PRODUCTION_API_ORIGIN" /tmp/amos-live-index.js >/dev/null
+          grep --fixed-strings "Account Recovery" /tmp/amos-live-index.js >/dev/null
+
+          curl --fail --silent --show-error --max-time 20 "$PRODUCTION_ORIGIN/login" |
+            grep --ignore-case '<!doctype html>' >/dev/null
+          curl --fail --silent --show-error --max-time 20 "$PRODUCTION_ORIGIN/admin/settings" |
+            grep --ignore-case '<!doctype html>' >/dev/null
+          curl --fail --silent --show-error --max-time 20 "$PRODUCTION_ORIGIN/admin/access-recovery" |
+            grep --ignore-case '<!doctype html>' >/dev/null
+
+          headers="$(mktemp)"
+          status="$(curl --silent --show-error --output /dev/null --dump-header "$headers" \
+            --write-out '%{http_code}' \
+            --request OPTIONS "$PRODUCTION_API_ORIGIN/api/runtime-config" \
+            --header "Origin: $PRODUCTION_ORIGIN" \
+            --header "Access-Control-Request-Method: GET")"
+          test "$status" = "204"
+          tr -d '\r' <"$headers" |
+            grep --fixed-strings --ignore-case "access-control-allow-origin: $PRODUCTION_ORIGIN" >/dev/null
+
+          curl --fail --silent --show-error --max-time 20 "$PRODUCTION_API_ORIGIN/api/runtime-config" |
+            jq --exit-status \
+              --arg build "$CANDIDATE_SHA" \
+              --arg release "$RELEASE_ID" \
+              '.buildId == $build and .productionReleaseId == $release and .deploymentPosture == "live"' >/dev/null
+          curl --fail --silent --show-error --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" |
+            jq --exit-status '.ready == true and .checks.database.status == "ok"' >/dev/null
+
+      - name: Roll back both Production hosts on any failed live gate
+        if: ${{ failure() && steps.stage-metadata.outcome == 'success' }}
+        shell: bash
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        run: |
+          curl --fail --silent --show-error --request POST \
+            --header "Authorization: Bearer $NETLIFY_AUTH_TOKEN" \
+            "https://api.netlify.com/api/v1/sites/$NETLIFY_SITE_ID/deploys/$ROLLBACK_NETLIFY_DEPLOY_ID/restore" \
+            --output /tmp/netlify-rollback.json
+          jq --exit-status \
+            --arg deploy "$ROLLBACK_NETLIFY_DEPLOY_ID" \
+            '.id == $deploy and .state == "ready"' \
+            /tmp/netlify-rollback.json >/dev/null
+
+          old_build="$(jq --exit-status --raw-output '.AMOS_BUILD_ID' /tmp/amos-production-release-metadata.json)"
+          old_release="$(jq --exit-status --raw-output '.AMOS_PRODUCTION_RELEASE_ID' /tmp/amos-production-release-metadata.json)"
+          old_approval="$(jq --exit-status --raw-output '.DEPLOYMENT_APPROVAL_ID' /tmp/amos-production-release-metadata.json)"
+          old_change="$(jq --exit-status --raw-output '.DEPLOYMENT_CHANGE_REFERENCE' /tmp/amos-production-release-metadata.json)"
+          railway variable set \
+            "AMOS_BUILD_ID=$old_build" \
+            "AMOS_PRODUCTION_RELEASE_ID=$old_release" \
+            "DEPLOYMENT_APPROVAL_ID=$old_approval" \
+            "DEPLOYMENT_CHANGE_REFERENCE=$old_change" \
+            --project "$PROD_RAILWAY_PROJECT_ID" \
+            --environment "$PROD_RAILWAY_ENVIRONMENT_ID" \
+            --service "$PROD_RAILWAY_SERVICE_ID" \
+            --skip-deploys \
+            --json >/dev/null
+
+          payload="$(jq --null-input --compact-output \
+            --arg id "$ROLLBACK_RAILWAY_DEPLOYMENT_ID" \
+            '{query:"mutation DeploymentRedeploy($id: String!) { deploymentRedeploy(id: $id) { id } }", variables:{id:$id}}')"
+          response="$(curl --fail --silent --show-error \
+            --header "Content-Type: application/json" \
+            --header "Project-Access-Token: $RAILWAY_TOKEN" \
+            --data "$payload" \
+            https://backboard.railway.com/graphql/v2)"
+          jq --exit-status '.data.deploymentRedeploy.id and ((.errors // []) | length == 0)' \
+            <<<"$response" >/dev/null
+
+          for attempt in $(seq 1 120); do
+            runtime="$(curl --fail --silent --show-error --max-time 20 "$PRODUCTION_API_ORIGIN/api/runtime-config" || true)"
+            if jq --exit-status \
+              --arg build "$old_build" \
+              --arg release "$old_release" \
+              '.buildId == $build and .productionReleaseId == $release and .deploymentPosture == "live"' \
+              <<<"$runtime" >/dev/null 2>&1; then
+              curl --fail --silent --show-error --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" |
+                jq --exit-status '.ready == true and .checks.database.status == "ok"' >/dev/null
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Production rollback did not become ready in time." >&2
+          exit 1
+
+      - name: Record Production release summary
+        if: ${{ success() }}
+        shell: bash
+        run: |
+          {
+            echo "### AMOS-OPS permanent authentication repair"
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Tree: \`$CANDIDATE_TREE\`"
+            echo "- Release: \`$RELEASE_ID\`"
+            echo "- Railway: \`$PRODUCTION_API_ORIGIN\`"
+            echo "- Netlify: \`$PRODUCTION_ORIGIN\`"
+            echo "- Existing Production identity database and secret bindings: preserved"
+            echo "- Previous Railway deployment: \`$ROLLBACK_RAILWAY_DEPLOYMENT_ID\`"
+            echo "- Previous Netlify deployment: \`$ROLLBACK_NETLIFY_DEPLOY_ID\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record candidate release status
+        if: ${{ always() }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          state=success
+          description="Permanent authentication release completed"
+          if test "${{ job.status }}" != "success"; then
+            state=failure
+            description="Permanent authentication release failed or rolled back"
+          fi
+          payload="$(jq --null-input --compact-output \
+            --arg state "$state" \
+            --arg context "AMOS-OPS Production Auth Release" \
+            --arg description "$description" \
+            --arg target_url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            '{state:$state, context:$context, description:$description, target_url:$target_url}')"
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --data "$payload" \
+            "https://api.github.com/repos/${{ github.repository }}/statuses/$CANDIDATE_SHA" \
+            >/dev/null
