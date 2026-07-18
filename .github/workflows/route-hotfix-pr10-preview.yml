@@ -1,0 +1,176 @@
+name: Route Hotfix PR10 Isolated Preview
+
+on:
+  push:
+    branches:
+      - agent/route-hotfix-preview-release-20260718
+
+permissions:
+  contents: read
+
+concurrency:
+  group: amos-ops-route-hotfix-preview-pr10
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: c6ee865b138f92a700e2f36bb34dea42968b0e68
+  CANDIDATE_TREE: 00705d846cc05d4d01590875fad6ba600e772bcd
+  SOURCE_DIGEST: 66c6097086a9b571260665ec639ade38e62dc81e7c2803164e1b64513e50445a
+  PREVIEW_ORIGIN: https://route-hotfix-pr10--amos-ops.netlify.app
+  PREVIEW_API_ORIGIN: https://amos-ops-dms1-review-production.up.railway.app
+  RAILWAY_PROJECT_ID: 1fcdaa39-f1ef-449a-94a6-fb96f544a6dc
+  RAILWAY_ENVIRONMENT_ID: 99bd68e2-472f-4ee8-b690-614c7670765f
+  RAILWAY_SERVICE_ID: 8d9e326d-6ec3-4bf4-8f99-8107d20afa9c
+  VITE_AMOS_API_ORIGIN: https://amos-ops-dms1-review-production.up.railway.app
+
+jobs:
+  verify-and-deploy-preview:
+    name: Verify and deploy immutable preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: amos-staging
+    steps:
+      - name: Check out the exact hotfix candidate
+        uses: actions/checkout@v4
+        with:
+          ref: c6ee865b138f92a700e2f36bb34dea42968b0e68
+
+      - name: Assert immutable source identity
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          test "$(git archive --format=tar HEAD | sha256sum | cut -d' ' -f1)" = "$SOURCE_DIGEST"
+          git diff --check "$CANDIDATE_SHA^" "$CANDIDATE_SHA"
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run complete verification
+        run: npm run verify
+
+      - name: Verify built runtime safety
+        run: npm run test:dms1:built-runtime
+
+      - name: Install pinned Railway CLI
+        run: npm install --global @railway/cli@5.27.0
+
+      - name: Bind isolated review variables
+        shell: bash
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway variable set \
+            APP_ENV=staging \
+            AMOS_RUNTIME_MODE=production \
+            AMOS_REVIEW_DEPLOYMENT=true \
+            AMOS_ENVIRONMENT_ID=amos-ops-staging-route-hotfix-pr10 \
+            CREDENTIAL_NAMESPACE=amos-ops/staging/route-hotfix-pr10 \
+            DATABASE_PATH=/app/data/staging/route-hotfix-pr10/amos-ops.db \
+            TRAINING_DATABASE_PATH=/app/data/staging/route-hotfix-pr10/training/amos-ops-training.db \
+            UPLOAD_PATH=/app/uploads/staging/route-hotfix-pr10 \
+            TRAINING_UPLOAD_PATH=/app/uploads/staging/route-hotfix-pr10/training \
+            BACKUP_PATH=/app/data/staging/route-hotfix-pr10/backups \
+            AMOS_ALLOWED_ORIGINS="$PREVIEW_ORIGIN,$PREVIEW_API_ORIGIN" \
+            AMOS_BUILD_ID="$CANDIDATE_SHA" \
+            AMOS_FINAL_GATE_CANDIDATE_ID=ROUTE-HOTFIX-PR10 \
+            AMOS_SOURCE_DIGEST="$SOURCE_DIGEST" \
+            DEPLOYMENT_APPROVAL_ID=ROUTE-HOTFIX-PREVIEW-20260718 \
+            DEPLOYMENT_CHANGE_REFERENCE=GITHUB-PR-10 \
+            ALLOW_SELF_REGISTRATION=false \
+            MFA_POLICY=required-all \
+            --project "$RAILWAY_PROJECT_ID" \
+            --environment "$RAILWAY_ENVIRONMENT_ID" \
+            --service "$RAILWAY_SERVICE_ID" \
+            --skip-deploys \
+            --json
+
+      - name: Deploy exact candidate to isolated Railway service
+        shell: bash
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway up \
+            --project "$RAILWAY_PROJECT_ID" \
+            --environment "$RAILWAY_ENVIRONMENT_ID" \
+            --service "$RAILWAY_SERVICE_ID" \
+            --detach \
+            --json \
+            --message "Route hotfix PR10 isolated preview $CANDIDATE_SHA"
+
+      - name: Wait for exact Railway build and safety posture
+        shell: bash
+        run: |
+          for attempt in $(seq 1 90); do
+            runtime="$(curl --fail --silent --show-error --max-time 20 "$PREVIEW_API_ORIGIN/api/runtime-config" || true)"
+            if jq --exit-status \
+              --arg build "$CANDIDATE_SHA" \
+              '.buildId == $build
+               and .appEnvironment == "staging"
+               and .deploymentPosture == "release-review"
+               and .reviewDeployment == true
+               and .productionReleaseAuthorized == false
+               and .safeguards.syntheticDataOnly == true
+               and .safeguards.productionDataAllowed == false
+               and .safeguards.externalWritesAllowed == false' \
+              <<<"$runtime" >/dev/null 2>&1; then
+              curl --fail --silent --show-error "$PREVIEW_API_ORIGIN/api/health" |
+                jq --exit-status '.ready == true and .checks.database.status == "ok"'
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Exact isolated Railway preview did not become ready in time." >&2
+          exit 1
+
+      - name: Rebuild browser artifact for isolated API
+        run: npm run build:client
+
+      - name: Deploy matching Netlify preview
+        uses: nwtgck/actions-netlify@v3.0
+        with:
+          publish-dir: ./dist/public
+          production-deploy: false
+          alias: route-hotfix-pr10
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-message: "AMOS-OPS route hotfix PR10 isolated preview ${{ env.CANDIDATE_SHA }}"
+          enable-pull-request-comment: false
+          enable-commit-comment: false
+          overwrites-pull-request-comment: false
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+      - name: Verify preview CORS and deep-link refresh
+        shell: bash
+        run: |
+          headers="$(mktemp)"
+          status="$(curl --silent --show-error --output /dev/null --dump-header "$headers" \
+            --write-out '%{http_code}' \
+            --request OPTIONS "$PREVIEW_API_ORIGIN/api/runtime-config" \
+            --header "Origin: $PREVIEW_ORIGIN" \
+            --header "Access-Control-Request-Method: GET")"
+          test "$status" = "204"
+          tr -d '\r' <"$headers" | grep --fixed-strings --ignore-case "access-control-allow-origin: $PREVIEW_ORIGIN"
+          curl --fail --silent --show-error "$PREVIEW_ORIGIN/" | grep --ignore-case '<!doctype html>'
+          curl --fail --silent --show-error "$PREVIEW_ORIGIN/admin/settings" | grep --ignore-case '<!doctype html>'
+          curl --fail --silent --show-error "$PREVIEW_ORIGIN/assets/index-BIhI6oMF.js" |
+            grep --fixed-strings "$PREVIEW_API_ORIGIN"
+
+      - name: Record preview gate summary
+        shell: bash
+        run: |
+          {
+            echo "### AMOS-OPS route hotfix PR10 preview"
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Tree: \`$CANDIDATE_TREE\`"
+            echo "- Railway: \`$PREVIEW_API_ORIGIN\`"
+            echo "- Netlify: \`$PREVIEW_ORIGIN\`"
+            echo "- Production deployment: unchanged"
+          } >> "$GITHUB_STEP_SUMMARY"
