@@ -17,6 +17,25 @@ export type HttpAuthorizationResult =
       reason: string;
     };
 
+/**
+ * TA.1 file boundary: Training is orientation-only until RM.5 supplies malware
+ * quarantine, object authorization, retention, and governed deletion.
+ */
+export function enforceTrainingFileBoundary(
+  authorization: HttpAuthorizationResult,
+): HttpAuthorizationResult {
+  if (authorization.allowed && authorization.user.dataScope === "training") {
+    return {
+      allowed: false,
+      status: 403,
+      code: "FORBIDDEN",
+      reason:
+        "File upload and download are disabled in the Training workspace.",
+    };
+  }
+  return authorization;
+}
+
 /** Pure policy boundary used by both the HTTP adapter and focused authorization tests. */
 export function authorizeHttpIdentity(
   user: IdentityUser | null,

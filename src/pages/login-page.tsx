@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { runtimeConfig } from "@/config/runtime";
-import { useNavigate } from "react-router-dom";
 import {
   Shield,
   LogIn,
@@ -20,6 +19,7 @@ import {
   MailCheck,
 } from "lucide-react";
 import type { MfaPrompt, TotpSetup } from "@/hooks/use-auth";
+import { captureTrainingInvitationToken } from "@/security/training-invitation-token";
 
 /* ─── Floating Particles Canvas ─────────────────────────── */
 function ParticleBackground() {
@@ -150,11 +150,27 @@ const FEATURE_CARDS = [
 
 const DEPT_PILLS = ["Executive", "Corporate", "GAD", "BHC", "GRO"];
 
-export function LoginPage() {
-  const navigate = useNavigate();
-  const invitationToken = new URLSearchParams(window.location.search).get(
-    "invite",
+let pendingInvitationToken: string | null = null;
+
+function captureInvitationToken(): string | null {
+  const token = captureTrainingInvitationToken(window.location, (pathname) =>
+    window.history.replaceState({}, "", pathname),
   );
+  if (token) {
+    // Keep the secret only in this page's JavaScript memory. The module-level
+    // handoff also survives React StrictMode's development remount.
+    pendingInvitationToken = token;
+  }
+  return pendingInvitationToken;
+}
+
+export function LoginPage() {
+  const [invitationToken] = useState(captureInvitationToken);
+  useEffect(() => {
+    // The state initializer now owns the token. Clear the StrictMode handoff so
+    // a later login-page remount cannot reopen a consumed or abandoned invite.
+    pendingInvitationToken = null;
+  }, []);
   const {
     login,
     completeMfa,
@@ -187,10 +203,7 @@ export function LoginPage() {
   const [recoveryToken, setRecoveryToken] = useState(invitationToken ?? "");
   const [newPassword, setNewPassword] = useState("");
 
-  if (isAuthenticated) {
-    navigate("/", { replace: true });
-    return null;
-  }
+  if (isAuthenticated) return null;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -202,8 +215,6 @@ export function LoginPage() {
         setMfaPrompt(prompt);
         setMfaCode(prompt.evaluationCode ?? "");
         setAuthStep("mfa");
-      } else {
-        navigate("/");
       }
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "";
@@ -233,8 +244,6 @@ export function LoginPage() {
         setMfaPrompt(prompt);
         setMfaCode(prompt.evaluationCode ?? "");
         setAuthStep("mfa");
-      } else {
-        navigate("/");
       }
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "Registration failed");
@@ -266,7 +275,6 @@ export function LoginPage() {
     setLoading(true);
     try {
       await completeMfa(mfaPrompt.challengeId, mfaCode);
-      navigate("/");
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "Verification failed");
     } finally {
@@ -303,9 +311,7 @@ export function LoginPage() {
     setLoading(true);
     try {
       const setup = await resetPassword(recoveryToken, newPassword);
-      if (invitationToken) {
-        window.history.replaceState({}, "", window.location.pathname);
-      }
+      pendingInvitationToken = null;
       if (setup) {
         setTotpSetup(setup);
         setForm((current) => ({

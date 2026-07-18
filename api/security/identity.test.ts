@@ -306,7 +306,8 @@ describe("identity lifecycle", () => {
   });
 
   it("creates a sponsored external Training invitation that can set a password", async () => {
-    const { service } = makeFixture();
+    const now = new Date("2026-07-17T12:00:00.000Z");
+    const { service } = makeFixture({ now: () => now });
     const actorRegistration = await service.register({
       email: "sponsor@amos-ops.invalid",
       password: "Fictional!Youth2026",
@@ -323,18 +324,44 @@ describe("identity lifecycle", () => {
       role: "rcs-day",
       identityType: "external_guest",
       sponsorName: "Training Sponsor",
+      accessExpiresAt: "2026-08-17T12:00:00.000Z",
       rationale: "Authorized stakeholder orientation.",
     });
     expect(invitation.invitationToken.length).toBeGreaterThan(20);
-    await service.resetPassword({
+    const reset = await service.resetPassword({
       token: invitation.invitationToken,
       newPassword: "Stakeholder!Access2026",
     });
+    expect(reset.totpSetup).toMatchObject({
+      accountName: "stakeholder@example.invalid",
+      issuer: "AMOS-OPS",
+    });
+    expect(reset.totpSetup?.secret).toMatch(/^[A-Z2-7]{32}$/);
     const login = await service.login({
       email: "stakeholder@example.invalid",
       password: "Stakeholder!Access2026",
     });
-    expect(login.status).toBe("mfa_required");
+    expect(login).toMatchObject({
+      status: "mfa_required",
+      deliveryMethod: "totp",
+      destination: "your authenticator app",
+    });
+    if (login.status !== "mfa_required" || !reset.totpSetup) {
+      throw new Error("expected TOTP invitation enrollment");
+    }
+    const authenticated = await service.verifyMfa({
+      challengeId: login.challengeId,
+      code: totpCodeForTest(reset.totpSetup.secret, now),
+    });
+    expect(authenticated).toMatchObject({
+      status: "authenticated",
+      mfaVerified: true,
+      user: {
+        email: "stakeholder@example.invalid",
+        accessStatus: "training",
+        dataScope: "training",
+      },
+    });
     expect(
       service.listUsers().find((user) => user.id === invitation.userId),
     ).toMatchObject({
@@ -342,6 +369,57 @@ describe("identity lifecycle", () => {
       identityType: "external_guest",
       sponsorName: "Training Sponsor",
     });
+  });
+
+  it("rejects a Training invitation with a noncanonical role", async () => {
+    const service = makeService();
+    const expectedError = {
+      code: "ROLE_INVALID",
+    } satisfies Partial<IdentityError>;
+    await expect(
+      service.createTrainingAccount({
+        actorId: "synthetic-admin",
+        email: "invalid-role@example.invalid",
+        firstName: "Invalid",
+        lastName: "Role",
+        role: "qa-coordinator",
+        identityType: "workforce",
+        sponsorName: "Training Sponsor",
+        accessExpiresAt: "2026-08-17T12:00:00.000Z",
+        rationale: "Negative canonical-role validation test.",
+      }),
+    ).rejects.toMatchObject(expectedError);
+  });
+
+  it("rejects a Training invitation without a future access expiry", async () => {
+    const now = new Date("2026-07-17T12:00:00.000Z");
+    const { service } = makeFixture({ now: () => now });
+    const baseRequest = {
+      actorId: "synthetic-admin",
+      email: "expiry-required@example.invalid",
+      firstName: "Expiry",
+      lastName: "Required",
+      role: "training-coordinator",
+      identityType: "workforce" as const,
+      sponsorName: "Training Sponsor",
+      rationale: "Verify the mandatory expiry boundary.",
+    };
+
+    const expectedError = {
+      code: "ACCESS_EXPIRY_INVALID",
+    } satisfies Partial<IdentityError>;
+    await expect(
+      service.createTrainingAccount({
+        ...baseRequest,
+        accessExpiresAt: "",
+      }),
+    ).rejects.toMatchObject(expectedError);
+    await expect(
+      service.createTrainingAccount({
+        ...baseRequest,
+        accessExpiresAt: "2026-07-17T11:59:59.000Z",
+      }),
+    ).rejects.toMatchObject(expectedError);
   });
 
   it("revokes sessions when account access expires", async () => {

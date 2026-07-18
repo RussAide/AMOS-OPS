@@ -2728,7 +2728,8 @@ function getSingleDemoData(procedure: string, input: DemoRecord = {}): unknown {
       items: [
         {
           id: "wq1",
-          title: "Review governed assessment requirements for Synthetic Youth 006",
+          title:
+            "Review governed assessment requirements for Synthetic Youth 006",
           type: "assessment",
           assignedTo: "Demo Case Manager",
           priority: "high",
@@ -6949,7 +6950,12 @@ function getSingleDemoData(procedure: string, input: DemoRecord = {}): unknown {
       { from: string; to: string; type: string; strength: number }[]
     > = {
       "ne-p1": [
-        { from: "ne-p1", to: "ne-clinical-director", type: "treated_by", strength: 100 },
+        {
+          from: "ne-p1",
+          to: "ne-clinical-director",
+          type: "treated_by",
+          strength: 100,
+        },
         { from: "ne-p1", to: "ne-tp1", type: "has_plan", strength: 100 },
         { from: "ne-p1", to: "ne-tp2", type: "had_plan", strength: 80 },
         { from: "ne-p1", to: "ne-cs1", type: "has_session", strength: 100 },
@@ -6957,12 +6963,42 @@ function getSingleDemoData(procedure: string, input: DemoRecord = {}): unknown {
         { from: "ne-p1", to: "ne-r1", type: "from_referral", strength: 100 },
       ],
       "ne-clinical-director": [
-        { from: "ne-clinical-director", to: "ne-p1", type: "treats", strength: 100 },
-        { from: "ne-clinical-director", to: "ne-p3", type: "treats", strength: 100 },
-        { from: "ne-clinical-director", to: "ne-cs1", type: "conducted", strength: 100 },
-        { from: "ne-clinical-director", to: "ne-tp1", type: "authored", strength: 100 },
-        { from: "ne-clinical-director", to: "ne-a1", type: "audited_by", strength: 90 },
-        { from: "ne-clinical-director", to: "ne-demo-case-manager", type: "supervises", strength: 90 },
+        {
+          from: "ne-clinical-director",
+          to: "ne-p1",
+          type: "treats",
+          strength: 100,
+        },
+        {
+          from: "ne-clinical-director",
+          to: "ne-p3",
+          type: "treats",
+          strength: 100,
+        },
+        {
+          from: "ne-clinical-director",
+          to: "ne-cs1",
+          type: "conducted",
+          strength: 100,
+        },
+        {
+          from: "ne-clinical-director",
+          to: "ne-tp1",
+          type: "authored",
+          strength: 100,
+        },
+        {
+          from: "ne-clinical-director",
+          to: "ne-a1",
+          type: "audited_by",
+          strength: 90,
+        },
+        {
+          from: "ne-clinical-director",
+          to: "ne-demo-case-manager",
+          type: "supervises",
+          strength: 90,
+        },
       ],
       "ne-russ": [
         { from: "ne-russ", to: "ne-d1", type: "authored", strength: 100 },
@@ -6980,7 +7016,12 @@ function getSingleDemoData(procedure: string, input: DemoRecord = {}): unknown {
       ],
       "ne-a1": [
         { from: "ne-a1", to: "ne-ca1", type: "generated_capa", strength: 100 },
-        { from: "ne-a1", to: "ne-clinical-director", type: "audited", strength: 90 },
+        {
+          from: "ne-a1",
+          to: "ne-clinical-director",
+          type: "audited",
+          strength: 90,
+        },
       ],
       "ne-wo1": [
         { from: "ne-wo1", to: "ne-f1", type: "for_facility", strength: 100 },
@@ -8183,7 +8224,8 @@ function getSingleDemoData(procedure: string, input: DemoRecord = {}): unknown {
         {
           id: "ai1",
           meeting_id: "mt2",
-          description: "Complete Synthetic-Person-001 quarterly assessment documentation",
+          description:
+            "Complete Synthetic-Person-001 quarterly assessment documentation",
           assigned_to_name: "Demo Clinical Director",
           priority: "high",
           due_date: "2026-07-04",
@@ -8192,7 +8234,8 @@ function getSingleDemoData(procedure: string, input: DemoRecord = {}): unknown {
         {
           id: "ai2",
           meeting_id: "mt2",
-          description: "Schedule Synthetic-Person-004 intake assessment with guardian",
+          description:
+            "Schedule Synthetic-Person-004 intake assessment with guardian",
           assigned_to_name: "Demo Clinical Lead",
           priority: "urgent",
           due_date: "2026-07-01",
@@ -8210,7 +8253,8 @@ function getSingleDemoData(procedure: string, input: DemoRecord = {}): unknown {
         {
           id: "ai4",
           meeting_id: "mt2",
-          description: "Prepare family conference materials for Synthetic-Person-001",
+          description:
+            "Prepare family conference materials for Synthetic-Person-001",
           assigned_to_name: "Demo Clinical Lead",
           priority: "medium",
           due_date: "2026-07-03",
@@ -9190,15 +9234,30 @@ function getSingleDemoData(procedure: string, input: DemoRecord = {}): unknown {
     ];
   if (procedure === "m29.typeahead")
     return [
-      { id: "y1", title: "Synthetic Youth 001", type: "youth", module: "Clinical" },
+      {
+        id: "y1",
+        title: "Synthetic Youth 001",
+        type: "youth",
+        module: "Clinical",
+      },
       {
         id: "y2",
         title: "Synthetic Youth 005",
         type: "youth",
         module: "Clinical",
       },
-      { id: "y3", title: "Synthetic Youth 007", type: "youth", module: "Clinical" },
-      { id: "y4", title: "Synthetic Youth 002", type: "youth", module: "Clinical" },
+      {
+        id: "y3",
+        title: "Synthetic Youth 007",
+        type: "youth",
+        module: "Clinical",
+      },
+      {
+        id: "y4",
+        title: "Synthetic Youth 002",
+        type: "youth",
+        module: "Clinical",
+      },
     ];
   if (procedure === "m29.stats")
     return {
@@ -11138,14 +11197,13 @@ export function mayUseAmosEvaluationFallback(
     return false;
   if (PHASE3_CONTROLLED_MUTATIONS.some((procedure) => path.includes(procedure)))
     return false;
-  const trainingWorkspace =
-    typeof localStorage !== "undefined" &&
-    localStorage.getItem("amos-workspace") === "training";
-  return mayUseEvaluationData(
-    path,
-    kind,
-    runtimeConfig.evaluationMode || trainingWorkspace,
-  );
+  if (runtimeConfig.evaluationMode) {
+    return mayUseEvaluationData(path, kind, true);
+  }
+  // Production data scope is server-authoritative. A browser-local workspace
+  // value must never enable any synthetic API substitute, including an empty
+  // response that could conceal missing assignments or authoritative data.
+  return false;
 }
 
 const queryClient = new QueryClient({

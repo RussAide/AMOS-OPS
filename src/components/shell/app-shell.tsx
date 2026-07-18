@@ -1,10 +1,17 @@
-import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import {
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/providers/trpc";
-import { runtimeConfig } from "@/config/runtime";
 import ErrorBoundary from "@/components/error-boundary";
 import { AppSidebar } from "./app-sidebar";
+import { WorkspaceEnvironmentBanner } from "./workspace-environment-banner";
+import { isTrainingRouteAllowed } from "./training-route-policy";
 import {
   Menu,
   X,
@@ -159,8 +166,7 @@ import WorkflowEnginePage from "@/pages/admin/workflow-engine-page";
 import OrganizationModelPage from "@/pages/admin/organization-model-page";
 
 // ─── ONBOARDING ACADEMY (new) ───
-import OnboardingAcademyPage from "@/pages/onboarding/onboarding-academy-page";
-import UniversalOrientationPage from "@/pages/onboarding/universal-orientation-page";
+import OnboardingHomePage from "@/pages/onboarding/onboarding-home-page";
 
 // ─── EXECUTIVE ───
 import ExecutiveDashboardPage from "@/pages/exec/executive-dashboard-page";
@@ -272,7 +278,8 @@ export function AppShell({ children }: AppShellProps) {
 
 function AppShellAuthenticated({ children }: AppShellProps) {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const location = useLocation();
+  const { user, logout, workspace } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // ─── Dark Mode ───
@@ -321,16 +328,16 @@ function AppShellAuthenticated({ children }: AppShellProps) {
 
   // ─── tRPC Data Queries ───
   const { data: patientsData } = trpc.bhc.listPatients.useQuery(undefined, {
-    enabled: showResults,
+    enabled: workspace === "operational" && showResults,
   });
   const { data: staffData } = trpc.hr.listPeople.useQuery(undefined, {
-    enabled: showResults,
+    enabled: workspace === "operational" && showResults,
   });
   const { data: documentsData } = trpc.m2.list.useQuery(undefined, {
-    enabled: showResults,
+    enabled: workspace === "operational" && showResults,
   });
   const { data: claimsData } = trpc.revenue.listClaims.useQuery(undefined, {
-    enabled: showResults,
+    enabled: workspace === "operational" && showResults,
   });
 
   // ─── Build Search Results ───
@@ -640,7 +647,12 @@ function AppShellAuthenticated({ children }: AppShellProps) {
           </span>
 
           {/* ─── Global Search Bar ─── */}
-          <div className="relative flex-1 max-w-lg mx-auto">
+          <div
+            className={`relative flex-1 max-w-lg mx-auto ${
+              workspace === "training" ? "invisible" : ""
+            }`}
+            aria-hidden={workspace === "training"}
+          >
             <div className="relative">
               <Search
                 size={14}
@@ -650,6 +662,8 @@ function AppShellAuthenticated({ children }: AppShellProps) {
               <input
                 ref={searchRef}
                 type="text"
+                disabled={workspace === "training"}
+                tabIndex={workspace === "training" ? -1 : 0}
                 placeholder="Search patients, staff, documents, claims... (press / to focus)"
                 value={searchQuery}
                 onChange={(e) => {
@@ -969,500 +983,516 @@ function AppShellAuthenticated({ children }: AppShellProps) {
           </div>
         </header>
 
-        {runtimeConfig.evaluationMode && (
-          <div
-            role="status"
-            data-amos-environment={runtimeConfig.environmentId}
-            data-amos-runtime-mode="demo"
-            data-amos-control-plane="AMOS-OPS-PHASE3-EVALUATION"
-            className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-amber-500 bg-amber-300 px-3 py-1.5 text-center text-[11px] font-bold tracking-wide text-slate-950 print:flex"
-          >
-            <span>DEMO - NOT FOR CARE DELIVERY</span>
-            <span aria-hidden="true">•</span>
-            <span>Environment: {runtimeConfig.environmentId}</span>
-            <span aria-hidden="true">•</span>
-            <span>Control plane: AMOS-OPS-PHASE3-EVALUATION</span>
-            <span aria-hidden="true">•</span>
-            <span>
-              Synthetic data only · Production and Microsoft writes blocked
-            </span>
-          </div>
-        )}
-        {runtimeConfig.mode === "production" &&
-          runtimeConfig.productionReleaseAuthorized && (
-            <div
-              role="status"
-              data-amos-environment={runtimeConfig.environmentId}
-              data-amos-runtime-mode="production"
-              className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-emerald-800 bg-emerald-950 px-3 py-1.5 text-center text-[11px] font-bold tracking-wide text-emerald-50 print:flex"
-            >
-              <span>PRODUCTION</span>
-              <span aria-hidden="true">•</span>
-              <span>Authorized live operations</span>
-              <span aria-hidden="true">•</span>
-              <span>Release: {runtimeConfig.productionReleaseId}</span>
-            </div>
-          )}
+        <WorkspaceEnvironmentBanner workspace={workspace} />
 
         {/* ─── Main Content ─── */}
         <main className="flex-1 overflow-auto p-4 md:p-6">
           <ErrorBoundary>
-            {children ?? (
-              <Routes>
-                {/* ─── HOME ─── */}
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/home/alerts" element={<DashboardPage focus="alerts" />} />
-                <Route path="/home/divisions" element={<DashboardPage focus="divisions" />} />
-                <Route path="/home/quick-actions" element={<DashboardPage focus="actions" />} />
-                <Route path="/continuum" element={<Phase2ContinuumPage />} />
-                <Route
-                  path="/corporate-operations"
-                  element={<Phase3CorporateOperationsPage />}
-                />
+            {workspace === "training" &&
+            !isTrainingRouteAllowed(location.pathname) ? (
+              <Navigate to="/onboarding" replace />
+            ) : (
+              (children ?? (
+                <Routes>
+                  {/* ─── HOME ─── */}
+                  <Route path="/" element={<DashboardPage />} />
+                  <Route
+                    path="/home/alerts"
+                    element={<DashboardPage focus="alerts" />}
+                  />
+                  <Route
+                    path="/home/divisions"
+                    element={<DashboardPage focus="divisions" />}
+                  />
+                  <Route
+                    path="/home/quick-actions"
+                    element={<DashboardPage focus="actions" />}
+                  />
+                  <Route path="/continuum" element={<Phase2ContinuumPage />} />
+                  <Route
+                    path="/corporate-operations"
+                    element={<Phase3CorporateOperationsPage />}
+                  />
 
-                {/* ─── CLINICAL / BHC ─── */}
-                <Route path="/clinical" element={<ClinicalDashboardPage />} />
-                <Route
-                  path="/clinical/intelligence-fabric"
-                  element={<M41cClinicalIntelligencePage />}
-                />
-                <Route
-                  path="/clinical/sessions"
-                  element={<ClinicalSessionsPage />}
-                />
-                <Route
-                  path="/clinical/treatment-plans"
-                  element={<TreatmentPlansPage />}
-                />
-                <Route
-                  path="/clinical/cans-assessments"
-                  element={<CansAssessmentPage />}
-                />
-                <Route
-                  path="/clinical/outcome-measures"
-                  element={<OutcomeMeasuresPage />}
-                />
-                <Route
-                  path="/clinical/insurance-plans"
-                  element={<InsurancePlansPage />}
-                />
-                <Route
-                  path="/clinical/referrals"
-                  element={<ReferralIntakePage />}
-                />
-                <Route
-                  path="/clinical/service-delivery"
-                  element={<ServiceDeliveryPage />}
-                />
-                <Route
-                  path="/clinical/patients"
-                  element={<PatientListPage />}
-                />
-                <Route
-                  path="/clinical/patient/:id"
-                  element={<PatientProfilePage />}
-                />
-                <Route
-                  path="/clinical/workspace"
-                  element={<ClinicalWorkspacePage />}
-                />
+                  {/* ─── CLINICAL / BHC ─── */}
+                  <Route path="/clinical" element={<ClinicalDashboardPage />} />
+                  <Route
+                    path="/clinical/intelligence-fabric"
+                    element={<M41cClinicalIntelligencePage />}
+                  />
+                  <Route
+                    path="/clinical/sessions"
+                    element={<ClinicalSessionsPage />}
+                  />
+                  <Route
+                    path="/clinical/treatment-plans"
+                    element={<TreatmentPlansPage />}
+                  />
+                  <Route
+                    path="/clinical/cans-assessments"
+                    element={<CansAssessmentPage />}
+                  />
+                  <Route
+                    path="/clinical/outcome-measures"
+                    element={<OutcomeMeasuresPage />}
+                  />
+                  <Route
+                    path="/clinical/insurance-plans"
+                    element={<InsurancePlansPage />}
+                  />
+                  <Route
+                    path="/clinical/referrals"
+                    element={<ReferralIntakePage />}
+                  />
+                  <Route
+                    path="/clinical/service-delivery"
+                    element={<ServiceDeliveryPage />}
+                  />
+                  <Route
+                    path="/clinical/patients"
+                    element={<PatientListPage />}
+                  />
+                  <Route
+                    path="/clinical/patient/:id"
+                    element={<PatientProfilePage />}
+                  />
+                  <Route
+                    path="/clinical/workspace"
+                    element={<ClinicalWorkspacePage />}
+                  />
 
-                {/* ─── BHC DASHBOARD ─── */}
-                <Route path="/bhc" element={<BhcDashboardPage />} />
-                <Route path="/ccmg" element={<CcmgOversightPage />} />
-                <Route path="/mhtcm" element={<M22CaseManagementPage />} />
-                <Route path="/mhrs" element={<M23Workspace />} />
+                  {/* ─── BHC DASHBOARD ─── */}
+                  <Route path="/bhc" element={<BhcDashboardPage />} />
+                  <Route path="/ccmg" element={<CcmgOversightPage />} />
+                  <Route path="/mhtcm" element={<M22CaseManagementPage />} />
+                  <Route path="/mhrs" element={<M23Workspace />} />
 
-                {/* ─── INTAKE ─── */}
-                <Route path="/intake" element={<IntakePipelinePage />} />
-                <Route
-                  path="/intake/pipeline"
-                  element={<IntakePipelinePage />}
-                />
-                <Route
-                  path="/intake/assessment"
-                  element={<IntakeAssessmentPage />}
-                />
+                  {/* ─── INTAKE ─── */}
+                  <Route path="/intake" element={<IntakePipelinePage />} />
+                  <Route
+                    path="/intake/pipeline"
+                    element={<IntakePipelinePage />}
+                  />
+                  <Route
+                    path="/intake/assessment"
+                    element={<IntakeAssessmentPage />}
+                  />
 
-                {/* ─── CRISIS / CASE ─── */}
-                <Route path="/crisis" element={<CrisisResponsePage />} />
-                <Route path="/cases" element={<CaseManagementPage />} />
+                  {/* ─── CRISIS / CASE ─── */}
+                  <Route path="/crisis" element={<CrisisResponsePage />} />
+                  <Route path="/cases" element={<CaseManagementPage />} />
 
-                {/* ─── GRO / RESIDENTIAL ─── */}
-                <Route path="/gro" element={<GroDashboardPage />} />
-                <Route path="/gro/workspace" element={<GroWorkspacePage />} />
-                <Route
-                  path="/gro/compliance"
-                  element={<GroComplianceDashboardPage />}
-                />
-                <Route path="/gro/incidents" element={<IncidentReportPage />} />
-                <Route path="/gro/shift-logs" element={<ShiftLogPage />} />
-                <Route
-                  path="/gro/safety-rounds"
-                  element={<SafetyRoundPage />}
-                />
-                <Route path="/gro/care-logs" element={<YouthCareLogPage />} />
-                <Route
-                  path="/gro/supervision"
-                  element={<SupervisionNotesPage />}
-                />
-                <Route
-                  path="/gro/handoffs"
-                  element={<ShiftHandoffListPage />}
-                />
+                  {/* ─── GRO / RESIDENTIAL ─── */}
+                  <Route path="/gro" element={<GroDashboardPage />} />
+                  <Route path="/gro/workspace" element={<GroWorkspacePage />} />
+                  <Route
+                    path="/gro/compliance"
+                    element={<GroComplianceDashboardPage />}
+                  />
+                  <Route
+                    path="/gro/incidents"
+                    element={<IncidentReportPage />}
+                  />
+                  <Route path="/gro/shift-logs" element={<ShiftLogPage />} />
+                  <Route
+                    path="/gro/safety-rounds"
+                    element={<SafetyRoundPage />}
+                  />
+                  <Route path="/gro/care-logs" element={<YouthCareLogPage />} />
+                  <Route
+                    path="/gro/supervision"
+                    element={<SupervisionNotesPage />}
+                  />
+                  <Route
+                    path="/gro/handoffs"
+                    element={<ShiftHandoffListPage />}
+                  />
 
-                {/* ─── RESIDENTIAL ─── */}
-                <Route
-                  path="/residential"
-                  element={<ResidentialDashboardV2Page />}
-                />
-                <Route path="/medications" element={<MedicationAdminPage />} />
-                <Route path="/mobile-mar" element={<MobileMarPage />} />
-                <Route
-                  path="/mar-facility"
-                  element={<MarFacilityViewPage facilityId="fac-001" />}
-                />
-                <Route path="/family" element={<FamilyContactPage />} />
-                <Route path="/handoffs" element={<ShiftHandoffPage />} />
-                <Route
-                  path="/residential/analytics"
-                  element={<PredictiveAnalyticsPage />}
-                />
+                  {/* ─── RESIDENTIAL ─── */}
+                  <Route
+                    path="/residential"
+                    element={<ResidentialDashboardV2Page />}
+                  />
+                  <Route
+                    path="/medications"
+                    element={<MedicationAdminPage />}
+                  />
+                  <Route path="/mobile-mar" element={<MobileMarPage />} />
+                  <Route
+                    path="/mar-facility"
+                    element={<MarFacilityViewPage facilityId="fac-001" />}
+                  />
+                  <Route path="/family" element={<FamilyContactPage />} />
+                  <Route path="/handoffs" element={<ShiftHandoffPage />} />
+                  <Route
+                    path="/residential/analytics"
+                    element={<PredictiveAnalyticsPage />}
+                  />
 
-                {/* ─── COORDINATION ─── */}
-                <Route
-                  path="/observations"
-                  element={<DailyObservationsPage />}
-                />
-                <Route path="/meetings" element={<MeetingCadencePage />} />
-                <Route
-                  path="/escalation-ladder"
-                  element={<EscalationLadderPage />}
-                />
+                  {/* ─── COORDINATION ─── */}
+                  <Route
+                    path="/observations"
+                    element={<DailyObservationsPage />}
+                  />
+                  <Route path="/meetings" element={<MeetingCadencePage />} />
+                  <Route
+                    path="/escalation-ladder"
+                    element={<EscalationLadderPage />}
+                  />
 
-                {/* ─── CAMPUS ─── */}
-                <Route path="/campus" element={<CampusCensusDashboardPage />} />
+                  {/* ─── CAMPUS ─── */}
+                  <Route
+                    path="/campus"
+                    element={<CampusCensusDashboardPage />}
+                  />
 
-                {/* ─── QA / COMPLIANCE ─── */}
-                <Route path="/qa" element={<QaDashboardPage />} />
-                <Route path="/qa/list" element={<QaListPage />} />
-                <Route path="/qa/audit-binder" element={<AuditBinderPage />} />
-                <Route path="/qa/cap-tracker" element={<CapTrackerPage />} />
-                <Route
-                  path="/qa/compliance-memo"
-                  element={<ComplianceMemoPage />}
-                />
-                <Route
-                  path="/qa/deficiency-tracking"
-                  element={<DeficiencyTrackingPage />}
-                />
-                <Route
-                  path="/qa/evidence-matrix"
-                  element={<EvidenceMatrixPage />}
-                />
-                <Route
-                  path="/compliance/hhsc-export"
-                  element={<HhscExportPage />}
-                />
-                <Route
-                  path="/compliance/part2"
-                  element={<Part2DashboardPage />}
-                />
-                <Route
-                  path="/compliance/regulatory-framework"
-                  element={<RegulatoryFrameworkPage />}
-                />
+                  {/* ─── QA / COMPLIANCE ─── */}
+                  <Route path="/qa" element={<QaDashboardPage />} />
+                  <Route path="/qa/list" element={<QaListPage />} />
+                  <Route
+                    path="/qa/audit-binder"
+                    element={<AuditBinderPage />}
+                  />
+                  <Route path="/qa/cap-tracker" element={<CapTrackerPage />} />
+                  <Route
+                    path="/qa/compliance-memo"
+                    element={<ComplianceMemoPage />}
+                  />
+                  <Route
+                    path="/qa/deficiency-tracking"
+                    element={<DeficiencyTrackingPage />}
+                  />
+                  <Route
+                    path="/qa/evidence-matrix"
+                    element={<EvidenceMatrixPage />}
+                  />
+                  <Route
+                    path="/compliance/hhsc-export"
+                    element={<HhscExportPage />}
+                  />
+                  <Route
+                    path="/compliance/part2"
+                    element={<Part2DashboardPage />}
+                  />
+                  <Route
+                    path="/compliance/regulatory-framework"
+                    element={<RegulatoryFrameworkPage />}
+                  />
 
-                {/* ─── TOOLKITS ─── */}
-                <Route
-                  path="/toolkits/chart-audit"
-                  element={<ChartAuditPage />}
-                />
-                <Route path="/toolkits" element={<ToolkitHubPage />} />
+                  {/* ─── TOOLKITS ─── */}
+                  <Route
+                    path="/toolkits/chart-audit"
+                    element={<ChartAuditPage />}
+                  />
+                  <Route path="/toolkits" element={<ToolkitHubPage />} />
 
-                {/* ─── REVENUE ─── */}
-                <Route path="/revenue" element={<RevenueDashboardPage />} />
-                <Route path="/revenue/claims" element={<ClaimsListPage />} />
-                <Route
-                  path="/revenue/claim-submission"
-                  element={<ClaimSubmissionPage />}
-                />
-                <Route
-                  path="/revenue/denials"
-                  element={<DenialManagementPage />}
-                />
-                <Route
-                  path="/authorizations"
-                  element={<AuthorizationManagementPage />}
-                />
-                <Route path="/revenue/aging" element={<AgingQueuePage />} />
-                <Route
-                  path="/revenue/proof-of-service"
-                  element={<ProofOfServiceGatePage />}
-                />
-                <Route
-                  path="/revenue/payer-packets"
-                  element={<PayerPacketBuilderPage />}
-                />
+                  {/* ─── REVENUE ─── */}
+                  <Route path="/revenue" element={<RevenueDashboardPage />} />
+                  <Route path="/revenue/claims" element={<ClaimsListPage />} />
+                  <Route
+                    path="/revenue/claim-submission"
+                    element={<ClaimSubmissionPage />}
+                  />
+                  <Route
+                    path="/revenue/denials"
+                    element={<DenialManagementPage />}
+                  />
+                  <Route
+                    path="/authorizations"
+                    element={<AuthorizationManagementPage />}
+                  />
+                  <Route path="/revenue/aging" element={<AgingQueuePage />} />
+                  <Route
+                    path="/revenue/proof-of-service"
+                    element={<ProofOfServiceGatePage />}
+                  />
+                  <Route
+                    path="/revenue/payer-packets"
+                    element={<PayerPacketBuilderPage />}
+                  />
 
-                {/* ─── HR ─── */}
-                <Route path="/hr" element={<HrCommandCenterPage />} />
-                <Route
-                  path="/hr/personnel-files"
-                  element={<HrPersonProfilePage />}
-                />
-                <Route
-                  path="/hr/credentials"
-                  element={<CredentialTrackingPage />}
-                />
-                <Route
-                  path="/hr/performance"
-                  element={<PerformanceReviewPage />}
-                />
-                <Route path="/hr/onboarding" element={<HrOnboardingPage />} />
-                <Route
-                  path="/hr/separation"
-                  element={<SeparationManagementPage />}
-                />
-                <Route path="/hr/module" element={<HrModulePage />} />
-                <Route path="/hr/layout" element={<HrLayout />} />
-                <Route
-                  path="/hr/training"
-                  element={<TrainingAssignmentPage />}
-                />
-                <Route path="/hr/recruitment" element={<RecruitmentPage />} />
-                <Route path="/hr/tracker" element={<TrainingTrackerPage />} />
+                  {/* ─── HR ─── */}
+                  <Route path="/hr" element={<HrCommandCenterPage />} />
+                  <Route
+                    path="/hr/personnel-files"
+                    element={<HrPersonProfilePage />}
+                  />
+                  <Route
+                    path="/hr/credentials"
+                    element={<CredentialTrackingPage />}
+                  />
+                  <Route
+                    path="/hr/performance"
+                    element={<PerformanceReviewPage />}
+                  />
+                  <Route path="/hr/onboarding" element={<HrOnboardingPage />} />
+                  <Route
+                    path="/hr/separation"
+                    element={<SeparationManagementPage />}
+                  />
+                  <Route path="/hr/module" element={<HrModulePage />} />
+                  <Route path="/hr/layout" element={<HrLayout />} />
+                  <Route
+                    path="/hr/training"
+                    element={<TrainingAssignmentPage />}
+                  />
+                  <Route path="/hr/recruitment" element={<RecruitmentPage />} />
+                  <Route path="/hr/tracker" element={<TrainingTrackerPage />} />
 
-                {/* ─── HR WORKFORCE ACTIVATION (new) ─── */}
-                <Route path="/hr/screening" element={<ScreeningPage />} />
-                <Route path="/hr/offers" element={<OffersPage />} />
-                <Route path="/hr/orientation" element={<OrientationPage />} />
+                  {/* ─── HR WORKFORCE ACTIVATION (new) ─── */}
+                  <Route path="/hr/screening" element={<ScreeningPage />} />
+                  <Route path="/hr/offers" element={<OffersPage />} />
+                  <Route path="/hr/orientation" element={<OrientationPage />} />
 
-                {/* ─── HR WORKFORCE MANAGEMENT (new) ─── */}
-                <Route path="/hr/clearance" element={<ClearancePage />} />
-                <Route path="/hr/compliance" element={<HrCompliancePage />} />
-                <Route path="/hr/separations" element={<SeparationsPage />} />
+                  {/* ─── HR WORKFORCE MANAGEMENT (new) ─── */}
+                  <Route path="/hr/clearance" element={<ClearancePage />} />
+                  <Route path="/hr/compliance" element={<HrCompliancePage />} />
+                  <Route path="/hr/separations" element={<SeparationsPage />} />
 
-                {/* ─── HR TOOLS (new) ─── */}
-                <Route
-                  path="/hr/credentials-tracker"
-                  element={<CredentialsTrackerPage />}
-                />
-                <Route
-                  path="/hr/training-assignments"
-                  element={<TrainingAssignmentsPage />}
-                />
-                <Route
-                  path="/hr/performance-reviews"
-                  element={<PerformanceReviewsPage />}
-                />
-                <Route
-                  path="/hr/onboarding-workflow"
-                  element={<OnboardingWorkflowPage />}
-                />
+                  {/* ─── HR TOOLS (new) ─── */}
+                  <Route
+                    path="/hr/credentials-tracker"
+                    element={<CredentialsTrackerPage />}
+                  />
+                  <Route
+                    path="/hr/training-assignments"
+                    element={<TrainingAssignmentsPage />}
+                  />
+                  <Route
+                    path="/hr/performance-reviews"
+                    element={<PerformanceReviewsPage />}
+                  />
+                  <Route
+                    path="/hr/onboarding-workflow"
+                    element={<OnboardingWorkflowPage />}
+                  />
 
-                {/* ─── NEW HR ROUTES ─── */}
-                <Route path="/hr/personnel" element={<PersonnelFilesPage />} />
-                <Route
-                  path="/hr/credential-tracker"
-                  element={<CredentialTrackerPage />}
-                />
-                <Route
-                  path="/hr/onboarding-flow"
-                  element={<OnboardingFlowPage />}
-                />
+                  {/* ─── NEW HR ROUTES ─── */}
+                  <Route
+                    path="/hr/personnel"
+                    element={<PersonnelFilesPage />}
+                  />
+                  <Route
+                    path="/hr/credential-tracker"
+                    element={<CredentialTrackerPage />}
+                  />
+                  <Route
+                    path="/hr/onboarding-flow"
+                    element={<OnboardingFlowPage />}
+                  />
 
-                {/* ─── EXECUTIVE ─── */}
-                <Route path="/executive" element={<ExecutiveDashboardPage />} />
-                <Route
-                  path="/executive/decision-intelligence"
-                  element={<M41aDecisionIntelligencePage />}
-                />
-                <Route path="/executive/mgma" element={<MgmaScorecardPage />} />
-                <Route
-                  path="/executive/strategic-projects"
-                  element={<StrategicProjectsHubPage />}
-                />
-                <Route
-                  path="/executive/marketing-review"
-                  element={<MarketingSiteReviewPage />}
-                />
+                  {/* ─── EXECUTIVE ─── */}
+                  <Route
+                    path="/executive"
+                    element={<ExecutiveDashboardPage />}
+                  />
+                  <Route
+                    path="/executive/decision-intelligence"
+                    element={<M41aDecisionIntelligencePage />}
+                  />
+                  <Route
+                    path="/executive/mgma"
+                    element={<MgmaScorecardPage />}
+                  />
+                  <Route
+                    path="/executive/strategic-projects"
+                    element={<StrategicProjectsHubPage />}
+                  />
+                  <Route
+                    path="/executive/marketing-review"
+                    element={<MarketingSiteReviewPage />}
+                  />
 
-                {/* ─── GAD ─── */}
-                <Route path="/gad" element={<GadDashboardPage />} />
-                <Route
-                  path="/gad/facilities-work-orders"
-                  element={<GadDashboardPage initialTab="workorders" />}
-                />
-                <Route
-                  path="/gad/procurement-vendors"
-                  element={<GadDashboardPage initialTab="procurement" />}
-                />
-                <Route
-                  path="/gad/safety-emergency-preparedness"
-                  element={<GadDashboardPage initialTab="safety" />}
-                />
-                <Route
-                  path="/gad/transportation-logistics"
-                  element={<GadDashboardPage initialTab="transportation" />}
-                />
-                <Route
-                  path="/gad/regulatory-support"
-                  element={<GadDashboardPage initialTab="regulatory" />}
-                />
+                  {/* ─── GAD ─── */}
+                  <Route path="/gad" element={<GadDashboardPage />} />
+                  <Route
+                    path="/gad/facilities-work-orders"
+                    element={<GadDashboardPage initialTab="workorders" />}
+                  />
+                  <Route
+                    path="/gad/procurement-vendors"
+                    element={<GadDashboardPage initialTab="procurement" />}
+                  />
+                  <Route
+                    path="/gad/safety-emergency-preparedness"
+                    element={<GadDashboardPage initialTab="safety" />}
+                  />
+                  <Route
+                    path="/gad/transportation-logistics"
+                    element={<GadDashboardPage initialTab="transportation" />}
+                  />
+                  <Route
+                    path="/gad/regulatory-support"
+                    element={<GadDashboardPage initialTab="regulatory" />}
+                  />
 
-                {/* ─── NEW EXECUTIVE ROUTES ─── */}
-                <Route path="/mgma" element={<MgmaScorecardPage />} />
-                <Route
-                  path="/strategic-projects"
-                  element={<StrategicProjectsPage />}
-                />
-                <Route path="/site-review" element={<SiteReviewPage />} />
+                  {/* ─── NEW EXECUTIVE ROUTES ─── */}
+                  <Route path="/mgma" element={<MgmaScorecardPage />} />
+                  <Route
+                    path="/strategic-projects"
+                    element={<StrategicProjectsPage />}
+                  />
+                  <Route path="/site-review" element={<SiteReviewPage />} />
 
-                {/* ─── ANALYTICS ─── */}
-                <Route path="/analytics" element={<AnalyticsPage />} />
+                  {/* ─── ANALYTICS ─── */}
+                  <Route path="/analytics" element={<AnalyticsPage />} />
 
-                {/* ─── DOCUMENTS / DMS ─── */}
-                <Route path="/documents" element={<DocumentStudioPage />} />
-                <Route path="/documents/*" element={<DocumentStudioPage />} />
+                  {/* ─── DOCUMENTS / DMS ─── */}
+                  <Route path="/documents" element={<DocumentStudioPage />} />
+                  <Route path="/documents/*" element={<DocumentStudioPage />} />
 
-                {/* ─── KNOWLEDGE ─── */}
-                <Route path="/knowledge" element={<KnowledgePage />} />
-                <Route
-                  path="/knowledge/document-intelligence"
-                  element={<M42DocumentKnowledgePage />}
-                />
-                <Route
-                  path="/operations-hub"
-                  element={<M51AOperationsHubPage />}
-                />
-                <Route
-                  path="/operations-hub/microsoft-integrations"
-                  element={<M51BMicrosoftIntegrationsPage />}
-                />
-                <Route
-                  path="/operations-hub/mobile-offline"
-                  element={<M52MobileOfflinePage />}
-                />
-                <Route
-                  path="/operations-hub/enterprise-demo"
-                  element={<Dx1EnterpriseDemoPage />}
-                />
-                <Route path="/sop-knowledge" element={<SOPKnowledgePage />} />
+                  {/* ─── KNOWLEDGE ─── */}
+                  <Route path="/knowledge" element={<KnowledgePage />} />
+                  <Route
+                    path="/knowledge/document-intelligence"
+                    element={<M42DocumentKnowledgePage />}
+                  />
+                  <Route
+                    path="/operations-hub"
+                    element={<M51AOperationsHubPage />}
+                  />
+                  <Route
+                    path="/operations-hub/microsoft-integrations"
+                    element={<M51BMicrosoftIntegrationsPage />}
+                  />
+                  <Route
+                    path="/operations-hub/mobile-offline"
+                    element={<M52MobileOfflinePage />}
+                  />
+                  <Route
+                    path="/operations-hub/enterprise-demo"
+                    element={<Dx1EnterpriseDemoPage />}
+                  />
+                  <Route path="/sop-knowledge" element={<SOPKnowledgePage />} />
 
-                {/* ─── NIL ─── */}
-                <Route path="/nil" element={<NilSearchPage />} />
-                <Route path="/nil/graph" element={<NilGraphPage />} />
+                  {/* ─── NIL ─── */}
+                  <Route path="/nil" element={<NilSearchPage />} />
+                  <Route path="/nil/graph" element={<NilGraphPage />} />
 
-                {/* ─── WORKFLOWS ─── */}
-                <Route path="/workflows" element={<WorkflowsPage />} />
-                <Route
-                  path="/workflows/intelligence-assistant"
-                  element={<M41bIntelligenceAssistantPage />}
-                />
-                <Route
-                  path="/workflows/my-work-today"
-                  element={<MyWorkTodayPage view="today" />}
-                />
-                <Route
-                  path="/workflows/assigned-tasks"
-                  element={<MyWorkTodayPage view="assigned" />}
-                />
-                <Route
-                  path="/workflows/attention"
-                  element={<MyWorkTodayPage view="attention" />}
-                />
-                <Route
-                  path="/workflows/calendar"
-                  element={<MyWorkTodayPage view="calendar" />}
-                />
-                <Route
-                  path="/workflows/recent-activity"
-                  element={<MyWorkTodayPage view="recent" />}
-                />
-                <Route path="/my-work-today" element={<MyWorkTodayPage />} />
+                  {/* ─── WORKFLOWS ─── */}
+                  <Route path="/workflows" element={<WorkflowsPage />} />
+                  <Route
+                    path="/workflows/intelligence-assistant"
+                    element={<M41bIntelligenceAssistantPage />}
+                  />
+                  <Route
+                    path="/workflows/my-work-today"
+                    element={<MyWorkTodayPage view="today" />}
+                  />
+                  <Route
+                    path="/workflows/assigned-tasks"
+                    element={<MyWorkTodayPage view="assigned" />}
+                  />
+                  <Route
+                    path="/workflows/attention"
+                    element={<MyWorkTodayPage view="attention" />}
+                  />
+                  <Route
+                    path="/workflows/calendar"
+                    element={<MyWorkTodayPage view="calendar" />}
+                  />
+                  <Route
+                    path="/workflows/recent-activity"
+                    element={<MyWorkTodayPage view="recent" />}
+                  />
+                  <Route path="/my-work-today" element={<MyWorkTodayPage />} />
 
-                {/* ─── ONBOARDING ─── */}
-                <Route path="/onboarding" element={<OnboardingAcademyPage />} />
-                <Route
-                  path="/onboarding/track"
-                  element={<OnboardingTrackPage />}
-                />
-                <Route
-                  path="/onboarding/track/universal-orientation"
-                  element={<UniversalOrientationPage />}
-                />
-                <Route
-                  path="/onboarding/module"
-                  element={<OnboardingModulePage />}
-                />
-                <Route
-                  path="/onboarding/employee"
-                  element={<OnboardingEmployeePage />}
-                />
-                <Route
-                  path="/onboarding/supervisor"
-                  element={<OnboardingSupervisorPage />}
-                />
-                <Route
-                  path="/onboarding/management"
-                  element={<OnboardingManagementPage />}
-                />
-                <Route
-                  path="/onboarding/evidence"
-                  element={<OnboardingEvidencePage />}
-                />
-                <Route
-                  path="/onboarding/training"
-                  element={<OnboardingTrainingPage />}
-                />
+                  {/* ─── ONBOARDING ─── */}
+                  <Route path="/onboarding" element={<OnboardingHomePage />} />
+                  <Route
+                    path="/onboarding/track"
+                    element={<Navigate to="/onboarding" replace />}
+                  />
+                  <Route
+                    path="/onboarding/track/:trackId"
+                    element={<OnboardingTrackPage />}
+                  />
+                  <Route
+                    path="/onboarding/module"
+                    element={<Navigate to="/onboarding/training" replace />}
+                  />
+                  <Route
+                    path="/onboarding/module/:moduleId"
+                    element={<OnboardingModulePage />}
+                  />
+                  <Route
+                    path="/onboarding/employee"
+                    element={<Navigate to="/onboarding/supervisor" replace />}
+                  />
+                  <Route
+                    path="/onboarding/employee/:id"
+                    element={<OnboardingEmployeePage />}
+                  />
+                  <Route
+                    path="/onboarding/supervisor"
+                    element={<OnboardingSupervisorPage />}
+                  />
+                  <Route
+                    path="/onboarding/management"
+                    element={<OnboardingManagementPage />}
+                  />
+                  <Route
+                    path="/onboarding/evidence"
+                    element={<OnboardingEvidencePage />}
+                  />
+                  <Route
+                    path="/onboarding/training"
+                    element={<OnboardingTrainingPage />}
+                  />
 
-                {/* ─── ADMIN ─── */}
-                <Route
-                  path="/admin/organization"
-                  element={<OrganizationModelPage />}
-                />
-                <Route path="/admin/settings" element={<AdminSettingsPage />} />
-                <Route
-                  path="/admin/workflow"
-                  element={<WorkflowEnginePage />}
-                />
-                <Route
-                  path="/admin/workflows"
-                  element={<Navigate to="/workflows" replace />}
-                />
-                <Route path="/admin/entra-id" element={<EntraSyncPage />} />
-                <Route
-                  path="/admin/enhancement-register"
-                  element={<EnhancementRegisterPage />}
-                />
-                <Route
-                  path="/admin/enhancements"
-                  element={<EnhancementRegisterPage />}
-                />
-                <Route
-                  path="/admin/enhancement"
-                  element={<EnhancementRegisterPage />}
-                />
-                <Route
-                  path="/admin/nil-graph"
-                  element={<AdminNilGraphPage />}
-                />
-                <Route path="/admin/entra-sync" element={<EntraSyncPage />} />
+                  {/* ─── ADMIN ─── */}
+                  <Route
+                    path="/admin/organization"
+                    element={<OrganizationModelPage />}
+                  />
+                  <Route
+                    path="/admin/settings"
+                    element={<AdminSettingsPage />}
+                  />
+                  <Route
+                    path="/admin/workflow"
+                    element={<WorkflowEnginePage />}
+                  />
+                  <Route
+                    path="/admin/workflows"
+                    element={<Navigate to="/workflows" replace />}
+                  />
+                  <Route path="/admin/entra-id" element={<EntraSyncPage />} />
+                  <Route
+                    path="/admin/enhancement-register"
+                    element={<EnhancementRegisterPage />}
+                  />
+                  <Route
+                    path="/admin/enhancements"
+                    element={<EnhancementRegisterPage />}
+                  />
+                  <Route
+                    path="/admin/enhancement"
+                    element={<EnhancementRegisterPage />}
+                  />
+                  <Route
+                    path="/admin/nil-graph"
+                    element={<AdminNilGraphPage />}
+                  />
+                  <Route path="/admin/entra-sync" element={<EntraSyncPage />} />
 
-                {/* ─── AUTH ─── */}
-                <Route path="/authorization" element={<AuthorizationPage />} />
+                  {/* ─── AUTH ─── */}
+                  <Route
+                    path="/authorization"
+                    element={<AuthorizationPage />}
+                  />
 
-                {/* ─── MY SHIFT / PERSONAL ─── */}
-                <Route path="/my-shift" element={<MyShiftPage />} />
-                <Route
-                  path="/meetings-escalations"
-                  element={<MeetingsEscalationsPage />}
-                />
+                  {/* ─── MY SHIFT / PERSONAL ─── */}
+                  <Route path="/my-shift" element={<MyShiftPage />} />
+                  <Route
+                    path="/meetings-escalations"
+                    element={<MeetingsEscalationsPage />}
+                  />
 
-                {/* ─── FALLBACK ─── */}
-                <Route path="*" element={<DashboardPage />} />
-              </Routes>
+                  {/* ─── FALLBACK ─── */}
+                  <Route path="*" element={<DashboardPage />} />
+                </Routes>
+              ))
             )}
           </ErrorBoundary>
         </main>

@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   OnboardingProvider,
+  createTrainingPracticeFixtures,
   mayUseIsolatedFixtures,
   resolveOnboardingFixtures,
   useOnboarding,
@@ -53,6 +54,81 @@ describe("RM.1 Production fixture isolation", () => {
     expect(markup).toContain("&quot;evidence&quot;:0");
     expect(markup).toContain("&quot;isUnavailable&quot;:true");
     expect(markup).not.toContain("Synthetic Staff");
+  });
+
+  it("starts Production Training as zero-progress practice without official-looking records", () => {
+    const practice = createTrainingPracticeFixtures({
+      tracks: [
+        {
+          id: "universal-orientation",
+          name: "Synthetic Track",
+          description: "Synthetic practice",
+          role: "clinical_staff",
+          moduleCount: 1,
+          completedModules: 1,
+          clearanceStatus: "cleared",
+        },
+      ],
+      modules: [
+        {
+          id: "mod-101",
+          trackId: "universal-orientation",
+          title: "Synthetic Module",
+          category: "Practice",
+          description: "Synthetic practice",
+          stepCount: 1,
+          completedSteps: 1,
+          status: "completed",
+        },
+      ],
+      steps: [
+        {
+          id: "step-1",
+          moduleId: "mod-101",
+          title: "Synthetic Step",
+          content: "Synthetic practice",
+          contentType: "text",
+          durationMinutes: 1,
+          completed: true,
+        },
+      ],
+      employees: [
+        {
+          id: "employee-1",
+          name: "Synthetic Staff",
+          employeeId: "SYN-001",
+          track: "Synthetic Track",
+          startDate: "2026-07-17",
+          clearanceStatus: "cleared",
+          supervisor: "Synthetic Supervisor",
+          completedModules: 1,
+          totalModules: 1,
+        },
+      ],
+      evidence: [
+        {
+          id: "evidence-1",
+          title: "Synthetic Certificate",
+          moduleTitle: "Synthetic Module",
+          submittedAt: "2026-07-17",
+          status: "approved",
+          fileName: "synthetic.pdf",
+          fileSize: "1 KB",
+        },
+      ],
+    });
+
+    expect(practice.tracks[0]).toMatchObject({
+      completedModules: 0,
+      clearanceStatus: "pending",
+    });
+    expect(practice.modules[0]).toMatchObject({
+      completedSteps: 0,
+      status: "available",
+    });
+    expect(practice.steps[0]?.completed).toBe(false);
+    expect(practice.employees).toEqual([]);
+    expect(practice.evidence).toEqual([]);
   });
 
   it.each([

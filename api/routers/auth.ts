@@ -254,7 +254,7 @@ export const authRouter = createRouter({
         role: z.string().trim().min(1).max(80),
         identityType: z.enum(["workforce", "external_guest"]),
         sponsorName: z.string().trim().min(2).max(160),
-        accessExpiresAt: z.string().datetime().nullable().optional(),
+        accessExpiresAt: z.string().datetime(),
         rationale: z.string().trim().min(5).max(1_000),
       }),
     )

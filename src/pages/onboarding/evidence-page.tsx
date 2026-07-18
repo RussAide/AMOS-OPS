@@ -1,12 +1,24 @@
 import { useState } from "react";
-import { FileCheck, Upload, CheckCircle, XCircle, Filter } from "lucide-react";
+import {
+  FileCheck,
+  Upload,
+  CheckCircle,
+  XCircle,
+  Filter,
+  ShieldAlert,
+} from "lucide-react";
 import { useOnboarding } from "@/context/onboarding-context";
+import { useAuth } from "@/hooks/use-auth";
 import { evidenceStatusColors } from "@/data/onboardingData";
-import { FileUpload, FileDownloadButton } from "@/components/onboarding/file-upload";
+import {
+  FileUpload,
+  FileDownloadButton,
+} from "@/components/onboarding/file-upload";
 
 type FilterStatus = "all" | "pending" | "reviewing" | "approved" | "rejected";
 
 export function EvidencePage() {
+  const { workspace } = useAuth();
   const { evidence, submitEvidence, reviewEvidence, modules } = useOnboarding();
   const [filter, setFilter] = useState<FilterStatus>("all");
   const [showUpload, setShowUpload] = useState(false);
@@ -22,7 +34,8 @@ export function EvidencePage() {
   } | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
-  const filtered = filter === "all" ? evidence : evidence.filter((e) => e.status === filter);
+  const filtered =
+    filter === "all" ? evidence : evidence.filter((e) => e.status === filter);
 
   const statusCounts = {
     all: evidence.length,
@@ -60,18 +73,54 @@ export function EvidencePage() {
     setUploadSuccess(false);
   };
 
+  if (workspace === "training") {
+    return (
+      <section
+        role="status"
+        className="rounded-lg border border-amber-400 bg-amber-50 p-6"
+      >
+        <div className="flex items-start gap-3">
+          <ShieldAlert className="mt-0.5 shrink-0 text-amber-700" size={22} />
+          <div>
+            <h1 className="text-[18px] font-bold text-amber-950">
+              Training evidence upload is disabled
+            </h1>
+            <p className="mt-2 text-[13px] leading-5 text-amber-900">
+              Do not select or upload real files, PHI, personnel records, or
+              regulated data. This pilot records practice interaction only and
+              does not issue certification or staff clearance.
+            </p>
+            <p className="mt-2 text-[12px] text-amber-800">
+              Secure scanning, object-level authorization, retention, and audit
+              controls must pass RM.5 before evidence submission can be enabled.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#FFFBEB" }}>
+          <div
+            className="w-10 h-10 rounded-lg flex items-center justify-center"
+            style={{ backgroundColor: "#FFFBEB" }}
+          >
             <FileCheck size={20} style={{ color: "#D97706" }} />
           </div>
           <div>
-            <h1 className="text-[20px] font-bold" style={{ color: "var(--topbar-title)" }}>
+            <h1
+              className="text-[20px] font-bold"
+              style={{ color: "var(--topbar-title)" }}
+            >
               Evidence Review
             </h1>
-            <p className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>
+            <p
+              className="text-[13px]"
+              style={{ color: "var(--topbar-subtitle)" }}
+            >
               Manage training evidence and certification uploads
             </p>
           </div>
@@ -90,43 +139,74 @@ export function EvidencePage() {
       {showUpload && (
         <div
           className="rounded-lg border p-5 mb-5"
-          style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)" }}
+          style={{
+            borderColor: "var(--card-border)",
+            backgroundColor: "var(--card-bg)",
+          }}
         >
-          <h3 className="text-[15px] font-semibold mb-4" style={{ color: "var(--topbar-title)" }}>
+          <h3
+            className="text-[15px] font-semibold mb-4"
+            style={{ color: "var(--topbar-title)" }}
+          >
             Submit New Evidence
           </h3>
           {uploadSuccess ? (
-            <div className="flex items-center gap-3 p-4 rounded-lg" style={{ backgroundColor: "#ECFDF5" }}>
+            <div
+              className="flex items-center gap-3 p-4 rounded-lg"
+              style={{ backgroundColor: "#ECFDF5" }}
+            >
               <CheckCircle size={20} style={{ color: "#059669" }} />
-              <p className="text-[14px] font-medium" style={{ color: "#065F46" }}>
+              <p
+                className="text-[14px] font-medium"
+                style={{ color: "#065F46" }}
+              >
                 Evidence submitted successfully!
               </p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--topbar-title)" }}>
+                <label
+                  className="block text-[12px] font-medium mb-1.5"
+                  style={{ color: "var(--topbar-title)" }}
+                >
                   Evidence Title *
                 </label>
                 <input
                   type="text"
                   value={uploadForm.title}
-                  onChange={(e) => setUploadForm({ ...uploadForm, title: e.target.value })}
+                  onChange={(e) =>
+                    setUploadForm({ ...uploadForm, title: e.target.value })
+                  }
                   placeholder="e.g., HIPAA Certification"
                   className="w-full px-3 py-2 rounded-lg border text-[13px] outline-none focus:ring-2"
-                  style={{ borderColor: "var(--card-border)", color: "var(--topbar-title)" }}
+                  style={{
+                    borderColor: "var(--card-border)",
+                    color: "var(--topbar-title)",
+                  }}
                   required
                 />
               </div>
               <div>
-                <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--topbar-title)" }}>
+                <label
+                  className="block text-[12px] font-medium mb-1.5"
+                  style={{ color: "var(--topbar-title)" }}
+                >
                   Related Module *
                 </label>
                 <select
                   value={uploadForm.moduleTitle}
-                  onChange={(e) => setUploadForm({ ...uploadForm, moduleTitle: e.target.value })}
+                  onChange={(e) =>
+                    setUploadForm({
+                      ...uploadForm,
+                      moduleTitle: e.target.value,
+                    })
+                  }
                   className="w-full px-3 py-2 rounded-lg border text-[13px] outline-none focus:ring-2"
-                  style={{ borderColor: "var(--card-border)", color: "var(--topbar-title)" }}
+                  style={{
+                    borderColor: "var(--card-border)",
+                    color: "var(--topbar-title)",
+                  }}
                 >
                   {modules.map((m) => (
                     <option key={m.id} value={m.title}>
@@ -136,7 +216,10 @@ export function EvidencePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-[12px] font-medium mb-1.5" style={{ color: "var(--topbar-title)" }}>
+                <label
+                  className="block text-[12px] font-medium mb-1.5"
+                  style={{ color: "var(--topbar-title)" }}
+                >
                   Supporting Document *
                 </label>
                 <FileUpload
@@ -158,7 +241,10 @@ export function EvidencePage() {
                   type="button"
                   onClick={handleCancel}
                   className="px-4 py-2 rounded-lg text-[13px] font-medium border"
-                  style={{ borderColor: "var(--card-border)", color: "var(--topbar-subtitle)" }}
+                  style={{
+                    borderColor: "var(--card-border)",
+                    color: "var(--topbar-subtitle)",
+                  }}
                 >
                   Cancel
                 </button>
@@ -170,8 +256,20 @@ export function EvidencePage() {
 
       {/* Filter Tabs */}
       <div className="flex items-center gap-1 mb-4 overflow-x-auto pb-1">
-        <Filter size={14} className="mr-2 flex-shrink-0" style={{ color: "var(--topbar-subtitle)" }} />
-        {(["all", "pending", "reviewing", "approved", "rejected"] as FilterStatus[]).map((s) => (
+        <Filter
+          size={14}
+          className="mr-2 flex-shrink-0"
+          style={{ color: "var(--topbar-subtitle)" }}
+        />
+        {(
+          [
+            "all",
+            "pending",
+            "reviewing",
+            "approved",
+            "rejected",
+          ] as FilterStatus[]
+        ).map((s) => (
           <button
             key={s}
             onClick={() => setFilter(s)}
@@ -190,12 +288,24 @@ export function EvidencePage() {
       <div className="space-y-2">
         {filtered.length === 0 ? (
           <div className="text-center py-12">
-            <FileCheck size={40} className="mx-auto mb-3" style={{ color: "#CBD5E1" }} />
-            <p className="text-[14px] font-medium" style={{ color: "var(--topbar-title)" }}>
+            <FileCheck
+              size={40}
+              className="mx-auto mb-3"
+              style={{ color: "#CBD5E1" }}
+            />
+            <p
+              className="text-[14px] font-medium"
+              style={{ color: "var(--topbar-title)" }}
+            >
               No evidence found
             </p>
-            <p className="text-[12px]" style={{ color: "var(--topbar-subtitle)" }}>
-              {filter === "all" ? "Submit your first evidence to get started." : "No items match the selected filter."}
+            <p
+              className="text-[12px]"
+              style={{ color: "var(--topbar-subtitle)" }}
+            >
+              {filter === "all"
+                ? "Submit your first evidence to get started."
+                : "No items match the selected filter."}
             </p>
           </div>
         ) : (
@@ -205,26 +315,41 @@ export function EvidencePage() {
               <div
                 key={ev.id}
                 className="rounded-lg border p-4 transition-all hover:shadow-sm"
-                style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)" }}
+                style={{
+                  borderColor: "var(--card-border)",
+                  backgroundColor: "var(--card-bg)",
+                }}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span
                         className="text-[11px] font-semibold uppercase tracking-[1px] px-2 py-0.5 rounded"
-                        style={{ backgroundColor: colors.bg, color: colors.text }}
+                        style={{
+                          backgroundColor: colors.bg,
+                          color: colors.text,
+                        }}
                       >
                         {colors.label}
                       </span>
                     </div>
-                    <h4 className="text-[14px] font-semibold mb-1" style={{ color: "var(--topbar-title)" }}>
+                    <h4
+                      className="text-[14px] font-semibold mb-1"
+                      style={{ color: "var(--topbar-title)" }}
+                    >
                       {ev.title}
                     </h4>
-                    <p className="text-[12px] mb-2" style={{ color: "var(--topbar-subtitle)" }}>
+                    <p
+                      className="text-[12px] mb-2"
+                      style={{ color: "var(--topbar-subtitle)" }}
+                    >
                       Module: {ev.moduleTitle} • {ev.fileName} ({ev.fileSize})
                     </p>
                     <div className="flex items-center gap-2">
-                      <p className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>
+                      <p
+                        className="text-[11px]"
+                        style={{ color: "var(--topbar-subtitle)" }}
+                      >
                         Submitted: {ev.submittedAt}
                       </p>
                       {ev.fileContent && (

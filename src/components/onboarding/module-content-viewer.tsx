@@ -13,7 +13,11 @@ import {
   BookOpen,
 } from "lucide-react";
 import { useOnboarding } from "@/context/onboarding-context";
-import { getModuleById, getTrackById, moduleStatusColors } from "@/data/onboardingData";
+import {
+  getModuleById,
+  getTrackById,
+  moduleStatusColors,
+} from "@/data/onboardingData";
 import { IllustratedContentViewer } from "./illustrated-content-viewer";
 
 const contentTypeIcons: Record<string, typeof FileText> = {
@@ -35,8 +39,13 @@ interface ModuleContentViewerProps {
 
 export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
   const navigate = useNavigate();
-  const { completeStep, markModuleComplete, getStepsForModule, getModuleProgress } =
-    useOnboarding();
+  const {
+    completeStep,
+    markModuleComplete,
+    saveQuizResult,
+    getStepsForModule,
+    getModuleProgress,
+  } = useOnboarding();
 
   const mod = getModuleById(moduleId);
   const moduleSteps = getStepsForModule(moduleId);
@@ -59,7 +68,8 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
   }
 
   const track = getTrackById(mod.trackId);
-  const activeStep = moduleSteps.find((s) => s.id === activeStepId) || moduleSteps[0];
+  const activeStep =
+    moduleSteps.find((s) => s.id === activeStepId) || moduleSteps[0];
   const activeIndex = moduleSteps.findIndex((s) => s.id === activeStepId);
   const statusColors = moduleStatusColors[mod.status];
 
@@ -70,7 +80,9 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
     if (activeStep && !activeStep.completed) {
       completeStep(activeStep.id);
       // Auto-advance to next incomplete step
-      const nextIncomplete = moduleSteps.find((s, i) => i > activeIndex && !s.completed);
+      const nextIncomplete = moduleSteps.find(
+        (s, i) => i > activeIndex && !s.completed,
+      );
       if (nextIncomplete) {
         setActiveStepId(nextIncomplete.id);
       }
@@ -79,6 +91,20 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
 
   const handleMarkModuleComplete = () => {
     markModuleComplete(mod.id);
+  };
+
+  const handleQuizComplete = (
+    score: number,
+    totalQuestions: number,
+    passed: boolean,
+  ) => {
+    saveQuizResult({
+      moduleId,
+      score,
+      totalQuestions,
+      passed,
+      answers: [],
+    });
   };
 
   const goToPrevious = () => {
@@ -94,7 +120,9 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
   };
 
   const catColor = categoryColors[mod.category] || "#64748B";
-  const StepIcon = activeStep ? contentTypeIcons[activeStep.contentType] || FileText : FileText;
+  const StepIcon = activeStep
+    ? contentTypeIcons[activeStep.contentType] || FileText
+    : FileText;
 
   return (
     <div>
@@ -116,7 +144,10 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
           {track?.name || "Track"}
         </button>
         <span style={{ color: "var(--topbar-subtitle)" }}>/</span>
-        <span className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>
+        <span
+          className="text-[13px]"
+          style={{ color: "var(--topbar-subtitle)" }}
+        >
           {mod.title}
         </span>
       </div>
@@ -124,7 +155,10 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
       {/* Module Header */}
       <div
         className="rounded-lg border p-5 mb-5"
-        style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)" }}
+        style={{
+          borderColor: "var(--card-border)",
+          backgroundColor: "var(--card-bg)",
+        }}
       >
         <div className="flex items-start justify-between">
           <div className="flex-1">
@@ -137,20 +171,32 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
               </span>
               <span
                 className="text-[11px] font-semibold uppercase tracking-[1px] px-2 py-0.5 rounded"
-                style={{ backgroundColor: statusColors.bg, color: statusColors.text }}
+                style={{
+                  backgroundColor: statusColors.bg,
+                  color: statusColors.text,
+                }}
               >
                 {statusColors.label}
               </span>
             </div>
-            <h2 className="text-[20px] font-bold mb-1" style={{ color: "var(--topbar-title)" }}>
+            <h2
+              className="text-[20px] font-bold mb-1"
+              style={{ color: "var(--topbar-title)" }}
+            >
               {mod.title}
             </h2>
-            <p className="text-[13px]" style={{ color: "var(--topbar-subtitle)" }}>
+            <p
+              className="text-[13px]"
+              style={{ color: "var(--topbar-subtitle)" }}
+            >
               {mod.description}
             </p>
           </div>
           <div className="text-right ml-4">
-            <span className="text-[28px] font-bold" style={{ color: "#245C5A" }}>
+            <span
+              className="text-[28px] font-bold"
+              style={{ color: "#245C5A" }}
+            >
               {progress.percentage}%
             </span>
           </div>
@@ -161,11 +207,15 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
               className="h-full rounded-full transition-all duration-700"
               style={{
                 width: `${progress.percentage}%`,
-                backgroundColor: progress.percentage === 100 ? "#059669" : "#245C5A",
+                backgroundColor:
+                  progress.percentage === 100 ? "#059669" : "#245C5A",
               }}
             />
           </div>
-          <span className="text-[12px] font-medium flex-shrink-0" style={{ color: "var(--topbar-title)" }}>
+          <span
+            className="text-[12px] font-medium flex-shrink-0"
+            style={{ color: "var(--topbar-title)" }}
+          >
             {progress.completed}/{progress.total} steps
           </span>
         </div>
@@ -176,23 +226,45 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
         <div className="w-72 flex-shrink-0">
           <div
             className="rounded-lg border overflow-hidden"
-            style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)" }}
+            style={{
+              borderColor: "var(--card-border)",
+              backgroundColor: "var(--card-bg)",
+            }}
           >
-            <div className="p-4 border-b" style={{ borderColor: "var(--card-border)" }}>
-              <h4 className="text-[13px] font-semibold flex items-center gap-2" style={{ color: "var(--topbar-title)" }}>
+            <div
+              className="p-4 border-b"
+              style={{ borderColor: "var(--card-border)" }}
+            >
+              <h4
+                className="text-[13px] font-semibold flex items-center gap-2"
+                style={{ color: "var(--topbar-title)" }}
+              >
                 <BookOpen size={15} style={{ color: "#245C5A" }} />
                 Module Contents
               </h4>
-              <p className="text-[11px] mt-1" style={{ color: "var(--topbar-subtitle)" }}>
-                {moduleSteps.length} sections • {Math.round(moduleSteps.reduce((acc, s) => acc + s.durationMinutes, 0) / 60 * 10) / 10}h total
+              <p
+                className="text-[11px] mt-1"
+                style={{ color: "var(--topbar-subtitle)" }}
+              >
+                {moduleSteps.length} sections •{" "}
+                {Math.round(
+                  (moduleSteps.reduce((acc, s) => acc + s.durationMinutes, 0) /
+                    60) *
+                    10,
+                ) / 10}
+                h total
               </p>
             </div>
 
-            <div className="divide-y" style={{ borderColor: "var(--card-border)" }}>
+            <div
+              className="divide-y"
+              style={{ borderColor: "var(--card-border)" }}
+            >
               {moduleSteps.map((step, index) => {
                 const isActive = step.id === activeStepId;
                 const isLocked = !step.completed && index > completedCount;
-                const StepTypeIcon = contentTypeIcons[step.contentType] || FileText;
+                const StepTypeIcon =
+                  contentTypeIcons[step.contentType] || FileText;
 
                 return (
                   <button
@@ -206,27 +278,53 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
                     onClick={() => !isLocked && setActiveStepId(step.id)}
                   >
                     {step.completed ? (
-                      <CheckCircle size={16} style={{ color: "#059669" }} className="flex-shrink-0" />
+                      <CheckCircle
+                        size={16}
+                        style={{ color: "#059669" }}
+                        className="flex-shrink-0"
+                      />
                     ) : isLocked ? (
-                      <Lock size={16} style={{ color: "#94A3B8" }} className="flex-shrink-0" />
+                      <Lock
+                        size={16}
+                        style={{ color: "#94A3B8" }}
+                        className="flex-shrink-0"
+                      />
                     ) : (
-                      <StepTypeIcon size={16} style={{ color: isActive ? "#245C5A" : "#64748B" }} className="flex-shrink-0" />
+                      <StepTypeIcon
+                        size={16}
+                        style={{ color: isActive ? "#245C5A" : "#64748B" }}
+                        className="flex-shrink-0"
+                      />
                     )}
                     <div className="flex-1 min-w-0">
                       <p
                         className="text-[13px] font-medium truncate"
-                        style={{ color: isActive ? "#245C5A" : "var(--topbar-title)" }}
+                        style={{
+                          color: isActive ? "#245C5A" : "var(--topbar-title)",
+                        }}
                       >
                         {index + 1}. {step.title}
                       </p>
                       <div className="flex items-center gap-2">
-                        <Clock size={11} style={{ color: "var(--topbar-subtitle)" }} />
-                        <p className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>
+                        <Clock
+                          size={11}
+                          style={{ color: "var(--topbar-subtitle)" }}
+                        />
+                        <p
+                          className="text-[11px]"
+                          style={{ color: "var(--topbar-subtitle)" }}
+                        >
                           {step.durationMinutes} min
                         </p>
                       </div>
                     </div>
-                    {isActive && <ChevronRight size={14} style={{ color: "#245C5A" }} className="flex-shrink-0" />}
+                    {isActive && (
+                      <ChevronRight
+                        size={14}
+                        style={{ color: "#245C5A" }}
+                        className="flex-shrink-0"
+                      />
+                    )}
                   </button>
                 );
               })}
@@ -239,8 +337,15 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
               className="mt-3 p-3 rounded-lg border text-center"
               style={{ borderColor: "#059669", backgroundColor: "#ECFDF5" }}
             >
-              <CheckCircle size={20} style={{ color: "#059669" }} className="mx-auto mb-1" />
-              <p className="text-[12px] font-semibold" style={{ color: "#065F46" }}>
+              <CheckCircle
+                size={20}
+                style={{ color: "#059669" }}
+                className="mx-auto mb-1"
+              />
+              <p
+                className="text-[12px] font-semibold"
+                style={{ color: "#065F46" }}
+              >
                 Module Complete
               </p>
             </div>
@@ -252,18 +357,30 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
           {activeStep && (
             <div
               className="rounded-lg border"
-              style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)" }}
+              style={{
+                borderColor: "var(--card-border)",
+                backgroundColor: "var(--card-bg)",
+              }}
             >
               {/* Content Header */}
-              <div className="p-6 border-b" style={{ borderColor: "var(--card-border)" }}>
+              <div
+                className="p-6 border-b"
+                style={{ borderColor: "var(--card-border)" }}
+              >
                 <div className="flex items-center gap-2 mb-3">
                   <span
                     className="text-[11px] font-semibold uppercase tracking-[1px] px-2 py-0.5 rounded"
-                    style={{ backgroundColor: catColor + "15", color: catColor }}
+                    style={{
+                      backgroundColor: catColor + "15",
+                      color: catColor,
+                    }}
                   >
                     {mod.category}
                   </span>
-                  <span className="text-[11px]" style={{ color: "var(--topbar-subtitle)" }}>
+                  <span
+                    className="text-[11px]"
+                    style={{ color: "var(--topbar-subtitle)" }}
+                  >
                     Section {activeIndex + 1} of {moduleSteps.length}
                   </span>
                 </div>
@@ -279,15 +396,28 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
                 </div>
 
                 <div className="flex items-center gap-4">
-                  <span className="text-[12px] flex items-center gap-1" style={{ color: "var(--topbar-subtitle)" }}>
+                  <span
+                    className="text-[12px] flex items-center gap-1"
+                    style={{ color: "var(--topbar-subtitle)" }}
+                  >
                     <Clock size={13} />
                     {activeStep.durationMinutes} minutes
                   </span>
                   <span
                     className="text-[11px] font-medium px-2 py-0.5 rounded capitalize"
                     style={{
-                      backgroundColor: activeStep.contentType === "quiz" ? "#FEF3C7" : activeStep.contentType === "interactive" ? "#DBEAFE" : "#F1F5F9",
-                      color: activeStep.contentType === "quiz" ? "#92400E" : activeStep.contentType === "interactive" ? "#1E40AF" : "#475569",
+                      backgroundColor:
+                        activeStep.contentType === "quiz"
+                          ? "#FEF3C7"
+                          : activeStep.contentType === "interactive"
+                            ? "#DBEAFE"
+                            : "#F1F5F9",
+                      color:
+                        activeStep.contentType === "quiz"
+                          ? "#92400E"
+                          : activeStep.contentType === "interactive"
+                            ? "#1E40AF"
+                            : "#475569",
                     }}
                   >
                     {activeStep.contentType}
@@ -300,7 +430,7 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
                 <IllustratedContentViewer
                   step={activeStep}
                   moduleId={moduleId}
-                  onComplete={handleMarkComplete}
+                  onQuizComplete={handleQuizComplete}
                   sectionNumber={activeIndex + 1}
                   totalSections={moduleSteps.length}
                 />
@@ -315,14 +445,20 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
                   onClick={goToPrevious}
                   disabled={activeIndex === 0}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-medium border transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-sm"
-                  style={{ borderColor: "var(--card-border)", color: "var(--topbar-title)" }}
+                  style={{
+                    borderColor: "var(--card-border)",
+                    color: "var(--topbar-title)",
+                  }}
                 >
                   <ArrowLeft size={14} />
                   Previous
                 </button>
 
                 {activeStep.completed ? (
-                  <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-medium" style={{ color: "#059669" }}>
+                  <div
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-medium"
+                    style={{ color: "#059669" }}
+                  >
                     <CheckCircle size={16} />
                     Completed
                   </div>
@@ -350,7 +486,10 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
                   onClick={goToNext}
                   disabled={activeIndex === moduleSteps.length - 1}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-medium border transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-sm"
-                  style={{ borderColor: "var(--card-border)", color: "var(--topbar-title)" }}
+                  style={{
+                    borderColor: "var(--card-border)",
+                    color: "var(--topbar-title)",
+                  }}
                 >
                   Next
                   <ArrowRight size={14} />
@@ -363,5 +502,3 @@ export function ModuleContentViewer({ moduleId }: ModuleContentViewerProps) {
     </div>
   );
 }
-
-

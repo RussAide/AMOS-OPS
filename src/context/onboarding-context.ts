@@ -1,9 +1,13 @@
 import {
   createContext,
   createElement,
+  Fragment,
   useContext,
   useState,
   useCallback,
+  useEffect,
+  useMemo,
+  useRef,
   type ReactNode,
 } from "react";
 import {
@@ -21,6 +25,7 @@ import {
 } from "@/data/onboardingData";
 import { runtimeConfig } from "@/config/runtime";
 import { useAuth } from "@/hooks/use-auth";
+import { trpc } from "@/providers/trpc";
 
 export function mayUseIsolatedFixtures(
   evaluationMode: boolean,
@@ -38,6 +43,199 @@ export function resolveOnboardingFixtures<T>(
   return fixturesAllowed ? [...fixtures] : [];
 }
 
+interface OnboardingFixtureSet {
+  tracks: readonly Track[];
+  modules: readonly Module[];
+  steps: readonly Step[];
+  employees: readonly Employee[];
+  evidence: readonly Evidence[];
+}
+
+export interface TrainingProgressSnapshot {
+  moduleId: string;
+  completedSteps: number;
+  status: string;
+  quizScore: number | null;
+  quizPassed: boolean;
+}
+
+interface TrainingProgressUpdate {
+  moduleId: string;
+  completedSteps?: number;
+  status?: "available" | "in-progress" | "completed";
+  quizScore?: number;
+  quizPassed?: boolean;
+}
+
+interface TrainingProgressPersistence {
+  rows: TrainingProgressSnapshot[] | undefined;
+  isLoading: boolean;
+  loadError: string | null;
+  save: (update: TrainingProgressUpdate) => Promise<TrainingProgressSnapshot>;
+}
+
+interface HydratedTrainingPractice {
+  tracks: Track[];
+  modules: Module[];
+  steps: Step[];
+  quizResults: QuizResult[];
+}
+
+/**
+ * Production Training is a practice workspace, not an authoritative training
+ * record. It must never inherit the pre-completed demonstration state used by
+ * the evaluation deployment.
+ */
+export function createTrainingPracticeFixtures(
+  fixtures: OnboardingFixtureSet,
+): Omit<OnboardingFixtureSet, "employees" | "evidence"> & {
+  employees: Employee[];
+  evidence: Evidence[];
+} {
+  const trainingTracks = fixtures.tracks.filter(
+    (track) => track.id === "universal-orientation",
+  );
+  const trainingModules = fixtures.modules.filter(
+    (module) => module.trackId === "universal-orientation",
+  );
+  const trainingModuleIds = new Set(trainingModules.map((module) => module.id));
+  return {
+    tracks: trainingTracks.map((track) => ({
+      ...track,
+      completedModules: 0,
+      clearanceStatus: "pending",
+    })),
+    modules: trainingModules.map((module) => ({
+      ...module,
+      completedSteps: 0,
+      status: "available",
+    })),
+    steps: fixtures.steps
+      .filter((step) => trainingModuleIds.has(step.moduleId))
+      .map((step) => ({ ...step, completed: false })),
+    // Staff-clearance and evidence fixtures look like official records. Keep
+    // them out of the live Training workspace until durable, audited storage is
+    // implemented and approved.
+    employees: [],
+    evidence: [],
+  };
+}
+
+function normalizeSavedModuleStatus(
+  module: Module,
+  snapshot: TrainingProgressSnapshot,
+  completedSteps: number,
+): Module["status"] {
+  if (snapshot.status === "completed" && completedSteps === module.stepCount) {
+    return "completed";
+  }
+  return completedSteps > 0 ? "in-progress" : "available";
+}
+
+/**
+ * Applies server-confirmed progress to the synthetic universal-orientation
+ * curriculum. Rows for any other track are ignored, and values are clamped to
+ * the local approved module contract.
+ */
+export function hydrateTrainingPracticeProgress(
+  fixtures: Pick<OnboardingFixtureSet, "tracks" | "modules" | "steps">,
+  snapshots: readonly TrainingProgressSnapshot[],
+): HydratedTrainingPractice {
+  const snapshotByModule = new Map(
+    snapshots.map((snapshot) => [snapshot.moduleId, snapshot]),
+  );
+  const modules = fixtures.modules.map((module) => {
+    const snapshot = snapshotByModule.get(module.id);
+    if (!snapshot) return { ...module };
+    const completedSteps = Math.max(
+      0,
+      Math.min(module.stepCount, snapshot.completedSteps),
+    );
+    return {
+      ...module,
+      completedSteps,
+      status: normalizeSavedModuleStatus(module, snapshot, completedSteps),
+    };
+  });
+  const moduleById = new Map(modules.map((module) => [module.id, module]));
+  const stepsByModule = new Map<string, Step[]>();
+  for (const step of fixtures.steps) {
+    const moduleSteps = stepsByModule.get(step.moduleId) ?? [];
+    moduleSteps.push(step);
+    stepsByModule.set(step.moduleId, moduleSteps);
+  }
+  const steps = fixtures.steps.map((step) => {
+    const module = moduleById.get(step.moduleId);
+    const moduleSteps = stepsByModule.get(step.moduleId) ?? [];
+    const stepIndex = moduleSteps.findIndex(
+      (candidate) => candidate.id === step.id,
+    );
+    return {
+      ...step,
+      completed:
+        module !== undefined &&
+        stepIndex >= 0 &&
+        stepIndex < module.completedSteps,
+    };
+  });
+  const tracks = fixtures.tracks.map((track) => {
+    const trackModules = modules.filter(
+      (module) => module.trackId === track.id,
+    );
+    const completedModules = trackModules.filter(
+      (module) => module.status === "completed",
+    ).length;
+    return {
+      ...track,
+      completedModules,
+      clearanceStatus: getTrackClearance(track, completedModules),
+    };
+  });
+  const quizResults = modules.flatMap((module) => {
+    const snapshot = snapshotByModule.get(module.id);
+    if (!snapshot || snapshot.quizScore === null) return [];
+    return [
+      {
+        moduleId: module.id,
+        score: snapshot.quizScore,
+        totalQuestions: 100,
+        passed: snapshot.quizPassed,
+        answers: [],
+      },
+    ];
+  });
+
+  return { tracks, modules, steps, quizResults };
+}
+
+export function createStepProgressUpdate(
+  modules: readonly Module[],
+  steps: readonly Step[],
+  stepId: string,
+  completed: boolean,
+): TrainingProgressUpdate | null {
+  const targetStep = steps.find((step) => step.id === stepId);
+  if (!targetStep) return null;
+  const module = modules.find(
+    (candidate) => candidate.id === targetStep.moduleId,
+  );
+  if (!module) return null;
+  const moduleSteps = steps.filter((step) => step.moduleId === module.id);
+  const completedSteps = moduleSteps.filter((step) =>
+    step.id === stepId ? completed : step.completed,
+  ).length;
+  return {
+    moduleId: module.id,
+    completedSteps,
+    status:
+      completedSteps === module.stepCount
+        ? "completed"
+        : completedSteps > 0
+          ? "in-progress"
+          : "available",
+  };
+}
+
 interface OnboardingState {
   // Data
   tracks: Track[];
@@ -47,6 +245,9 @@ interface OnboardingState {
   evidence: Evidence[];
   quizResults: QuizResult[];
   isUnavailable: boolean;
+  progressState:
+    "local-practice" | "loading" | "authoritative" | "saving" | "unavailable";
+  progressError: string | null;
 
   // Navigation
   selectTrack: (trackId: string | null) => void;
@@ -104,6 +305,7 @@ export function OnboardingProvider({
 }: OnboardingProviderProps) {
   if (workspace !== undefined) {
     return createElement(OnboardingStateProvider, {
+      key: workspace,
       workspace,
       children,
     });
@@ -117,38 +319,201 @@ function AuthenticatedOnboardingProvider({
   children: ReactNode;
 }) {
   const { workspace } = useAuth();
-  return createElement(OnboardingStateProvider, { workspace, children });
+  if (workspace === "training" && !runtimeConfig.evaluationMode) {
+    return createElement(AuthoritativeTrainingOnboardingProvider, {
+      key: workspace,
+      children,
+    });
+  }
+  return createElement(OnboardingStateProvider, {
+    key: workspace,
+    workspace,
+    children,
+  });
+}
+
+function AuthoritativeTrainingOnboardingProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const progressQuery = trpc.training.listMyProgress.useQuery(undefined, {
+    retry: false,
+  });
+  const progressMutation = trpc.training.updateMyProgress.useMutation();
+  const mutateProgress = progressMutation.mutateAsync;
+  const save = useCallback(
+    async (update: TrainingProgressUpdate) => {
+      const saved = await mutateProgress(update);
+      if (!saved) {
+        throw new Error(
+          "The Training progress service returned no saved record.",
+        );
+      }
+      return saved;
+    },
+    [mutateProgress],
+  );
+  const progressPersistence = useMemo<TrainingProgressPersistence>(
+    () => ({
+      rows: progressQuery.data,
+      isLoading: progressQuery.isLoading,
+      loadError: progressQuery.error?.message ?? null,
+      save,
+    }),
+    [
+      progressQuery.data,
+      progressQuery.error?.message,
+      progressQuery.isLoading,
+      save,
+    ],
+  );
+
+  return createElement(OnboardingStateProvider, {
+    key: "training-authoritative",
+    workspace: "training",
+    progressPersistence,
+    children,
+  });
 }
 
 function OnboardingStateProvider({
   children,
   workspace,
+  progressPersistence,
 }: {
   children: ReactNode;
   workspace: "training" | "operational";
+  progressPersistence?: TrainingProgressPersistence;
 }) {
   const fixturesAllowed = mayUseOnboardingFixtures(
     runtimeConfig.evaluationMode,
     workspace,
   );
+  const trainingPracticeFixtures = useMemo(
+    () =>
+      workspace === "training" && !runtimeConfig.evaluationMode
+        ? createTrainingPracticeFixtures({
+            tracks: initialTracks,
+            modules: initialModules,
+            steps: initialSteps,
+            employees: initialEmployees,
+            evidence: initialEvidence,
+          })
+        : null,
+    [workspace],
+  );
   const [tracks, setTracks] = useState<Track[]>(() =>
-    resolveOnboardingFixtures(initialTracks, fixturesAllowed),
+    trainingPracticeFixtures
+      ? [...trainingPracticeFixtures.tracks]
+      : resolveOnboardingFixtures(initialTracks, fixturesAllowed),
   );
   const [modules, setModules] = useState<Module[]>(() =>
-    resolveOnboardingFixtures(initialModules, fixturesAllowed),
+    trainingPracticeFixtures
+      ? [...trainingPracticeFixtures.modules]
+      : resolveOnboardingFixtures(initialModules, fixturesAllowed),
   );
   const [steps, setSteps] = useState<Step[]>(() =>
-    resolveOnboardingFixtures(initialSteps, fixturesAllowed),
+    trainingPracticeFixtures
+      ? [...trainingPracticeFixtures.steps]
+      : resolveOnboardingFixtures(initialSteps, fixturesAllowed),
   );
   const [employees, setEmployees] = useState<Employee[]>(() =>
-    resolveOnboardingFixtures(initialEmployees, fixturesAllowed),
+    trainingPracticeFixtures
+      ? trainingPracticeFixtures.employees
+      : resolveOnboardingFixtures(initialEmployees, fixturesAllowed),
   );
   const [evidence, setEvidence] = useState<Evidence[]>(() =>
-    resolveOnboardingFixtures(initialEvidence, fixturesAllowed),
+    trainingPracticeFixtures
+      ? trainingPracticeFixtures.evidence
+      : resolveOnboardingFixtures(initialEvidence, fixturesAllowed),
   );
   const [quizResults, setQuizResults] = useState<QuizResult[]>([]);
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
+  const [authoritativeProgressRows, setAuthoritativeProgressRows] = useState<
+    TrainingProgressSnapshot[]
+  >([]);
+  const [progressSaveError, setProgressSaveError] = useState<string | null>(
+    null,
+  );
+  const [isProgressSaving, setIsProgressSaving] = useState(false);
+  const progressSaveInFlight = useRef(false);
+
+  useEffect(() => {
+    if (
+      !progressPersistence ||
+      progressPersistence.isLoading ||
+      progressPersistence.loadError ||
+      !progressPersistence.rows
+    ) {
+      return;
+    }
+    // Hydrate only after the authoritative query has settled; this state is a
+    // deliberate mirror of an external query cache.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAuthoritativeProgressRows(progressPersistence.rows);
+    setProgressSaveError(null);
+  }, [progressPersistence]);
+
+  useEffect(() => {
+    if (!trainingPracticeFixtures || !progressPersistence) return;
+    const hydrated = hydrateTrainingPracticeProgress(
+      trainingPracticeFixtures,
+      authoritativeProgressRows,
+    );
+    // Apply one consistent server-confirmed snapshot across the related view
+    // models. The effect is the synchronization boundary with remote state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTracks(hydrated.tracks);
+    setModules(hydrated.modules);
+    setSteps(hydrated.steps);
+    setQuizResults(hydrated.quizResults);
+  }, [
+    authoritativeProgressRows,
+    progressPersistence,
+    trainingPracticeFixtures,
+  ]);
+
+  const persistAuthoritativeProgress = useCallback(
+    async (update: TrainingProgressUpdate) => {
+      if (!progressPersistence) return false;
+      if (
+        progressPersistence.isLoading ||
+        progressPersistence.loadError ||
+        progressSaveInFlight.current
+      ) {
+        setProgressSaveError(
+          progressPersistence.loadError ??
+            "Training progress is not ready to save. Wait for the current operation and try again.",
+        );
+        return false;
+      }
+
+      progressSaveInFlight.current = true;
+      setIsProgressSaving(true);
+      setProgressSaveError(null);
+      try {
+        const saved = await progressPersistence.save(update);
+        setAuthoritativeProgressRows((current) => [
+          ...current.filter((row) => row.moduleId !== saved.moduleId),
+          saved,
+        ]);
+        return true;
+      } catch (error) {
+        setProgressSaveError(
+          error instanceof Error
+            ? error.message
+            : "Training progress could not be saved. No completion was recorded.",
+        );
+        return false;
+      } finally {
+        progressSaveInFlight.current = false;
+        setIsProgressSaving(false);
+      }
+    },
+    [progressPersistence],
+  );
 
   const selectTrack = useCallback((trackId: string | null) => {
     setSelectedTrackId(trackId);
@@ -162,6 +527,11 @@ function OnboardingStateProvider({
   const completeStep = useCallback(
     (stepId: string) => {
       if (!fixturesAllowed) return;
+      if (progressPersistence) {
+        const update = createStepProgressUpdate(modules, steps, stepId, true);
+        if (update) void persistAuthoritativeProgress(update);
+        return;
+      }
       setSteps((prev) =>
         prev.map((s) => (s.id === stepId ? { ...s, completed: true } : s)),
       );
@@ -186,12 +556,23 @@ function OnboardingStateProvider({
         return currentSteps;
       });
     },
-    [fixturesAllowed],
+    [
+      fixturesAllowed,
+      modules,
+      persistAuthoritativeProgress,
+      progressPersistence,
+      steps,
+    ],
   );
 
   const uncompleteStep = useCallback(
     (stepId: string) => {
       if (!fixturesAllowed) return;
+      if (progressPersistence) {
+        const update = createStepProgressUpdate(modules, steps, stepId, false);
+        if (update) void persistAuthoritativeProgress(update);
+        return;
+      }
       setSteps((prev) =>
         prev.map((s) => (s.id === stepId ? { ...s, completed: false } : s)),
       );
@@ -216,12 +597,29 @@ function OnboardingStateProvider({
         return currentSteps;
       });
     },
-    [fixturesAllowed],
+    [
+      fixturesAllowed,
+      modules,
+      persistAuthoritativeProgress,
+      progressPersistence,
+      steps,
+    ],
   );
 
   const markModuleComplete = useCallback(
     (moduleId: string) => {
       if (!fixturesAllowed) return;
+      if (progressPersistence) {
+        const module = modules.find((candidate) => candidate.id === moduleId);
+        if (module) {
+          void persistAuthoritativeProgress({
+            moduleId,
+            completedSteps: module.stepCount,
+            status: "completed",
+          });
+        }
+        return;
+      }
       setModules((prev) =>
         prev.map((m) =>
           m.id === moduleId
@@ -261,13 +659,42 @@ function OnboardingStateProvider({
         return currentModules;
       });
     },
-    [fixturesAllowed],
+    [
+      fixturesAllowed,
+      modules,
+      persistAuthoritativeProgress,
+      progressPersistence,
+    ],
   );
 
   // Quiz actions
   const saveQuizResult = useCallback(
     (result: QuizResult) => {
       if (!fixturesAllowed) return;
+      if (progressPersistence) {
+        const module = modules.find(
+          (candidate) => candidate.id === result.moduleId,
+        );
+        if (!module) return;
+        const quizScore =
+          result.totalQuestions > 0
+            ? Math.round((result.score / result.totalQuestions) * 100)
+            : 0;
+        void persistAuthoritativeProgress({
+          moduleId: result.moduleId,
+          completedSteps: result.passed
+            ? module.stepCount
+            : module.completedSteps,
+          status: result.passed
+            ? "completed"
+            : module.completedSteps > 0
+              ? "in-progress"
+              : "available",
+          quizScore,
+          quizPassed: result.passed,
+        });
+        return;
+      }
       setQuizResults((prev) => {
         const filtered = prev.filter((r) => r.moduleId !== result.moduleId);
         return [...filtered, result];
@@ -315,7 +742,12 @@ function OnboardingStateProvider({
         });
       }
     },
-    [fixturesAllowed],
+    [
+      fixturesAllowed,
+      modules,
+      persistAuthoritativeProgress,
+      progressPersistence,
+    ],
   );
 
   const getQuizResultForModule = useCallback(
@@ -397,7 +829,30 @@ function OnboardingStateProvider({
     [modules],
   );
 
-  return createElement(
+  const progressError =
+    progressPersistence?.loadError ?? progressSaveError ?? null;
+  const progressState: OnboardingState["progressState"] = !fixturesAllowed
+    ? "unavailable"
+    : !progressPersistence
+      ? "local-practice"
+      : progressError
+        ? "unavailable"
+        : progressPersistence.isLoading
+          ? "loading"
+          : isProgressSaving
+            ? "saving"
+            : "authoritative";
+  const isUnavailable =
+    !fixturesAllowed ||
+    Boolean(
+      progressPersistence &&
+      (progressPersistence.isLoading || progressError !== null),
+    );
+
+  /* eslint-disable react-hooks/refs -- Context consumers receive callbacks that
+   * read the in-flight ref only when invoked; createElement does not invoke them
+   * during render. This avoids duplicate authoritative writes on rapid input. */
+  const provider = createElement(
     OnboardingContext.Provider,
     {
       value: {
@@ -407,7 +862,9 @@ function OnboardingStateProvider({
         employees,
         evidence,
         quizResults,
-        isUnavailable: !fixturesAllowed,
+        isUnavailable,
+        progressState,
+        progressError,
         selectedTrackId,
         selectedModuleId,
         selectTrack,
@@ -428,6 +885,36 @@ function OnboardingStateProvider({
     },
     children,
   );
+  /* eslint-enable react-hooks/refs */
+
+  if (
+    !progressPersistence ||
+    (!progressPersistence.isLoading && !progressError)
+  ) {
+    return provider;
+  }
+
+  const notice = progressError
+    ? createElement(
+        "div",
+        {
+          role: "alert",
+          className:
+            "border-b border-red-300 bg-red-50 px-4 py-2 text-center text-xs font-semibold text-red-800",
+        },
+        `Training progress unavailable: ${progressError} No completion has been recorded.`,
+      )
+    : createElement(
+        "div",
+        {
+          role: "status",
+          className:
+            "border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-xs font-semibold text-amber-900",
+        },
+        "Verifying your saved Training progress. Completion controls remain unavailable until this check finishes.",
+      );
+
+  return createElement(Fragment, null, notice, provider);
 }
 
 function getModuleStatus(m: Module, completedCount: number): Module["status"] {

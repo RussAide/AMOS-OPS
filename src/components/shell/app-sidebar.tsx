@@ -55,7 +55,7 @@ export function AppSidebar({ mobile = false, onNavigate }: AppSidebarProps) {
     () => new Set(),
   );
 
-  const runtimeMode = workspace === "training" ? "demo" : "production";
+  const runtimeMode = workspace === "training" ? "training" : "production";
   const navigation = useMemo(
     () => getSidebarNavigation(currentRole, runtimeMode),
     [currentRole, runtimeMode],
@@ -76,6 +76,14 @@ export function AppSidebar({ mobile = false, onNavigate }: AppSidebarProps) {
   ];
 
   const visibleBottomItems = bottomNavItems.filter((item) => {
+    if (
+      workspace === "training" &&
+      (item.section === "ADMIN" ||
+        item.href.startsWith("/admin") ||
+        item.href === "/personas")
+    ) {
+      return false;
+    }
     if (item.href === "/admin/settings") return permissions.canViewAdmin;
     if (item.href === "/personas") return permissions.canEditAdmin;
     return true;

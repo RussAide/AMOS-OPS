@@ -1282,7 +1282,7 @@ export function createIdentityService(
     role: string;
     identityType: IdentityType;
     sponsorName: string;
-    accessExpiresAt?: string | null;
+    accessExpiresAt: string;
     rationale: string;
   }): Promise<{
     success: true;
@@ -1305,9 +1305,11 @@ export function createIdentityService(
     }
     const roleDefinition = canonicalRole(input.role);
     const now = clock();
+    const accessExpiresAt = new Date(input.accessExpiresAt);
     if (
-      input.accessExpiresAt &&
-      new Date(input.accessExpiresAt).getTime() <= now.getTime()
+      !input.accessExpiresAt ||
+      Number.isNaN(accessExpiresAt.getTime()) ||
+      accessExpiresAt.getTime() <= now.getTime()
     ) {
       throw new IdentityError(
         "ACCESS_EXPIRY_INVALID",
@@ -1327,10 +1329,10 @@ export function createIdentityService(
         .prepare(
           `INSERT INTO users
            (id, email, password_hash, first_name, last_name, role, department,
-            is_active, must_change_password, mfa_enabled, access_status,
+            is_active, must_change_password, mfa_enabled, mfa_method, access_status,
             identity_type, training_access, sponsor_name, access_expires_at,
             next_access_review_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 'training', ?, 1, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 'totp', 'training', ?, 1, ?, ?, ?, ?, ?)`,
         )
         .run(
           userId,
@@ -1342,7 +1344,7 @@ export function createIdentityService(
           roleDefinition.department,
           input.identityType,
           input.sponsorName.trim(),
-          input.accessExpiresAt ?? null,
+          accessExpiresAt.toISOString(),
           nextReviewAt,
           nowIso(now),
           nowIso(now),
