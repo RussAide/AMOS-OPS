@@ -30,6 +30,22 @@ jobs:
     timeout-minutes: 45
     environment: amos-staging
     steps:
+      - name: Preflight deployment credentials
+        shell: bash
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          missing=()
+          test -n "$RAILWAY_TOKEN" || missing+=(RAILWAY_TOKEN)
+          test -n "$NETLIFY_AUTH_TOKEN" || missing+=(NETLIFY_AUTH_TOKEN)
+          test -n "$NETLIFY_SITE_ID" || missing+=(NETLIFY_SITE_ID)
+          if (( ${#missing[@]} )); then
+            printf 'Missing amos-staging GitHub environment credential: %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+
       - name: Check out the exact hotfix candidate
         uses: actions/checkout@v4
         with:
