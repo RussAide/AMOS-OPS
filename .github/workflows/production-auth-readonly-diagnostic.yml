@@ -1,0 +1,109 @@
+name: AMOS-OPS Production Auth Read-Only Diagnostic
+
+on:
+  push:
+    branches:
+      - agent/production-auth-diagnostic-20260718
+
+permissions:
+  contents: read
+
+concurrency:
+  group: amos-ops-production-auth-diagnostic
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: ceb5d8ed175fdd0daf0e13e05076130437f2604d
+  RELEASE_ID: AMOS-OPS-ROUTE-HOTFIX-20260718-ceb5d8e
+  PRODUCTION_API_ORIGIN: https://amos-ops-production.up.railway.app
+  PROD_RAILWAY_PROJECT_ID: f9357da4-00c4-4f25-a52d-5c53f6ce07dc
+  PROD_RAILWAY_ENVIRONMENT_ID: 7c22d214-abac-478f-983b-1418a7cbac77
+  PROD_RAILWAY_SERVICE_ID: 8fdf6d7e-c7ba-412d-95f0-8b980ba612ba
+
+jobs:
+  diagnose-production-auth:
+    name: Inspect Production identity prerequisites without mutation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: amos-production
+    steps:
+      - name: Preflight read-only Railway access
+        shell: bash
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          test -n "$RAILWAY_TOKEN"
+
+      - name: Install pinned Railway CLI
+        run: npm install --global @railway/cli@5.27.0
+
+      - name: Verify exact live release and database readiness
+        shell: bash
+        run: |
+          runtime="$(curl --fail --silent --show-error --max-time 30 "$PRODUCTION_API_ORIGIN/api/runtime-config")"
+          jq --exit-status \
+            --arg build "$CANDIDATE_SHA" \
+            --arg release "$RELEASE_ID" \
+            '.buildId == $build
+             and .productionReleaseId == $release
+             and .appEnvironment == "production"
+             and .deploymentPosture == "live"
+             and .productionReleaseAuthorized == true
+             and .reviewDeployment == false
+             and .safeguards.productionDataAllowed == true' \
+            <<<"$runtime" >/dev/null
+
+          health="$(curl --fail --silent --show-error --max-time 30 "$PRODUCTION_API_ORIGIN/api/health")"
+          jq --exit-status '.ready == true and .checks.database.status == "ok"' \
+            <<<"$health" >/dev/null
+
+      - name: Inspect identity and persistence configuration without exposing values
+        id: identity-config
+        shell: bash
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          variables_file="$(mktemp)"
+          railway variable list \
+            --project "$PROD_RAILWAY_PROJECT_ID" \
+            --environment "$PROD_RAILWAY_ENVIRONMENT_ID" \
+            --service "$PROD_RAILWAY_SERVICE_ID" \
+            --json >"$variables_file"
+          chmod 600 "$variables_file"
+
+          jq --exit-status \
+            --arg build "$CANDIDATE_SHA" \
+            --arg release "$RELEASE_ID" \
+            '
+              .AMOS_BUILD_ID == $build
+              and .AMOS_PRODUCTION_RELEASE_ID == $release
+              and .PERSISTENT_ROOT == "/app/persistent"
+              and .DATABASE_PATH == "/app/persistent/data/production/amos-ops.db"
+              and .UPLOAD_PATH == "/app/persistent/uploads/production"
+              and .RAILWAY_VOLUME_MOUNT_PATH == "/app/persistent"
+              and .AMOS_INITIAL_ADMIN_EMAIL == "e.o.aideyan@adobicarebhc.com"
+              and (.AMOS_INITIAL_ADMIN_FIRST_NAME | type == "string" and length > 0)
+              and (.AMOS_INITIAL_ADMIN_LAST_NAME | type == "string" and length > 0)
+              and (.AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH | test("^[a-f0-9]{64}$"))
+              and (.AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT | type == "string" and length > 0)
+              and (.APP_SECRET | type == "string" and length >= 32)
+              and (.JWT_SECRET | type == "string" and length >= 32)
+              and .ALLOW_SELF_REGISTRATION == "false"
+            ' "$variables_file" >/dev/null
+
+          expiry="$(jq --exit-status --raw-output '.AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT' "$variables_file")"
+          expiry_epoch="$(date --date="$expiry" +%s)"
+          now_epoch="$(date +%s)"
+          test "$expiry_epoch" -gt "$now_epoch"
+
+          rm -f "$variables_file"
+
+          {
+            echo "### Production authentication diagnostic"
+            echo "- Exact deployed build/release: Complete"
+            echo "- Backend and database readiness: Complete"
+            echo "- Canonical persistent database and volume paths: Complete"
+            echo "- Initial Production administrator configuration: Complete"
+            echo "- Administrator recovery invitation expiry is still future-dated: Complete"
+            echo "- No Production variable, volume, database, account, or deployment mutation performed"
+          } >>"$GITHUB_STEP_SUMMARY"
