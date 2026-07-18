@@ -627,6 +627,19 @@ const ADMIN_ITEMS: NavItem[] = [
     audience: ["enterprise-administration"],
   },
   {
+    label: "Account Recovery",
+    agent: "AMOS-Core",
+    href: "/admin/access-recovery",
+    icon: Lock,
+    section: "ADMIN",
+    audience: [
+      "super-admin",
+      "managing-director",
+      "administrator",
+      "hr-director",
+    ],
+  },
+  {
     label: "Settings",
     agent: "AMOS-Core",
     href: "/admin/settings",
@@ -1090,6 +1103,12 @@ export const heroConfigs: Record<string, HeroConfig> = {
     category: "ADMIN",
     title: "Settings",
     subtitle: "System configuration, user management, and administrative controls.",
+  },
+  "/admin/access-recovery": {
+    category: "ADMIN",
+    title: "Account Recovery",
+    subtitle:
+      "Audited password, lockout, session, and authenticator recovery for team accounts.",
   },
   "/admin/organization": {
     category: "ADMIN",

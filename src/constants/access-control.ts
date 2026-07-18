@@ -828,7 +828,7 @@ export function procedureAccessResource(
 
   // Auth administration is never treated as ordinary self-service.
   const adminAuthProcedure =
-    /^(listUsers|updateUser|deleteUser|listAccessReviews|completeAccessReview|resetMfa|disableUser)/.test(
+    /^(listUsers|createTrainingAccount|issueAccountRecovery|unlockAccount|updateUser|deleteUser|listAccessReviews|completeAccessReview|resetMfa|disableUser)/.test(
       procedureName,
     );
   const executiveDashboard =

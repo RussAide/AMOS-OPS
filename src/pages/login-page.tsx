@@ -288,7 +288,7 @@ export function LoginPage() {
     try {
       const result = await requestPasswordReset(form.email);
       setNotice(
-        "If the account exists, recovery instructions have been prepared.",
+        "If the account exists, ask an AMOS-OPS administrator to issue a one-time account recovery link. The link resets both the password and authenticator enrollment.",
       );
       if (result.evaluationToken) {
         setRecoveryToken(result.evaluationToken);

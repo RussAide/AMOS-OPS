@@ -180,6 +180,7 @@ describe("department-grouped sidebar navigation", () => {
         label: "System Administration",
         children: [
           "Organization and Roles",
+          "Account Recovery",
           "System Settings",
           "Microsoft 365 and Entra Integrations",
           "Workflow Configuration",

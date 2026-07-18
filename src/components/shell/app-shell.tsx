@@ -165,6 +165,7 @@ import StrategicProjectsPage from "@/pages/executive/strategic-projects-page";
 import SiteReviewPage from "@/pages/executive/site-review-page";
 
 // ─── ADMIN (new) ───
+import AccountRecoveryPage from "@/pages/admin/account-recovery-page";
 import AdminSettingsPage from "@/pages/admin/settings-page";
 import EnhancementRegisterPage from "@/pages/admin/enhancement-register-page";
 import WorkflowEnginePage from "@/pages/admin/workflow-engine-page";
@@ -1477,6 +1478,10 @@ function AppShellAuthenticated({ children }: AppShellProps) {
                 <Route
                   path="/admin/organization"
                   element={<OrganizationModelPage />}
+                />
+                <Route
+                  path="/admin/access-recovery"
+                  element={<AccountRecoveryPage />}
                 />
                 <Route path="/admin/settings" element={<AdminSettingsPage />} />
                 <Route

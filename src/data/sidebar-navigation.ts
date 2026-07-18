@@ -276,6 +276,11 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
     Settings,
     [
       link("admin-organization", "Organization and Roles", "/admin/organization"),
+      link(
+        "admin-access-recovery",
+        "Account Recovery",
+        "/admin/access-recovery",
+      ),
       link("admin-settings", "System Settings", "/admin/settings"),
       link(
         "admin-microsoft-integration",

@@ -172,5 +172,26 @@ export function ensureIdentitySchema(sqlite: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_identity_access_profile_events_user
       ON identity_access_profile_events(user_id, occurred_at);
+
+    CREATE TABLE IF NOT EXISTS identity_security_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      actor_id TEXT,
+      event_type TEXT NOT NULL,
+      rationale TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_identity_security_events_user
+      ON identity_security_events(user_id, occurred_at);
+
+    CREATE TABLE IF NOT EXISTS identity_runtime_key_bindings (
+      environment_id TEXT PRIMARY KEY,
+      key_fingerprint TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      verified_at TEXT NOT NULL
+    );
   `);
 }

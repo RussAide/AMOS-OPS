@@ -1,5 +1,8 @@
 import Database from "better-sqlite3";
 import { createHmac } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildEnvironmentConfig } from "../lib/env";
 import {
@@ -13,6 +16,7 @@ import {
 import { totpCodeForTest } from "./totp";
 
 const openDatabases: Database.Database[] = [];
+const temporaryDirectories: string[] = [];
 
 function makeService(options?: {
   mfaPolicy?: "optional" | "required-privileged" | "required-all";
@@ -58,6 +62,9 @@ function makeFixture(options?: {
 
 afterEach(() => {
   for (const sqlite of openDatabases.splice(0)) sqlite.close();
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 describe("synthetic evaluation identity", () => {
@@ -171,6 +178,20 @@ describe("identity lifecycle", () => {
         mfaEnabled: true,
       }),
     ]);
+
+    expect(
+      service.requestPasswordReset({
+        email: "e.o.aideyan@adobicarebhc.com",
+        ipAddress: "198.51.100.10",
+      }),
+    ).toEqual({ accepted: true });
+    expect(
+      sqlite
+        .prepare(
+          "SELECT consumed_at FROM identity_password_reset_tokens WHERE token_hash = ?",
+        )
+        .get(invitationTokenHash),
+    ).toEqual({ consumed_at: null });
 
     const reset = await service.resetPassword({
       token: invitationToken,
@@ -311,6 +332,95 @@ describe("identity lifecycle", () => {
     ).resolves.toMatchObject({ status: "authenticated", mfaVerified: true });
   });
 
+  it("preserves the Production password and authenticator across a database restart and rejects secret drift", async () => {
+    const directory = mkdtempSync(
+      path.join(tmpdir(), "amos-identity-restart-"),
+    );
+    temporaryDirectories.push(directory);
+    const databasePath = path.join(directory, "amos-ops.db");
+    const now = new Date("2026-07-18T18:00:00.000Z");
+    const appSecret = `production-persistence-test-${"p".repeat(40)}`;
+    const invitationToken = "persistent-admin-invitation-token-fixture-2026";
+    const invitationTokenHash = createHmac("sha256", appSecret)
+      .update(invitationToken)
+      .digest("hex");
+    const environment = buildEnvironmentConfig({
+      APP_ENV: "production",
+      AMOS_RUNTIME_MODE: "production",
+      NODE_ENV: "production",
+      DATABASE_PATH: "/app/persistent/data/production/amos-ops.db",
+      UPLOAD_PATH: "/app/persistent/uploads/production",
+      CREDENTIAL_NAMESPACE: "amos-ops/production",
+      APP_SECRET: appSecret,
+      JWT_SECRET: `production-persistence-jwt-${"j".repeat(40)}`,
+      DEPLOYMENT_APPROVAL_ID: "USER-AUTHORIZED-AUTH-PERSISTENCE",
+      DEPLOYMENT_CHANGE_REFERENCE: "AMOS-OPS-AUTH-PERSISTENCE",
+      AMOS_ALLOWED_ORIGINS: "https://amos-ops.example.invalid",
+      ALLOW_SELF_REGISTRATION: "false",
+      MFA_POLICY: "required-all",
+      AMOS_PRODUCTION_RELEASE_AUTHORIZED: "true",
+      AMOS_PRODUCTION_RELEASE_ID: "AMOS-OPS-AUTH-PERSISTENCE-TEST",
+      AMOS_INITIAL_ADMIN_EMAIL: "persistent.admin@adobicarebhc.com",
+      AMOS_INITIAL_ADMIN_FIRST_NAME: "Persistent",
+      AMOS_INITIAL_ADMIN_LAST_NAME: "Administrator",
+      AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH: invitationTokenHash,
+      AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT: new Date(
+        now.getTime() + 60 * 60_000,
+      ).toISOString(),
+    });
+
+    const firstDatabase = new Database(databasePath);
+    const firstService = createIdentityService(firstDatabase, {
+      environment,
+      now: () => now,
+      policy: { passwordHashRounds: 4 },
+    });
+    const reset = await firstService.resetPassword({
+      token: invitationToken,
+      newPassword: "Persistent!Admin2026",
+    });
+    expect(reset.totpSetup?.secret).toMatch(/^[A-Z2-7]{32}$/);
+    firstDatabase.close();
+
+    const restartedDatabase = new Database(databasePath);
+    const restartedService = createIdentityService(restartedDatabase, {
+      environment,
+      now: () => now,
+      policy: { passwordHashRounds: 4 },
+    });
+    const login = await restartedService.login({
+      email: "persistent.admin@adobicarebhc.com",
+      password: "Persistent!Admin2026",
+    });
+    expect(login).toMatchObject({
+      status: "mfa_required",
+      deliveryMethod: "totp",
+    });
+    if (login.status !== "mfa_required" || !reset.totpSetup) {
+      throw new Error("expected persisted authenticator challenge");
+    }
+    await expect(
+      restartedService.verifyMfa({
+        challengeId: login.challengeId,
+        code: totpCodeForTest(reset.totpSetup.secret, now),
+      }),
+    ).resolves.toMatchObject({ status: "authenticated", mfaVerified: true });
+    restartedDatabase.close();
+
+    const rotatedSecretDatabase = new Database(databasePath);
+    expect(() =>
+      createIdentityService(rotatedSecretDatabase, {
+        environment: {
+          ...environment,
+          appSecret: `${appSecret}-unexpected-rotation`,
+        },
+        now: () => now,
+        policy: { passwordHashRounds: 4 },
+      }),
+    ).toThrow(/IDENTITY_KEY_MISMATCH/);
+    rotatedSecretDatabase.close();
+  });
+
   it("keeps new accounts in Training and rejects Operational workspace requests", async () => {
     const service = makeService();
     const registered = await service.register({
@@ -410,15 +520,32 @@ describe("identity lifecycle", () => {
       rationale: "Authorized stakeholder orientation.",
     });
     expect(invitation.invitationToken.length).toBeGreaterThan(20);
-    await service.resetPassword({
+    const onboarding = await service.resetPassword({
       token: invitation.invitationToken,
       newPassword: "Stakeholder!Access2026",
+    });
+    expect(onboarding.totpSetup).toMatchObject({
+      accountName: "stakeholder@example.invalid",
+      issuer: "AMOS-OPS",
     });
     const login = await service.login({
       email: "stakeholder@example.invalid",
       password: "Stakeholder!Access2026",
     });
-    expect(login.status).toBe("mfa_required");
+    expect(login).toMatchObject({
+      status: "mfa_required",
+      deliveryMethod: "totp",
+      destination: "your authenticator app",
+    });
+    if (login.status !== "mfa_required" || !onboarding.totpSetup) {
+      throw new Error("expected authenticator enrollment");
+    }
+    await expect(
+      service.verifyMfa({
+        challengeId: login.challengeId,
+        code: totpCodeForTest(onboarding.totpSetup.secret, new Date()),
+      }),
+    ).resolves.toMatchObject({ status: "authenticated", mfaVerified: true });
     expect(
       service.listUsers().find((user) => user.id === invitation.userId),
     ).toMatchObject({
@@ -426,6 +553,169 @@ describe("identity lifecycle", () => {
       identityType: "external_guest",
       sponsorName: "Training Sponsor",
     });
+  });
+
+  it("lets an administrator permanently recover a team account with password and authenticator rotation", async () => {
+    const { service, sqlite } = makeFixture();
+    const actor = await service.register({
+      email: "identity.admin@amos-ops.invalid",
+      password: "Fictional!Admin2026",
+      firstName: "Identity",
+      lastName: "Administrator",
+    });
+    if (actor.status !== "authenticated") throw new Error("expected session");
+    service.updateUser({
+      id: actor.user.id,
+      actorId: actor.user.id,
+      role: "administrator",
+      accessStatus: "cleared",
+      evidenceReference: "HR-CLEARANCE-ADMIN-001",
+      rationale: "Authorized identity administrator clearance.",
+    });
+    const target = await service.register({
+      email: "team.member@amos-ops.invalid",
+      password: "Fictional!Member2026",
+      firstName: "Team",
+      lastName: "Member",
+    });
+    if (target.status !== "authenticated") throw new Error("expected session");
+
+    const firstRecovery = service.issueAccountRecovery({
+      actorId: actor.user.id,
+      userId: target.user.id,
+      rationale: "Team member reported lost password and authenticator.",
+    });
+    expect(service.getSession(target.token)).toBeNull();
+    expect(
+      service.listUsers().find((user) => user.id === target.user.id),
+    ).toMatchObject({
+      failedLoginCount: 0,
+      lockedUntil: null,
+      mustChangePassword: true,
+      mfaEnabled: true,
+      mfaMethod: "totp",
+      pendingRecoveryExpiresAt: firstRecovery.expiresAt,
+    });
+    await expect(
+      service.login({
+        email: "team.member@amos-ops.invalid",
+        password: "Fictional!Member2026",
+      }),
+    ).rejects.toMatchObject({ code: "PASSWORD_CHANGE_REQUIRED" });
+
+    const replacementRecovery = service.issueAccountRecovery({
+      actorId: actor.user.id,
+      userId: target.user.id,
+      rationale: "Superseded the first link before secure delivery.",
+    });
+    await expect(
+      service.resetPassword({
+        token: firstRecovery.recoveryToken,
+        newPassword: "Superseded!Member2026",
+      }),
+    ).rejects.toMatchObject({ code: "RESET_TOKEN_INVALID" });
+
+    const reset = await service.resetPassword({
+      token: replacementRecovery.recoveryToken,
+      newPassword: "Recovered!Member2026",
+    });
+    expect(reset.totpSetup?.secret).toMatch(/^[A-Z2-7]{32}$/);
+    expect(
+      service.listUsers().find((user) => user.id === target.user.id),
+    ).toMatchObject({
+      mustChangePassword: false,
+      mfaMethod: "totp",
+      pendingRecoveryExpiresAt: null,
+    });
+    const login = await service.login({
+      email: "team.member@amos-ops.invalid",
+      password: "Recovered!Member2026",
+    });
+    expect(login).toMatchObject({
+      status: "mfa_required",
+      deliveryMethod: "totp",
+    });
+    if (login.status !== "mfa_required" || !reset.totpSetup) {
+      throw new Error("expected recovered authenticator challenge");
+    }
+    await expect(
+      service.verifyMfa({
+        challengeId: login.challengeId,
+        code: totpCodeForTest(reset.totpSetup.secret, new Date()),
+      }),
+    ).resolves.toMatchObject({ status: "authenticated", mfaVerified: true });
+    expect(
+      sqlite
+        .prepare(
+          "SELECT event_type FROM identity_security_events WHERE user_id = ? ORDER BY occurred_at, rowid",
+        )
+        .all(target.user.id),
+    ).toEqual([
+      { event_type: "administrator_account_recovery_issued" },
+      { event_type: "administrator_account_recovery_issued" },
+      { event_type: "password_reset_completed" },
+    ]);
+  });
+
+  it("lets an administrator unlock a team account without changing its password", async () => {
+    const { service, sqlite } = makeFixture({ maximumFailedLogins: 2 });
+    const actor = await service.register({
+      email: "unlock.admin@amos-ops.invalid",
+      password: "Fictional!Admin2026",
+      firstName: "Unlock",
+      lastName: "Administrator",
+    });
+    if (actor.status !== "authenticated") throw new Error("expected session");
+    service.updateUser({
+      id: actor.user.id,
+      actorId: actor.user.id,
+      role: "administrator",
+      accessStatus: "cleared",
+      evidenceReference: "HR-CLEARANCE-ADMIN-002",
+      rationale: "Authorized identity administrator clearance.",
+    });
+    const target = await service.register({
+      email: "locked.member@amos-ops.invalid",
+      password: "Fictional!Member2026",
+      firstName: "Locked",
+      lastName: "Member",
+    });
+    if (target.status !== "authenticated") throw new Error("expected session");
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await expect(
+        service.login({
+          email: "locked.member@amos-ops.invalid",
+          password: "Wrong!Member2026",
+        }),
+      ).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
+    }
+    expect(
+      service.listUsers().find((user) => user.id === target.user.id),
+    ).toMatchObject({ failedLoginCount: 2 });
+
+    expect(
+      service.unlockAccount({
+        actorId: actor.user.id,
+        userId: target.user.id,
+        rationale: "Verified the team member through the help desk.",
+      }),
+    ).toEqual({ success: true, wasLocked: true });
+    expect(
+      service.listUsers().find((user) => user.id === target.user.id),
+    ).toMatchObject({ failedLoginCount: 0, lockedUntil: null });
+    await expect(
+      service.login({
+        email: "locked.member@amos-ops.invalid",
+        password: "Fictional!Member2026",
+      }),
+    ).resolves.toMatchObject({ status: "authenticated" });
+    expect(
+      sqlite
+        .prepare(
+          "SELECT event_type FROM identity_security_events WHERE user_id = ? ORDER BY rowid DESC LIMIT 1",
+        )
+        .get(target.user.id),
+    ).toEqual({ event_type: "administrator_account_unlocked" });
   });
 
   it("revokes sessions when account access expires", async () => {
