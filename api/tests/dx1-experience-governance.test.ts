@@ -87,7 +87,7 @@ describe("DX.1 enterprise experience and governance verification", () => {
       "../..",
     );
     const appRoutes = fs.readFileSync(
-      path.join(sourceRoot, "src/components/shell/app-shell-routes.tsx"),
+      path.join(sourceRoot, "src/components/shell/app-shell.tsx"),
       "utf8",
     );
     for (const assignment of result.personaAssignments)

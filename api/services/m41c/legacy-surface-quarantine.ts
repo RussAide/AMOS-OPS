@@ -195,7 +195,7 @@ const surfaces = Object.freeze([
     activeSurfacePaths: [
       "api/routers/m14.ts#listAssessments",
       "api/routers/m14.ts#getAssessment",
-      "src/components/shell/app-shell-routes.tsx#IntakeAssessmentPage",
+      "src/components/shell/app-shell.tsx#IntakeAssessmentPage",
     ],
     legacyCapabilities: [
       "unbounded assessment-row projection with clinical derivations",
@@ -604,7 +604,6 @@ const surfaces = Object.freeze([
     surfaceId: "M41C-LSQ-22-OUTCOME-MEASURES-PAGE",
     activeSurfacePaths: [
       "src/pages/clinical/outcome-measures-page.tsx",
-      "src/components/shell/app-shell-routes.tsx#/clinical/outcome-measures",
       "src/components/shell/app-shell.tsx#/clinical/outcome-measures",
       "src/data/navData.ts#Outcome Measure Governance",
     ],

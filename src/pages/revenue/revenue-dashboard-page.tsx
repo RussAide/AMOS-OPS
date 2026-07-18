@@ -23,12 +23,12 @@ export function RevenueDashboardPage() {
 
   const modules = [
     { title: "Claims", description: "View and manage all claims", route: "/revenue/claims", icon: FileText, color: "#2563EB", count: kpis?.totalClaims ?? 0 },
-    { title: "Claim Submission", description: "Submit draft claims to payers", route: "/revenue/submission", icon: Send, color: "#245C5A", count: 0 },
-    { title: "Authorizations", description: "Manage prior authorizations", route: "/revenue/authorizations", icon: Shield, color: "#7C3AED", count: 0 },
-    { title: "Payer Packets", description: "Build documentation packets", route: "/revenue/packets", icon: Package, color: "#D97706", count: 0 },
+    { title: "Claim Submission", description: "Submit draft claims to payers", route: "/revenue/claim-submission", icon: Send, color: "#245C5A", count: 0 },
+    { title: "Authorizations", description: "Manage prior authorizations", route: "/authorizations", icon: Shield, color: "#7C3AED", count: 0 },
+    { title: "Payer Packets", description: "Build documentation packets", route: "/revenue/payer-packets", icon: Package, color: "#D97706", count: 0 },
     { title: "Denial Mgmt", description: "Track and appeal denials", route: "/revenue/denials", icon: AlertTriangle, color: "#DC2626", count: kpis?.deniedClaims ?? 0 },
     { title: "Aging Queue", description: "Monitor aged receivables", route: "/revenue/aging", icon: Calendar, color: "#059669", count: 0 },
-    { title: "POS Gate", description: "Proof-of-Service validation", route: "/revenue/pos-gate", icon: ShieldCheck, color: "#245C5A", count: 0 },
+    { title: "POS Gate", description: "Proof-of-Service validation", route: "/revenue/proof-of-service", icon: ShieldCheck, color: "#245C5A", count: 0 },
   ];
 
   return (

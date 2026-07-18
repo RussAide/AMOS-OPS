@@ -6,24 +6,16 @@ import { getBreadcrumbs, heroConfigs, navItems } from "../../src/data/navData";
 const route = "/operations-hub/microsoft-integrations";
 
 describe("M5.1B Microsoft 365 Integration application route", () => {
-  it("mounts the experience in the active and retained shell trees", () => {
-    const activeShell = fs.readFileSync(
+  it("mounts the experience in the canonical shell route tree", () => {
+    const routes = fs.readFileSync(
       path.resolve("src/components/shell/app-shell.tsx"),
       "utf8",
     );
-    const retainedRoutes = fs.readFileSync(
-      path.resolve("src/components/shell/app-shell-routes.tsx"),
-      "utf8",
+    expect(routes).toContain('path="/operations-hub/microsoft-integrations"');
+    expect(routes).toContain("M51BMicrosoftIntegrationsPage");
+    expect(routes).toContain(
+      "@/pages/operations-hub/m51b-microsoft-integrations-page",
     );
-    for (const source of [activeShell, retainedRoutes]) {
-      expect(source).toContain(
-        'path="/operations-hub/microsoft-integrations"',
-      );
-      expect(source).toContain("M51BMicrosoftIntegrationsPage");
-      expect(source).toContain(
-        "@/pages/operations-hub/m51b-microsoft-integrations-page",
-      );
-    }
   });
 
   it("publishes exactly one navigation item and governed metadata", () => {

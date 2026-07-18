@@ -7,22 +7,16 @@ import { getBreadcrumbs, heroConfigs, navItems } from "../../src/data/navData";
 const route = "/operations-hub/enterprise-demo";
 
 describe("DX.1 final cross-enterprise demo application route", () => {
-  it("mounts the experience in the active and retained shell trees", () => {
-    const activeShell = fs.readFileSync(
+  it("mounts the experience in the canonical shell route tree", () => {
+    const routes = fs.readFileSync(
       path.resolve("src/components/shell/app-shell.tsx"),
       "utf8",
     );
-    const retainedRoutes = fs.readFileSync(
-      path.resolve("src/components/shell/app-shell-routes.tsx"),
-      "utf8",
+    expect(routes).toContain('path="/operations-hub/enterprise-demo"');
+    expect(routes).toContain("Dx1EnterpriseDemoPage");
+    expect(routes).toContain(
+      "@/pages/operations-hub/dx1-enterprise-demo-page",
     );
-    for (const source of [activeShell, retainedRoutes]) {
-      expect(source).toContain('path="/operations-hub/enterprise-demo"');
-      expect(source).toContain("Dx1EnterpriseDemoPage");
-      expect(source).toContain(
-        "@/pages/operations-hub/dx1-enterprise-demo-page",
-      );
-    }
   });
 
   it("publishes exactly one navigation item and governed metadata", () => {
@@ -54,4 +48,3 @@ describe("DX.1 final cross-enterprise demo application route", () => {
     ]);
   });
 });
-

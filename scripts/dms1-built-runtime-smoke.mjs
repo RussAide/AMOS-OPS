@@ -14,6 +14,8 @@ const SOURCE_DIGEST = "b".repeat(64);
 const REVIEW_BANNER = "AMOS-OPS Operational Workspace";
 const testCredential = (scope) =>
   `not-a-secret-test-fixture-${scope}-${"x".repeat(32)}`;
+const testStorageKey = (marker) =>
+  Buffer.from(marker.repeat(32), "utf8").toString("base64");
 const testMfaCode = () => ["48", "27", "31"].join("");
 const FORBIDDEN_DEPLOYMENT_UX = Object.freeze([
   "Final Gate",
@@ -239,15 +241,25 @@ async function inspectRunningMode(kind, reviewPassword, reviewPasswordHash) {
       });
     }
 
-    const dashboard = await client.dashboard.overview.query();
-    assert(
-      ["bhc", "revenue", "campus", "mgma", "part2", "documents", "nil"].every(
-        (section) => section in dashboard,
-      ),
-      "DMS1_FRESH_DATABASE_DASHBOARD_FAILED",
-    );
-    await client.phase3.overview.query();
-    await client.dx1.getAcceptanceStatus.query();
+    if (kind === "demo") {
+      const orientationModules =
+        await client.training.listOrientationModules.query();
+      assert(
+        orientationModules.length > 0 &&
+          orientationModules.every((module) => module.id.startsWith("mod-")),
+        "DMS1_FRESH_TRAINING_DATABASE_ORIENTATION_FAILED",
+      );
+    } else {
+      const dashboard = await client.dashboard.overview.query();
+      assert(
+        ["bhc", "revenue", "campus", "mgma", "part2", "documents", "nil"].every(
+          (section) => section in dashboard,
+        ),
+        "DMS1_FRESH_DATABASE_DASHBOARD_FAILED",
+      );
+      await client.phase3.overview.query();
+      await client.dx1.getAcceptanceStatus.query();
+    }
 
     return Object.freeze({
       mode: runtime.mode,
@@ -278,13 +290,25 @@ async function verifyUnauthorizedProductionFailsClosed() {
     AMOS_RUNTIME_MODE: "production",
     AMOS_ENVIRONMENT_ID: "amos-ops-production-denied-smoke",
     CREDENTIAL_NAMESPACE: "amos-ops/production/denied-smoke",
-    DATABASE_PATH: path.join(
-      temporaryRoot,
-      "data",
-      "production",
-      "amos-ops.db",
-    ),
-    UPLOAD_PATH: path.join(temporaryRoot, "uploads", "production"),
+    PERSISTENT_ROOT: "/app/persistent",
+    RAILWAY_VOLUME_MOUNT_PATH: "/app/persistent",
+    DATABASE_PATH: `/app/persistent/dms1-production-denied-${process.pid}.db`,
+    UPLOAD_PATH: `/app/persistent/dms1-production-denied-${process.pid}-uploads`,
+    AMOS_STORAGE_ENCRYPTION_REQUIRED: "true",
+    AMOS_STORAGE_KEY_PROVIDER: "railway-sealed-variables-v1",
+    AMOS_STORAGE_MIGRATION_MODE: "none",
+    AMOS_DATABASE_ACTIVE_KEY_ID: "database-smoke",
+    AMOS_DATABASE_KEY_MANIFEST_JSON:
+      '{"database-smoke":"AMOS_DATABASE_KEY_SMOKE"}',
+    AMOS_DATABASE_KEY_SMOKE: testStorageKey("d"),
+    AMOS_UPLOAD_ACTIVE_KEY_ID: "upload-smoke",
+    AMOS_UPLOAD_KEY_MANIFEST_JSON:
+      '{"upload-smoke":"AMOS_UPLOAD_KEY_SMOKE"}',
+    AMOS_UPLOAD_KEY_SMOKE: testStorageKey("u"),
+    AMOS_BACKUP_ACTIVE_KEY_ID: "backup-smoke",
+    AMOS_BACKUP_KEY_MANIFEST_JSON:
+      '{"backup-smoke":"AMOS_BACKUP_KEY_SMOKE"}',
+    AMOS_BACKUP_KEY_SMOKE: testStorageKey("b"),
   };
   const { child, output } = startServer(environment);
   const exitCode = await Promise.race([
