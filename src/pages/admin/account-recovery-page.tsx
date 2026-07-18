@@ -32,6 +32,23 @@ export default function AccountRecoveryPage() {
     onSuccess: async () => trpcUtils.auth.listUsers.invalidate(),
   });
 
+  const copyRecoveryLink = async (url: string) => {
+    if (!navigator.clipboard) {
+      setError(
+        "The recovery link is ready below. Select it manually because this browser does not provide clipboard access.",
+      );
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setError("");
+    } catch {
+      setError(
+        "The recovery link is ready below. Select it manually because the browser blocked clipboard access.",
+      );
+    }
+  };
+
   const handleRecovery = async (user: {
     id: string;
     email: string;
@@ -56,7 +73,6 @@ export default function AccountRecoveryPage() {
         rationale,
       });
       const url = `${window.location.origin}/login?invite=${encodeURIComponent(result.recoveryToken)}`;
-      await navigator.clipboard?.writeText(url);
       setRecoveryLink({
         email: result.email,
         url,
@@ -182,9 +198,7 @@ export default function AccountRecoveryPage() {
             />
             <button
               type="button"
-              onClick={() =>
-                void navigator.clipboard?.writeText(recoveryLink.url)
-              }
+              onClick={() => void copyRecoveryLink(recoveryLink.url)}
               className="rounded bg-[#0F766E] px-3 py-2 text-[11px] font-semibold text-white"
             >
               Copy link
