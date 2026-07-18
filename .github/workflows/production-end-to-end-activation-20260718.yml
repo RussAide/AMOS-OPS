@@ -496,7 +496,7 @@ jobs:
           api_404_status="$(curl --silent --show-error --output /tmp/amos-api-404.json \
             --write-out '%{http_code}' "$PRODUCTION_API_ORIGIN/api/not-a-route")"
           test "$api_404_status" = "404"
-          jq --exit-status '.error == "API route not found"' /tmp/amos-api-404.json >/dev/null
+          jq --exit-status '.error == "Not Found"' /tmp/amos-api-404.json >/dev/null
 
           me_response="$(curl --fail --silent --show-error --max-time 20 \
             "$PRODUCTION_API_ORIGIN/api/trpc/auth.me")"
