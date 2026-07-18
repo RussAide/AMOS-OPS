@@ -151,7 +151,7 @@ export function QADashboardPage() {
           label={`${defStats?.overdue ?? 0} overdue`}
           color="#DC2626"
           icon={<AlertOctagon size={16} style={{ color: "#DC2626" }} />}
-          link="/qa/deficiencies"
+          link="/qa/deficiency-tracking"
         />
       </div>
 
@@ -214,7 +214,7 @@ export function QADashboardPage() {
           {/* Regulatory Links */}
           <div className="mt-4 pt-3 flex gap-2" style={{ borderTop: "1px solid var(--card-border)" }}>
             <Link
-              to="/qa/registry"
+              to="/qa/list"
               className="text-[11px] px-3 py-1.5 rounded-md border transition-all hover:opacity-80"
               style={{ borderColor: "var(--card-border)", color: "var(--topbar-subtitle)", backgroundColor: "var(--card-bg)" }}
             >
@@ -270,7 +270,7 @@ export function QADashboardPage() {
         <div className="rounded-xl border p-4" style={{ borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)" }}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[13px] font-semibold" style={{ color: "var(--topbar-title)" }}>Deficiency Summary</h3>
-            <Link to="/qa/deficiencies" className="text-[10px] hover:underline" style={{ color: "#245C5A" }}>View all</Link>
+            <Link to="/qa/deficiency-tracking" className="text-[10px] hover:underline" style={{ color: "#245C5A" }}>View all</Link>
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between text-[11px]">
