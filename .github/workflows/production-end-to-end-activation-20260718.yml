@@ -14,24 +14,24 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BASELINE_SHA: 5e846e25f72ed008e86f3b8211e0d79e88aa88db
-  BASELINE_RELEASE_ID: AMOS-OPS-ADMIN-RECOVERY-20260718-5e846e2
-  CANDIDATE_SHA: 6e303ae0f8f3fafe7867d577ed43865b6ba9ccbc
-  CANDIDATE_TREE: bb3b13908099a8765a9967f064f27b63aaa80efb
-  SOURCE_DIGEST: f2a452d3a50fef93e02a64b2ffc6e942ccd1fdd4c1432fe81a6251257d5164a4
-  RELEASE_ID: AMOS-OPS-END-TO-END-20260718-6e303ae
-  APPROVAL_ID: AMOS-OPS-END-TO-END-20260718
-  CHANGE_REFERENCE: USER-AUTHORIZED-PERMANENT-END-TO-END-FIX-20260718
+  BASELINE_SHA: 6e303ae0f8f3fafe7867d577ed43865b6ba9ccbc
+  BASELINE_RELEASE_ID: AMOS-OPS-END-TO-END-20260718-6e303ae
+  CANDIDATE_PARENT_SHA: 4749d3df3488e2bdb4883452d31314a3e63908d4
+  CANDIDATE_SHA: 3098f467cbbf54c942355912ee6b18fb5496fbb3
+  CANDIDATE_TREE: 882568e773f3c78ba7e714f7743f85a772fb13d1
+  SOURCE_DIGEST: 8030ee209056008f60be84da8acaf7ac2773cffc11e477e60cdc46b26532eee2
+  RELEASE_ID: AMOS-OPS-SIDEBAR-INTEGRITY-20260718-3098f46
+  APPROVAL_ID: AMOS-OPS-SIDEBAR-INTEGRITY-20260718
+  CHANGE_REFERENCE: USER-AUTHORIZED-COMPLETE-SIDEBAR-FIX-20260718
   PRODUCTION_ORIGIN: https://amos-ops.com
   PRODUCTION_API_ORIGIN: https://amos-ops-production.up.railway.app
   PROD_RAILWAY_PROJECT_ID: f9357da4-00c4-4f25-a52d-5c53f6ce07dc
   PROD_RAILWAY_ENVIRONMENT_ID: 7c22d214-abac-478f-983b-1418a7cbac77
   PROD_RAILWAY_SERVICE_ID: 8fdf6d7e-c7ba-412d-95f0-8b980ba612ba
-  RECOVERY_WINDOW_HOURS: "4"
 
 jobs:
   activate-production:
-    name: Verify, deploy, and prove the permanent Production route fix
+    name: Verify, deploy, and prove the complete Production sidebar fix
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: amos-production
@@ -44,8 +44,8 @@ jobs:
         run: |
           payload="$(jq --null-input --compact-output \
             --arg state pending \
-            --arg context "AMOS-OPS End-to-End Production Activation" \
-            --arg description "Protected end-to-end Production activation is running" \
+            --arg context "AMOS-OPS Sidebar Integrity Production Activation" \
+            --arg description "Protected complete sidebar activation is running" \
             --arg target_url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             '{state:$state, context:$context, description:$description, target_url:$target_url}')"
           curl --fail --silent --show-error \
@@ -61,26 +61,20 @@ jobs:
         shell: bash
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          AMOS_ADMIN_RECOVERY_TOKEN: ${{ secrets.AMOS_ADMIN_RECOVERY_TOKEN }}
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
         run: |
           missing=()
           test -n "$RAILWAY_TOKEN" || missing+=(RAILWAY_TOKEN)
-          test -n "$AMOS_ADMIN_RECOVERY_TOKEN" || missing+=(AMOS_ADMIN_RECOVERY_TOKEN)
           test -n "$NETLIFY_AUTH_TOKEN" || missing+=(NETLIFY_AUTH_TOKEN)
           if (( ${#missing[@]} )); then
             printf 'Missing amos-production GitHub environment credential: %s\n' "${missing[@]}" >&2
-            exit 1
-          fi
-          if [[ ! "$AMOS_ADMIN_RECOVERY_TOKEN" =~ ^[A-Za-z0-9_-]{48,}$ ]]; then
-            echo "AMOS_ADMIN_RECOVERY_TOKEN must be at least 48 URL-safe characters." >&2
             exit 1
           fi
 
       - name: Check out the exact permanent-fix candidate
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: 6e303ae0f8f3fafe7867d577ed43865b6ba9ccbc
+          ref: 3098f467cbbf54c942355912ee6b18fb5496fbb3
           fetch-depth: 2
 
       - name: Assert immutable source identity
@@ -88,7 +82,7 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
-          test "$(git rev-parse "$CANDIDATE_SHA^")" = "$BASELINE_SHA"
+          test "$(git rev-parse "$CANDIDATE_SHA^")" = "$CANDIDATE_PARENT_SHA"
           test "$(git archive --format=tar HEAD | sha256sum | cut -d' ' -f1)" = "$SOURCE_DIGEST"
           git diff --check "$BASELINE_SHA" "$CANDIDATE_SHA"
           test "$(cat public/_redirects)" = "/* /index.html 200"
@@ -204,11 +198,10 @@ jobs:
           curl --fail --silent --show-error --max-time 20 "$PRODUCTION_ORIGIN/login" |
             grep --ignore-case '<!doctype html>' >/dev/null
 
-      - name: Derive the protected recovery hash
+      - name: Capture the authentication state that must remain unchanged
         shell: bash
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          AMOS_ADMIN_RECOVERY_TOKEN: ${{ secrets.AMOS_ADMIN_RECOVERY_TOKEN }}
         run: |
           variables_file="$(mktemp)"
           railway variable list \
@@ -252,37 +245,17 @@ jobs:
             "$variables_file" > /tmp/amos-production-rollback-identity.json
           chmod 600 /tmp/amos-production-rollback-identity.json
 
-          APP_SECRET="$(jq --exit-status --raw-output '.APP_SECRET' "$variables_file")"
-          export APP_SECRET AMOS_ADMIN_RECOVERY_TOKEN
-          python3 - <<'PY'
-          import hashlib
-          import hmac
-          import os
-          from pathlib import Path
-
-          digest = hmac.new(
-              os.environ["APP_SECRET"].strip().encode("utf-8"),
-              os.environ["AMOS_ADMIN_RECOVERY_TOKEN"].encode("utf-8"),
-              hashlib.sha256,
-          ).hexdigest()
-          Path("/tmp/amos-admin-recovery-hash").write_text(digest, encoding="utf-8")
-          PY
-          unset APP_SECRET AMOS_ADMIN_RECOVERY_TOKEN
-          chmod 600 /tmp/amos-admin-recovery-hash
-
-          new_hash="$(cat /tmp/amos-admin-recovery-hash)"
-          old_hash="$(jq --exit-status --raw-output \
-            '.AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH' "$variables_file")"
-          test -n "$new_hash"
-          printf '::add-mask::%s\n' "$new_hash"
-          if test "$new_hash" = "$old_hash"; then
-            echo "The new recovery token must differ from the consumed token." >&2
-            exit 1
-          fi
-
-          date --utc --date "+$RECOVERY_WINDOW_HOURS hours" +'%Y-%m-%dT%H:%M:%S.000Z' \
-            > /tmp/amos-admin-recovery-expiry
-          chmod 600 /tmp/amos-admin-recovery-expiry
+          jq --compact-output --sort-keys \
+            '{APP_SECRET,
+              JWT_SECRET,
+              AMOS_INITIAL_ADMIN_EMAIL,
+              AMOS_INITIAL_ADMIN_FIRST_NAME,
+              AMOS_INITIAL_ADMIN_LAST_NAME,
+              AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH,
+              AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT}' \
+            "$variables_file" |
+            sha256sum | cut -d' ' -f1 > /tmp/amos-authentication-baseline-sha
+          chmod 600 /tmp/amos-authentication-baseline-sha
           rm -f "$variables_file"
 
       - name: Stage the new Production identity without deploying
@@ -292,16 +265,11 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           touch /tmp/amos-railway-mutation-started
-          recovery_hash="$(cat /tmp/amos-admin-recovery-hash)"
-          recovery_expiry="$(cat /tmp/amos-admin-recovery-expiry)"
-          printf '::add-mask::%s\n' "$recovery_hash"
           railway variable set \
             "AMOS_BUILD_ID=$CANDIDATE_SHA" \
             "AMOS_PRODUCTION_RELEASE_ID=$RELEASE_ID" \
             "DEPLOYMENT_APPROVAL_ID=$APPROVAL_ID" \
             "DEPLOYMENT_CHANGE_REFERENCE=$CHANGE_REFERENCE" \
-            "AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH=$recovery_hash" \
-            "AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT=$recovery_expiry" \
             --project "$PROD_RAILWAY_PROJECT_ID" \
             --environment "$PROD_RAILWAY_ENVIRONMENT_ID" \
             --service "$PROD_RAILWAY_SERVICE_ID" \
@@ -320,7 +288,7 @@ jobs:
             --service "$PROD_RAILWAY_SERVICE_ID" \
             --detach \
             --json \
-            --message "AMOS-OPS permanent end-to-end fix $CANDIDATE_SHA"
+            --message "AMOS-OPS complete sidebar integrity fix $CANDIDATE_SHA"
 
       - name: Wait for the Production Railway candidate
         id: backend-verified
@@ -353,12 +321,19 @@ jobs:
                 --environment "$PROD_RAILWAY_ENVIRONMENT_ID" \
                 --service "$PROD_RAILWAY_SERVICE_ID" \
                 --json >"$variables_file"
-              jq --exit-status \
-                --arg recovery_hash "$(cat /tmp/amos-admin-recovery-hash)" \
-                --arg recovery_expiry "$(cat /tmp/amos-admin-recovery-expiry)" \
-                '.AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH == $recovery_hash
-                 and .AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT == $recovery_expiry' \
-                "$variables_file" >/dev/null
+              jq --compact-output --sort-keys \
+                '{APP_SECRET,
+                  JWT_SECRET,
+                  AMOS_INITIAL_ADMIN_EMAIL,
+                  AMOS_INITIAL_ADMIN_FIRST_NAME,
+                  AMOS_INITIAL_ADMIN_LAST_NAME,
+                  AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH,
+                  AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT}' \
+                "$variables_file" |
+                sha256sum | cut -d' ' -f1 > /tmp/amos-authentication-candidate-sha
+              cmp --silent \
+                /tmp/amos-authentication-baseline-sha \
+                /tmp/amos-authentication-candidate-sha
               rm -f "$variables_file"
               break
             fi
@@ -401,14 +376,14 @@ jobs:
           production-branch: main
           production-deploy: true
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          deploy-message: "AMOS-OPS permanent end-to-end fix 6e303ae"
+          deploy-message: "AMOS-OPS complete sidebar integrity fix 3098f46"
           enable-pull-request-comment: false
           enable-commit-comment: false
           overwrites-pull-request-comment: false
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
 
-      - name: Verify Production frontend, backend, CORS, routes, and recovery posture
+      - name: Verify Production frontend, backend, CORS, and every sidebar route
         id: production-verified
         shell: bash
         env:
@@ -445,6 +420,29 @@ jobs:
           curl --fail --silent --show-error --max-time 20 \
             "$PRODUCTION_ORIGIN/admin/access-recovery" |
             grep --ignore-case '<!doctype html>' >/dev/null
+
+          mapfile -t sidebar_routes < <(
+            node --import tsx --input-type=module --eval \
+              'import { flattenSidebarLinks, getSidebarNavigation } from "./src/data/sidebar-navigation.ts"; for (const link of flattenSidebarLinks(getSidebarNavigation("super-admin", "production"))) console.log(link.href);'
+          )
+          test "${#sidebar_routes[@]}" = "67"
+          for route in "${sidebar_routes[@]}"; do
+            route_html="$(curl --fail --silent --show-error --max-time 20 \
+              "$PRODUCTION_ORIGIN$route")"
+            grep --fixed-strings '<div id="root"></div>' \
+              <<<"$route_html" >/dev/null
+
+            route_headers="$(mktemp)"
+            route_status="$(curl --silent --show-error --output /dev/null \
+              --dump-header "$route_headers" --write-out '%{http_code}' \
+              --max-redirs 0 --max-time 20 "$PRODUCTION_API_ORIGIN$route")"
+            test "$route_status" = "308"
+            tr -d '\r' <"$route_headers" |
+              grep --fixed-strings --ignore-case \
+                "location: $PRODUCTION_ORIGIN$route" >/dev/null
+            rm -f "$route_headers"
+          done
+          printf '%s' "${#sidebar_routes[@]}" > /tmp/amos-live-sidebar-route-count
 
           curl --fail --silent --show-error --max-time 30 \
             --header "Authorization: Bearer $NETLIFY_AUTH_TOKEN" \
@@ -535,7 +533,7 @@ jobs:
           grep --fixed-strings "content-type" <<<"$allow_headers" >/dev/null
           grep --fixed-strings "x-amos-workspace" <<<"$allow_headers" >/dev/null
 
-      - name: Roll back both Production surfaces and invalidate recovery on failure
+      - name: Roll back both Production surfaces while preserving authentication
         if: ${{ failure() }}
         shell: bash
         env:
@@ -543,8 +541,6 @@ jobs:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
         run: |
           if test -f /tmp/amos-railway-mutation-started; then
-            invalidation_hash="$(openssl rand -hex 32)"
-            printf '::add-mask::%s\n' "$invalidation_hash"
             old_build="$(jq --exit-status --raw-output \
               '.AMOS_BUILD_ID' /tmp/amos-production-rollback-identity.json)"
             old_release="$(jq --exit-status --raw-output \
@@ -558,8 +554,6 @@ jobs:
               "AMOS_PRODUCTION_RELEASE_ID=$old_release" \
               "DEPLOYMENT_APPROVAL_ID=$old_approval" \
               "DEPLOYMENT_CHANGE_REFERENCE=$old_change" \
-              "AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH=$invalidation_hash" \
-              "AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT=2000-01-01T00:00:00.000Z" \
               --project "$PROD_RAILWAY_PROJECT_ID" \
               --environment "$PROD_RAILWAY_ENVIRONMENT_ID" \
               --service "$PROD_RAILWAY_SERVICE_ID" \
@@ -640,7 +634,7 @@ jobs:
         shell: bash
         run: |
           {
-            echo "### AMOS-OPS permanent end-to-end fix activated"
+            echo "### AMOS-OPS complete sidebar integrity fix activated"
             echo "- Candidate: $CANDIDATE_SHA"
             echo "- Tree: $CANDIDATE_TREE"
             echo "- Release: $RELEASE_ID"
@@ -648,8 +642,8 @@ jobs:
             echo "- Netlify deploy: $(cat /tmp/amos-netlify-candidate-deployment-id)"
             echo "- Frontend asset: $(cat /tmp/amos-live-asset-path)"
             echo "- Frontend SHA-256: $(cat /tmp/amos-local-asset-sha)"
-            echo "- Recovery expires: $(cat /tmp/amos-admin-recovery-expiry)"
-            echo "- Plaintext recovery token: never logged or persisted by this workflow"
+            echo "- Live sidebar destinations verified: $(cat /tmp/amos-live-sidebar-route-count)"
+            echo "- Authentication and recovery variables: unchanged"
             echo "- RM.2/TA.1: paused"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -660,14 +654,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           state=success
-          description="Permanent end-to-end Production fix is active"
+          description="Complete sidebar integrity fix is active in Production"
           if test "${{ job.status }}" != "success"; then
             state=failure
             description="Production activation failed; rollback was attempted"
           fi
           payload="$(jq --null-input --compact-output \
             --arg state "$state" \
-            --arg context "AMOS-OPS End-to-End Production Activation" \
+            --arg context "AMOS-OPS Sidebar Integrity Production Activation" \
             --arg description "$description" \
             --arg target_url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             '{state:$state, context:$context, description:$description, target_url:$target_url}')"
