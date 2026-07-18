@@ -34,6 +34,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: c6ee865b138f92a700e2f36bb34dea42968b0e68
+          fetch-depth: 2
 
       - name: Assert immutable source identity
         shell: bash
