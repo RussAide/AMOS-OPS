@@ -67,7 +67,7 @@ const PERSONA_ASSIGNMENTS: Readonly<Record<string, PersonaAssignmentDefinition>>
     "SYNTH-DX1-ACTOR-REVENUE-004": {
       canonicalRole: "billing-specialist",
       workspaceRouteCode: "finance-revenue",
-      primaryWorkPath: "/revenue/pos-gate",
+      primaryWorkPath: "/revenue/proof-of-service",
       primaryWorkLabel: "Confirm proof-of-service billing readiness",
     },
     "SYNTH-DX1-ACTOR-EXEC-005": {

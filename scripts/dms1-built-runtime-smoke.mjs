@@ -278,13 +278,10 @@ async function verifyUnauthorizedProductionFailsClosed() {
     AMOS_RUNTIME_MODE: "production",
     AMOS_ENVIRONMENT_ID: "amos-ops-production-denied-smoke",
     CREDENTIAL_NAMESPACE: "amos-ops/production/denied-smoke",
-    DATABASE_PATH: path.join(
-      temporaryRoot,
-      "data",
-      "production",
-      "amos-ops.db",
-    ),
-    UPLOAD_PATH: path.join(temporaryRoot, "uploads", "production"),
+    PERSISTENT_ROOT: "/app/persistent",
+    RAILWAY_VOLUME_MOUNT_PATH: "/app/persistent",
+    DATABASE_PATH: `/app/persistent/dms1-production-denied-${process.pid}.db`,
+    UPLOAD_PATH: `/app/persistent/dms1-production-denied-${process.pid}-uploads`,
   };
   const { child, output } = startServer(environment);
   const exitCode = await Promise.race([

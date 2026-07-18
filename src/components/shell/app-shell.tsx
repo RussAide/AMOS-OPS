@@ -1,10 +1,20 @@
-import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import {
+  Routes,
+  Route,
+  Navigate,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/providers/trpc";
 import { runtimeConfig } from "@/config/runtime";
+import { authorizeClientRoute } from "@/constants/access-control";
 import ErrorBoundary from "@/components/error-boundary";
 import { AppSidebar } from "./app-sidebar";
+import { AccessDeniedPage } from "./access-denied-page";
+import { NotFoundPage } from "./not-found-page";
 import {
   Menu,
   X,
@@ -82,8 +92,10 @@ import EscalationLadderPage from "@/pages/coordination/escalation-ladder";
 // ─── BHC DASHBOARD ───
 import BhcDashboardPage from "@/pages/bhc/bhc-dashboard-page";
 import CcmgOversightPage from "@/pages/ccmg/ccmg-oversight-page";
+import CcmgReferralDetailPage from "@/pages/ccmg/ccmg-referral-detail-page";
 import M22CaseManagementPage from "@/pages/mhtcm/m22-case-management-page";
 import M23Workspace from "@/components/mhrs/m23-workspace";
+import M24ResidentialOperationsPage from "@/pages/gro/m24-residential-operations-page";
 
 // ─── CAMPUS ───
 import CampusCensusDashboardPage from "@/pages/campus/campus-census-dashboard-page";
@@ -103,6 +115,7 @@ import RegulatoryFrameworkPage from "@/pages/compliance/regulatory-framework-pag
 // ─── TOOLKITS ───
 import ChartAuditPage from "@/pages/toolkits/chart-audit-page";
 import ToolkitHubPage from "@/pages/toolkits/toolkit-hub-page";
+import CANSAssessmentPage from "@/pages/toolkits/cans-assessment-page";
 
 // ─── REVENUE ───
 import RevenueDashboardPage from "@/pages/revenue/revenue-dashboard-page";
@@ -122,7 +135,6 @@ import PerformanceReviewPage from "@/pages/hr/performance-review-page";
 import OnboardingWorkflowPage from "@/pages/hr/onboarding-workflow-page";
 import SeparationManagementPage from "@/pages/hr/separation-management-page";
 import HrModulePage from "@/pages/hr/hr-module-page";
-import HrLayout from "@/pages/hr/hr-layout";
 import TrainingAssignmentPage from "@/pages/hr/training-assignment-page";
 import TrainingTrackerPage from "@/pages/training/training-tracker-page";
 
@@ -238,6 +250,14 @@ const SHORTCUTS = [
   { keys: ["g", "c"], description: "Go to Clinical" },
   { keys: ["Escape"], description: "Close modal / clear search" },
 ];
+
+function ClientRouteGuard() {
+  const location = useLocation();
+  const { currentRole } = useAuth();
+  const access = authorizeClientRoute(currentRole, location.pathname);
+
+  return access.allowed ? <Outlet /> : <AccessDeniedPage reason={access.reason} />;
+}
 
 /* ═══════════════════════════════════════════════════════════════
    AppShell Component
@@ -1009,8 +1029,9 @@ function AppShellAuthenticated({ children }: AppShellProps) {
           <ErrorBoundary>
             {children ?? (
               <Routes>
-                {/* ─── HOME ─── */}
-                <Route path="/" element={<DashboardPage />} />
+                <Route element={<ClientRouteGuard />}>
+                  {/* ─── HOME ─── */}
+                  <Route path="/" element={<DashboardPage />} />
                 <Route path="/home/alerts" element={<DashboardPage focus="alerts" />} />
                 <Route path="/home/divisions" element={<DashboardPage focus="divisions" />} />
                 <Route path="/home/quick-actions" element={<DashboardPage focus="actions" />} />
@@ -1063,6 +1084,10 @@ function AppShellAuthenticated({ children }: AppShellProps) {
                   element={<PatientProfilePage />}
                 />
                 <Route
+                  path="/clinical/patients/:id"
+                  element={<PatientProfilePage />}
+                />
+                <Route
                   path="/clinical/workspace"
                   element={<ClinicalWorkspacePage />}
                 />
@@ -1070,6 +1095,10 @@ function AppShellAuthenticated({ children }: AppShellProps) {
                 {/* ─── BHC DASHBOARD ─── */}
                 <Route path="/bhc" element={<BhcDashboardPage />} />
                 <Route path="/ccmg" element={<CcmgOversightPage />} />
+                <Route
+                  path="/ccmg/referrals/:referralId"
+                  element={<CcmgReferralDetailPage />}
+                />
                 <Route path="/mhtcm" element={<M22CaseManagementPage />} />
                 <Route path="/mhrs" element={<M23Workspace />} />
 
@@ -1109,6 +1138,10 @@ function AppShellAuthenticated({ children }: AppShellProps) {
                 <Route
                   path="/gro/handoffs"
                   element={<ShiftHandoffListPage />}
+                />
+                <Route
+                  path="/gro/residential-operations"
+                  element={<M24ResidentialOperationsPage />}
                 />
 
                 {/* ─── RESIDENTIAL ─── */}
@@ -1178,6 +1211,10 @@ function AppShellAuthenticated({ children }: AppShellProps) {
                   path="/toolkits/chart-audit"
                   element={<ChartAuditPage />}
                 />
+                <Route
+                  path="/toolkits/cans"
+                  element={<CANSAssessmentPage />}
+                />
                 <Route path="/toolkits" element={<ToolkitHubPage />} />
 
                 {/* ─── REVENUE ─── */}
@@ -1208,10 +1245,6 @@ function AppShellAuthenticated({ children }: AppShellProps) {
                 {/* ─── HR ─── */}
                 <Route path="/hr" element={<HrCommandCenterPage />} />
                 <Route
-                  path="/hr/personnel-files"
-                  element={<HrPersonProfilePage />}
-                />
-                <Route
                   path="/hr/credentials"
                   element={<CredentialTrackingPage />}
                 />
@@ -1224,8 +1257,14 @@ function AppShellAuthenticated({ children }: AppShellProps) {
                   path="/hr/separation"
                   element={<SeparationManagementPage />}
                 />
-                <Route path="/hr/module" element={<HrModulePage />} />
-                <Route path="/hr/layout" element={<HrLayout />} />
+                <Route
+                  path="/hr/module"
+                  element={<Navigate to="/hr" replace />}
+                />
+                <Route
+                  path="/hr/layout"
+                  element={<Navigate to="/hr" replace />}
+                />
                 <Route
                   path="/hr/training"
                   element={<TrainingAssignmentPage />}
@@ -1271,6 +1310,11 @@ function AppShellAuthenticated({ children }: AppShellProps) {
                   path="/hr/onboarding-flow"
                   element={<OnboardingFlowPage />}
                 />
+                <Route
+                  path="/hr/person/:personId"
+                  element={<HrPersonProfilePage />}
+                />
+                <Route path="/hr/:moduleId" element={<HrModulePage />} />
 
                 {/* ─── EXECUTIVE ─── */}
                 <Route path="/executive" element={<ExecutiveDashboardPage />} />
@@ -1386,18 +1430,30 @@ function AppShellAuthenticated({ children }: AppShellProps) {
                 <Route path="/onboarding" element={<OnboardingAcademyPage />} />
                 <Route
                   path="/onboarding/track"
-                  element={<OnboardingTrackPage />}
+                  element={<Navigate to="/onboarding" replace />}
                 />
                 <Route
                   path="/onboarding/track/universal-orientation"
                   element={<UniversalOrientationPage />}
                 />
                 <Route
+                  path="/onboarding/track/:trackId"
+                  element={<OnboardingTrackPage />}
+                />
+                <Route
                   path="/onboarding/module"
+                  element={<Navigate to="/onboarding/training" replace />}
+                />
+                <Route
+                  path="/onboarding/module/:moduleId"
                   element={<OnboardingModulePage />}
                 />
                 <Route
                   path="/onboarding/employee"
+                  element={<Navigate to="/onboarding/supervisor" replace />}
+                />
+                <Route
+                  path="/onboarding/employee/:id"
                   element={<OnboardingEmployeePage />}
                 />
                 <Route
@@ -1459,9 +1515,11 @@ function AppShellAuthenticated({ children }: AppShellProps) {
                   path="/meetings-escalations"
                   element={<MeetingsEscalationsPage />}
                 />
+                </Route>
 
                 {/* ─── FALLBACK ─── */}
-                <Route path="*" element={<DashboardPage />} />
+                <Route path="/login" element={<Navigate to="/" replace />} />
+                <Route path="*" element={<NotFoundPage />} />
               </Routes>
             )}
           </ErrorBoundary>
