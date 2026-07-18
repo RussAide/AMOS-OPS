@@ -22,6 +22,7 @@ env:
   PREVIEW_RAILWAY_ENVIRONMENT_ID: 99bd68e2-472f-4ee8-b690-614c7670765f
   PREVIEW_RAILWAY_SERVICE_ID: 8d9e326d-6ec3-4bf4-8f99-8107d20afa9c
   VITE_AMOS_API_ORIGIN: https://amos-ops-dms1-review-production.up.railway.app
+  NETLIFY_SITE_ID: 53a02d95-9cd5-4d22-8c17-8ed2378b91e8
 
 jobs:
   verify-and-deploy-preview:
@@ -35,12 +36,10 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         run: |
           missing=()
           test -n "$RAILWAY_TOKEN" || missing+=(RAILWAY_TOKEN)
           test -n "$NETLIFY_AUTH_TOKEN" || missing+=(NETLIFY_AUTH_TOKEN)
-          test -n "$NETLIFY_SITE_ID" || missing+=(NETLIFY_SITE_ID)
           if (( ${#missing[@]} )); then
             printf 'Missing amos-staging GitHub environment credential: %s\n' "${missing[@]}" >&2
             exit 1
@@ -162,7 +161,7 @@ jobs:
           overwrites-pull-request-comment: false
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          NETLIFY_SITE_ID: ${{ env.NETLIFY_SITE_ID }}
 
       - name: Verify preview CORS and deep-link refresh
         shell: bash
