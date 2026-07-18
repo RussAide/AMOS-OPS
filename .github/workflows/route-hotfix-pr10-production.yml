@@ -13,10 +13,12 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  CANDIDATE_SHA: c6ee865b138f92a700e2f36bb34dea42968b0e68
-  CANDIDATE_TREE: 00705d846cc05d4d01590875fad6ba600e772bcd
-  SOURCE_DIGEST: 66c6097086a9b571260665ec639ade38e62dc81e7c2803164e1b64513e50445a
-  RELEASE_ID: AMOS-OPS-ROUTE-HOTFIX-20260718-c6ee865
+  BASELINE_SHA: 8d1351e6acd638698ac33417da5bd6e18da3d1bb
+  ROUTE_FIX_SHA: c6ee865b138f92a700e2f36bb34dea42968b0e68
+  CANDIDATE_SHA: ceb5d8ed175fdd0daf0e13e05076130437f2604d
+  CANDIDATE_TREE: d0674f1c670121b5a3775d4f2c7cc120a227db3e
+  SOURCE_DIGEST: ca289d6fb573e29c54eedfd7fce1c8deb4b067644931c8587e8e3d2b65136d4e
+  RELEASE_ID: AMOS-OPS-ROUTE-HOTFIX-20260718-ceb5d8e
   APPROVAL_ID: AMOS-OPS-ROUTE-HOTFIX-20260718
   CHANGE_REFERENCE: GITHUB-PR-10
   PRODUCTION_ORIGIN: https://amos-ops.com
@@ -55,16 +57,19 @@ jobs:
       - name: Check out the exact hotfix candidate
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: c6ee865b138f92a700e2f36bb34dea42968b0e68
-          fetch-depth: 2
+          ref: ceb5d8ed175fdd0daf0e13e05076130437f2604d
+          fetch-depth: 3
 
       - name: Assert immutable source identity
         shell: bash
         run: |
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          test "$(git rev-parse "$CANDIDATE_SHA^")" = "$ROUTE_FIX_SHA"
+          test "$(git rev-parse "$ROUTE_FIX_SHA^")" = "$BASELINE_SHA"
           test "$(git archive --format=tar HEAD | sha256sum | cut -d' ' -f1)" = "$SOURCE_DIGEST"
-          git diff --check "$CANDIDATE_SHA^" "$CANDIDATE_SHA"
+          git diff --check "$BASELINE_SHA" "$CANDIDATE_SHA"
+          test "$(cat public/_redirects)" = "/* /index.html 200"
 
       - name: Use Node.js 24
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -202,7 +207,10 @@ jobs:
           exit 1
 
       - name: Build matching Production browser artifact
-        run: npm run build:client
+        shell: bash
+        run: |
+          npm run build:client
+          test "$(cat dist/public/_redirects)" = "/* /index.html 200"
 
       - name: Deploy matching artifact to Production Netlify
         id: frontend-deploy
