@@ -564,9 +564,9 @@ export function buildEnvironmentConfig(
       );
     }
     const invitationExpiry = Date.parse(initialAdminInvitationExpiresAt!);
-    if (!Number.isFinite(invitationExpiry) || invitationExpiry <= Date.now()) {
+    if (!Number.isFinite(invitationExpiry)) {
       throw new Error(
-        "AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT must be a future ISO timestamp.",
+        "AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT must be a valid ISO timestamp.",
       );
     }
   }

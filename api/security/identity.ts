@@ -564,7 +564,14 @@ export function createIdentityService(
         )
         .get(existing.id, environment.initialAdminInvitationTokenHash);
       if (!configuredInvitation) {
-        const now = nowIso(clock());
+        const recoveryNow = clock();
+        if (
+          Date.parse(environment.initialAdminInvitationExpiresAt!) <=
+          recoveryNow.getTime()
+        ) {
+          return;
+        }
+        const now = nowIso(recoveryNow);
         sqlite.transaction(() => {
           sqlite
             .prepare(
@@ -602,6 +609,13 @@ export function createIdentityService(
     }
 
     const now = clock();
+    if (
+      Date.parse(environment.initialAdminInvitationExpiresAt!) <= now.getTime()
+    ) {
+      throw new Error(
+        "INITIAL_ADMIN_INVITATION_EXPIRED: rotate the controlled initial-administrator invitation before first startup.",
+      );
+    }
     const userId = `AMOS-INITIAL-ADMIN-${createHash("sha256")
       .update(environment.initialAdminEmail)
       .digest("hex")

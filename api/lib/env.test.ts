@@ -251,7 +251,7 @@ describe("environment isolation controls", () => {
     ).toThrow(/Production is locked/);
   });
 
-  it("accepts only a complete, expiring production initial-admin invitation", () => {
+  it("validates complete initial-admin configuration without making expiry a restart deadline", () => {
     const base = {
       APP_ENV: "production",
       AMOS_RUNTIME_MODE: "production",
@@ -288,6 +288,29 @@ describe("environment isolation controls", () => {
     });
     expect(config.initialAdminEmail).toBe("e.o.aideyan@adobicarebhc.com");
     expect(config.initialAdminInvitationTokenHash).toBe("a".repeat(64));
+
+    const expiredConfig = buildEnvironmentConfig({
+      ...base,
+      AMOS_INITIAL_ADMIN_EMAIL: "e.o.aideyan@adobicarebhc.com",
+      AMOS_INITIAL_ADMIN_FIRST_NAME: "Eghosa",
+      AMOS_INITIAL_ADMIN_LAST_NAME: "Aideyan",
+      AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH: "b".repeat(64),
+      AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT: new Date(
+        Date.now() - 60 * 60_000,
+      ).toISOString(),
+    });
+    expect(expiredConfig.initialAdminInvitationExpiresAt).toBeTruthy();
+
+    expect(() =>
+      buildEnvironmentConfig({
+        ...base,
+        AMOS_INITIAL_ADMIN_EMAIL: "e.o.aideyan@adobicarebhc.com",
+        AMOS_INITIAL_ADMIN_FIRST_NAME: "Eghosa",
+        AMOS_INITIAL_ADMIN_LAST_NAME: "Aideyan",
+        AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH: "c".repeat(64),
+        AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT: "not-an-iso-timestamp",
+      }),
+    ).toThrow(/must be a valid ISO timestamp/);
   });
 
   it("accepts only a fully owner-bound staging review posture", () => {

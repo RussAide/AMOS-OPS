@@ -330,6 +330,89 @@ describe("identity lifecycle", () => {
         code: totpCodeForTest(rotatedReset.totpSetup.secret, now),
       }),
     ).resolves.toMatchObject({ status: "authenticated", mfaVerified: true });
+
+    const afterRecoveryExpiry = new Date(now.getTime() + 4 * 60 * 60_000);
+    expect(() =>
+      createIdentityService(sqlite, {
+        environment: rotatedRecoveryEnvironment,
+        now: () => afterRecoveryExpiry,
+        policy: { passwordHashRounds: 4 },
+      }),
+    ).not.toThrow();
+
+    const expiredUnusedTokenHash = createHmac("sha256", appSecret)
+      .update("expired-unused-admin-recovery-token-fixture-2026")
+      .digest("hex");
+    expect(() =>
+      createIdentityService(sqlite, {
+        environment: {
+          ...rotatedRecoveryEnvironment,
+          initialAdminInvitationTokenHash: expiredUnusedTokenHash,
+          initialAdminInvitationExpiresAt: new Date(
+            now.getTime() - 60_000,
+          ).toISOString(),
+        },
+        now: () => now,
+        policy: { passwordHashRounds: 4 },
+      }),
+    ).not.toThrow();
+    expect(
+      (
+        sqlite
+          .prepare(
+            "SELECT COUNT(*) AS count FROM identity_password_reset_tokens WHERE token_hash = ?",
+          )
+          .get(expiredUnusedTokenHash) as { count: number }
+      ).count,
+    ).toBe(0);
+  });
+
+  it("requires a future invitation only for first administrator creation", () => {
+    const sqlite = new Database(":memory:");
+    openDatabases.push(sqlite);
+    const now = new Date();
+    const appSecret = `expired-bootstrap-test-${"e".repeat(40)}`;
+    const environment = buildEnvironmentConfig({
+      APP_ENV: "production",
+      AMOS_RUNTIME_MODE: "production",
+      NODE_ENV: "production",
+      DATABASE_PATH: "/app/persistent/data/production/amos-ops.db",
+      UPLOAD_PATH: "/app/persistent/uploads/production",
+      CREDENTIAL_NAMESPACE: "amos-ops/production",
+      APP_SECRET: appSecret,
+      JWT_SECRET: `expired-bootstrap-jwt-${"j".repeat(40)}`,
+      DEPLOYMENT_APPROVAL_ID: "EXPIRED-INITIAL-ADMIN",
+      DEPLOYMENT_CHANGE_REFERENCE: "EXPIRED-INITIAL-ADMIN-2026",
+      AMOS_ALLOWED_ORIGINS: "https://amos-ops.example.invalid",
+      ALLOW_SELF_REGISTRATION: "false",
+      MFA_POLICY: "required-all",
+      AMOS_PRODUCTION_RELEASE_AUTHORIZED: "true",
+      AMOS_PRODUCTION_RELEASE_ID: "AMOS-OPS-EXPIRED-BOOTSTRAP-TEST",
+      AMOS_INITIAL_ADMIN_EMAIL: "expired.admin@adobicarebhc.com",
+      AMOS_INITIAL_ADMIN_FIRST_NAME: "Expired",
+      AMOS_INITIAL_ADMIN_LAST_NAME: "Administrator",
+      AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH: createHmac("sha256", appSecret)
+        .update("expired-first-administrator-token-fixture")
+        .digest("hex"),
+      AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT: new Date(
+        now.getTime() - 60_000,
+      ).toISOString(),
+    });
+
+    expect(() =>
+      createIdentityService(sqlite, {
+        environment,
+        now: () => now,
+        policy: { passwordHashRounds: 4 },
+      }),
+    ).toThrow(/INITIAL_ADMIN_INVITATION_EXPIRED/);
+    expect(
+      (
+        sqlite.prepare("SELECT COUNT(*) AS count FROM users").get() as {
+          count: number;
+        }
+      ).count,
+    ).toBe(0);
   });
 
   it("preserves the Production password and authenticator across a database restart and rejects secret drift", async () => {
