@@ -6,6 +6,14 @@ const root = join(import.meta.dirname, "../..");
 const authRouter = readFileSync(join(root, "api/routers/auth.ts"), "utf8");
 const authHook = readFileSync(join(root, "src/hooks/use-auth.ts"), "utf8");
 const trpcProvider = readFileSync(join(root, "src/providers/trpc.ts"), "utf8");
+const apiRequest = readFileSync(
+  join(root, "src/config/api-request.ts"),
+  "utf8",
+);
+const documentUpload = readFileSync(
+  join(root, "src/components/hr/document-upload.tsx"),
+  "utf8",
+);
 
 describe("bearer token transport", () => {
   it("resolves me and logout only from the Authorization header", () => {
@@ -24,7 +32,11 @@ describe("bearer token transport", () => {
     expect(authHook).not.toContain("logoutMutation.mutate({ token })");
   });
 
-  it("sends the session only as a Bearer header", () => {
-    expect(trpcProvider).toContain("Authorization: `Bearer ${token}`");
+  it("sends every API session through the shared Bearer-header boundary", () => {
+    expect(apiRequest).toContain("Authorization: `Bearer ${token}`");
+    expect(trpcProvider).toContain("return identityRequestHeaders()");
+    expect(documentUpload).toContain(
+      'authenticatedApiFetch("/api/upload"',
+    );
   });
 });

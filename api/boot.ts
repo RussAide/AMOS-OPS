@@ -19,6 +19,7 @@ import { enforceDatabaseStartupPolicy } from "./startup-policy";
 import { createPublicRuntimeConfig } from "./runtime-mode";
 import { blockedProductionSyntheticProcedures } from "./lib/production-data-boundary";
 import { inheritResponseHeaders } from "./response-headers";
+import { canonicalWebLocation } from "./canonical-web";
 
 const logger = createStructuredLogger("amos-ops-api");
 
@@ -350,8 +351,16 @@ app.use("/api/trpc/*", async (c) => {
   }
 });
 
-// ─── Serve Frontend (Production SPA) ─────────────────────────
-if (fs.existsSync(DIST_DIR)) {
+// ─── API 404 Boundary ────────────────────────────────────────
+app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
+
+// ─── Canonical Web Surface ───────────────────────────────────
+// Netlify is the sole Production web surface. Railway remains the durable API
+// and redirects browser/deep-link traffic to the canonical site, preventing a
+// second embedded frontend artifact from drifting or rendering blank.
+if (env.isProduction) {
+  app.get("*", (c) => c.redirect(canonicalWebLocation(c.req.url), 308));
+} else if (fs.existsSync(DIST_DIR)) {
   app.use("/*", serveStatic({ root: DIST_DIR }));
   app.get("*", (c) => {
     try {
@@ -365,9 +374,6 @@ if (fs.existsSync(DIST_DIR)) {
   logger.warn("frontend.build_missing", { details: { directory: DIST_DIR } });
   app.get("/", (c) => c.json({ message: "AMOS-OPS API Server", status: "ok" }));
 }
-
-// ─── 404 Fallback ────────────────────────────────────────────
-app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 
 // ─── Start Server ────────────────────────────────────────────
 const port = env.port;
