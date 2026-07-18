@@ -84,6 +84,8 @@ jobs:
           test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
           test "$(git rev-parse "$CANDIDATE_SHA^")" = "$CANDIDATE_PARENT_SHA"
           test "$(git archive --format=tar HEAD | sha256sum | cut -d' ' -f1)" = "$SOURCE_DIGEST"
+          git cat-file -e "$BASELINE_SHA^{commit}" 2>/dev/null ||
+            git fetch --no-tags --depth=1 origin "$BASELINE_SHA"
           git diff --check "$BASELINE_SHA" "$CANDIDATE_SHA"
           test "$(cat public/_redirects)" = "/* /index.html 200"
 
