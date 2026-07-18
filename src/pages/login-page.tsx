@@ -20,6 +20,7 @@ import {
   MailCheck,
 } from "lucide-react";
 import type { MfaPrompt, TotpSetup } from "@/hooks/use-auth";
+import { invitationTokenFromLocation } from "./login-invitation";
 
 /* ─── Floating Particles Canvas ─────────────────────────── */
 function ParticleBackground() {
@@ -150,11 +151,16 @@ const FEATURE_CARDS = [
 
 const DEPT_PILLS = ["Executive", "Corporate", "GAD", "BHC", "GRO"];
 
+function invitationTokenFromBrowserLocation(): string | null {
+  return invitationTokenFromLocation(
+    window.location.search,
+    window.location.hash,
+  );
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
-  const invitationToken = new URLSearchParams(window.location.search).get(
-    "invite",
-  );
+  const [invitationToken] = useState(invitationTokenFromBrowserLocation);
   const {
     login,
     completeMfa,
@@ -302,7 +308,8 @@ export function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      const setup = await resetPassword(recoveryToken, newPassword);
+      const acceptedPassword = newPassword;
+      const setup = await resetPassword(recoveryToken, acceptedPassword);
       if (invitationToken) {
         window.history.replaceState({}, "", window.location.pathname);
       }
@@ -311,10 +318,10 @@ export function LoginPage() {
         setForm((current) => ({
           ...current,
           email: setup.accountName,
-          password: "",
+          password: acceptedPassword,
         }));
         setNotice(
-          "Password updated. Add AMOS-OPS to your authenticator before signing in.",
+          "Password updated. Add AMOS-OPS to your authenticator, then continue—the accepted password is retained only on this page for sign-in.",
         );
         setRecoveryToken("");
         setNewPassword("");
@@ -322,7 +329,10 @@ export function LoginPage() {
         return;
       }
       setNotice("Password updated. Sign in with your new password.");
-      setForm((current) => ({ ...current, password: "" }));
+      setForm((current) => ({
+        ...current,
+        password: acceptedPassword,
+      }));
       setRecoveryToken("");
       setNewPassword("");
       setAuthStep("credentials");
@@ -1030,7 +1040,7 @@ export function LoginPage() {
                     onClick={() => {
                       setTotpSetup(null);
                       setNotice(
-                        "Authenticator prepared. Sign in, then enter its current six-digit code.",
+                        "Authenticator prepared. Continue with the password retained only on this page, then enter the current six-digit code.",
                       );
                       setAuthStep("credentials");
                       setMode("login");

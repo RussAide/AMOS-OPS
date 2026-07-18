@@ -207,6 +207,108 @@ describe("identity lifecycle", () => {
         dataScope: "operational",
       },
     });
+
+    const recoveryToken = "existing-admin-recovery-token-fixture-2026";
+    const recoveryTokenHash = createHmac("sha256", appSecret)
+      .update(recoveryToken)
+      .digest("hex");
+    const recoveryEnvironment = {
+      ...environment,
+      initialAdminInvitationTokenHash: recoveryTokenHash,
+      initialAdminInvitationExpiresAt: new Date(
+        now.getTime() + 2 * 60 * 60_000,
+      ).toISOString(),
+    };
+
+    createIdentityService(sqlite, {
+      environment: recoveryEnvironment,
+      now: () => now,
+      policy: { passwordHashRounds: 4 },
+    });
+    createIdentityService(sqlite, {
+      environment: recoveryEnvironment,
+      now: () => now,
+      policy: { passwordHashRounds: 4 },
+    });
+
+    expect(
+      (
+        sqlite
+          .prepare(
+            "SELECT COUNT(*) AS count FROM identity_password_reset_tokens WHERE token_hash = ?",
+          )
+          .get(recoveryTokenHash) as { count: number }
+      ).count,
+    ).toBe(1);
+
+    const rotatedRecoveryToken =
+      "rotated-existing-admin-recovery-token-fixture-2026";
+    const rotatedRecoveryTokenHash = createHmac("sha256", appSecret)
+      .update(rotatedRecoveryToken)
+      .digest("hex");
+    const rotatedRecoveryEnvironment = {
+      ...recoveryEnvironment,
+      initialAdminInvitationTokenHash: rotatedRecoveryTokenHash,
+      initialAdminInvitationExpiresAt: new Date(
+        now.getTime() + 3 * 60 * 60_000,
+      ).toISOString(),
+    };
+    const recoveredService = createIdentityService(sqlite, {
+      environment: rotatedRecoveryEnvironment,
+      now: () => now,
+      policy: { passwordHashRounds: 4 },
+    });
+    createIdentityService(sqlite, {
+      environment: rotatedRecoveryEnvironment,
+      now: () => now,
+      policy: { passwordHashRounds: 4 },
+    });
+
+    await expect(
+      recoveredService.resetPassword({
+        token: recoveryToken,
+        newPassword: "Superseded!Admin2026",
+      }),
+    ).rejects.toMatchObject({ code: "RESET_TOKEN_INVALID" });
+    expect(
+      (
+        sqlite
+          .prepare(
+            "SELECT COUNT(*) AS count FROM identity_password_reset_tokens WHERE token_hash = ?",
+          )
+          .get(rotatedRecoveryTokenHash) as { count: number }
+      ).count,
+    ).toBe(1);
+
+    const rotatedReset = await recoveredService.resetPassword({
+      token: rotatedRecoveryToken,
+      newPassword: "Recovered!Admin2026",
+    });
+    expect(rotatedReset.totpSetup?.secret).toMatch(/^[A-Z2-7]{32}$/);
+    expect(rotatedReset.totpSetup?.secret).not.toBe(reset.totpSetup?.secret);
+    await expect(
+      recoveredService.login({
+        email: "e.o.aideyan@adobicarebhc.com",
+        password: "Authorized!Admin2026",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
+    const recoveredLogin = await recoveredService.login({
+      email: "e.o.aideyan@adobicarebhc.com",
+      password: "Recovered!Admin2026",
+    });
+    expect(recoveredLogin).toMatchObject({
+      status: "mfa_required",
+      deliveryMethod: "totp",
+    });
+    if (recoveredLogin.status !== "mfa_required" || !rotatedReset.totpSetup) {
+      throw new Error("expected rotated TOTP challenge");
+    }
+    await expect(
+      recoveredService.verifyMfa({
+        challengeId: recoveredLogin.challengeId,
+        code: totpCodeForTest(rotatedReset.totpSetup.secret, now),
+      }),
+    ).resolves.toMatchObject({ status: "authenticated", mfaVerified: true });
   });
 
   it("keeps new accounts in Training and rejects Operational workspace requests", async () => {

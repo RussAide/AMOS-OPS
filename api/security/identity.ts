@@ -126,6 +126,7 @@ interface PasswordResetRow {
   user_id: string;
   expires_at: string;
   consumed_at: string | null;
+  requested_ip: string | null;
 }
 
 export type AccessStatus = "training" | "cleared" | "suspended" | "deactivated";
@@ -449,6 +450,44 @@ export function createIdentityService(
         throw new Error(
           "INITIAL_ADMIN_ACCOUNT_CONFLICT: the configured account is not an active, cleared workforce super-admin.",
         );
+      }
+      const configuredInvitation = sqlite
+        .prepare(
+          `SELECT id
+             FROM identity_password_reset_tokens
+            WHERE user_id = ? AND token_hash = ?
+            LIMIT 1`,
+        )
+        .get(existing.id, environment.initialAdminInvitationTokenHash);
+      if (!configuredInvitation) {
+        const now = nowIso(clock());
+        sqlite.transaction(() => {
+          sqlite
+            .prepare(
+              `UPDATE identity_password_reset_tokens
+                  SET consumed_at = ?
+                WHERE user_id = ?
+                  AND consumed_at IS NULL
+                  AND requested_ip IN (
+                    'controlled-initial-admin-bootstrap',
+                    'controlled-initial-admin-recovery'
+                  )`,
+            )
+            .run(now, existing.id);
+          sqlite
+            .prepare(
+              `INSERT INTO identity_password_reset_tokens
+                 (id, user_id, token_hash, created_at, expires_at, requested_ip)
+               VALUES (?, ?, ?, ?, ?, 'controlled-initial-admin-recovery')`,
+            )
+            .run(
+              randomUUID(),
+              existing.id,
+              environment.initialAdminInvitationTokenHash,
+              now,
+              environment.initialAdminInvitationExpiresAt,
+            );
+        })();
       }
       return;
     }
@@ -1077,7 +1116,7 @@ export function createIdentityService(
     }
     const row = sqlite
       .prepare(
-        `SELECT id, user_id, expires_at, consumed_at
+        `SELECT id, user_id, expires_at, consumed_at, requested_ip
            FROM identity_password_reset_tokens WHERE token_hash = ?`,
       )
       .get(hashOpaqueValue(input.token)) as PasswordResetRow | undefined;
@@ -1100,8 +1139,12 @@ export function createIdentityService(
       );
     }
     const issuer = "AMOS-OPS";
+    const controlledInitialAdminRecovery =
+      row.requested_ip === "controlled-initial-admin-bootstrap" ||
+      row.requested_ip === "controlled-initial-admin-recovery";
     const totpSecret =
-      user.mfa_method === "totp" && !user.mfa_totp_secret
+      user.mfa_method === "totp" &&
+      (controlledInitialAdminRecovery || !user.mfa_totp_secret)
         ? generateTotpSecret()
         : null;
     const encryptedTotpSecret = totpSecret
