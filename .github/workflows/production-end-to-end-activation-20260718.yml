@@ -2,7 +2,9 @@ name: Production Release (Identity-Decoupled)
 
 on:
   push:
-    branches: [agent/auth-stab-1-rebuild-20260719]
+    branches:
+      - agent/auth-stab-1-rebuild-20260719
+      - agent/production-sidebar-integrity-20260718
   workflow_dispatch:
     inputs:
       release_sha:
