@@ -151,6 +151,15 @@ function getRoleRedirectPath(role: string): string {
   }
 }
 
+export function getPostLoginRedirectPath(user: {
+  role: string;
+  accessStatus: AuthUser["accessStatus"];
+}): string {
+  return user.accessStatus === "training"
+    ? "/onboarding"
+    : getRoleRedirectPath(user.role);
+}
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const EVALUATION_USER: AuthUser = {
@@ -348,7 +357,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(result.user);
       setCurrentRole(result.user.role);
       setWorkspaceState(initialWorkspace);
-      navigate(getRoleRedirectPath(result.user.role), { replace: true });
+      navigate(getPostLoginRedirectPath(result.user), { replace: true });
     },
     [navigate],
   );

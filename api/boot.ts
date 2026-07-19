@@ -61,11 +61,7 @@ if (!fs.existsSync(BACKUP_DIR)) {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
 }
 if (env.isProduction) {
-  for (const directoryPath of [
-    UPLOAD_DIR,
-    TRAINING_UPLOAD_DIR,
-    BACKUP_DIR,
-  ]) {
+  for (const directoryPath of [UPLOAD_DIR, TRAINING_UPLOAD_DIR, BACKUP_DIR]) {
     assertPathConfined(env.persistentRoot, directoryPath, {
       allowMissing: false,
       type: "directory",
@@ -74,16 +70,10 @@ if (env.isProduction) {
 }
 const storageEncryptionReports = env.isProduction
   ? [
-      enforceEncryptedDirectory(
-        UPLOAD_DIR,
-        "upload-operational",
-        process.env,
-        [TRAINING_UPLOAD_DIR],
-      ),
-      enforceEncryptedDirectory(
+      enforceEncryptedDirectory(UPLOAD_DIR, "upload-operational", process.env, [
         TRAINING_UPLOAD_DIR,
-        "upload-training",
-      ),
+      ]),
+      enforceEncryptedDirectory(TRAINING_UPLOAD_DIR, "upload-training"),
     ]
   : [];
 const databaseBackupEncryptionReport = env.isProduction
@@ -92,8 +82,7 @@ const databaseBackupEncryptionReport = env.isProduction
 const storageEncryptionReady = isStorageEncryptionInventoryReady({
   production: env.isProduction,
   uploadReportCount: storageEncryptionReports.length,
-  databaseBackupInventoryCompleted:
-    databaseBackupEncryptionReport !== null,
+  databaseBackupInventoryCompleted: databaseBackupEncryptionReport !== null,
 });
 logger.info("storage.paths.validated", {
   details: {
@@ -282,11 +271,14 @@ app.onError((error, c) => {
 // ─── File Upload ─────────────────────────────────────────────
 app.post("/api/upload", async (c) => {
   try {
-    const { authorizeHttpRequest } = await import("./authorization/http");
-    const authorization = authorizeHttpRequest(c.req.raw, {
-      domain: "documents",
-      action: "create",
-    });
+    const { authorizeHttpRequest, enforceTrainingFileBoundary } =
+      await import("./authorization/http");
+    const authorization = enforceTrainingFileBoundary(
+      authorizeHttpRequest(c.req.raw, {
+        domain: "documents",
+        action: "create",
+      }),
+    );
     if (!authorization.allowed) {
       const body = {
         error: {
@@ -347,11 +339,14 @@ app.post("/api/upload", async (c) => {
 
 // ─── File Download ───────────────────────────────────────────
 app.get("/uploads/:filename", async (c) => {
-  const { authorizeHttpRequest } = await import("./authorization/http");
-  const authorization = authorizeHttpRequest(c.req.raw, {
-    domain: "documents",
-    action: "read",
-  });
+  const { authorizeHttpRequest, enforceTrainingFileBoundary } =
+    await import("./authorization/http");
+  const authorization = enforceTrainingFileBoundary(
+    authorizeHttpRequest(c.req.raw, {
+      domain: "documents",
+      action: "read",
+    }),
+  );
   if (!authorization.allowed) {
     const body = {
       error: {

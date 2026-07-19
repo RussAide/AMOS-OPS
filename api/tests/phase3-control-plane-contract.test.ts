@@ -105,7 +105,15 @@ describe("Phase 3 control-plane integration", () => {
       new URL("../../src/pages/login-page.tsx", import.meta.url),
       "utf8",
     );
-    for (const source of [shell, login]) {
+    const workspaceBanner = readFileSync(
+      new URL(
+        "../../src/components/shell/workspace-environment-banner.tsx",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    expect(shell).toContain("WorkspaceEnvironmentBanner");
+    for (const source of [workspaceBanner, login]) {
       expect(source).toContain("DEMO - NOT FOR CARE DELIVERY");
       expect(source).toContain("AMOS-OPS-PHASE3-EVALUATION");
     }

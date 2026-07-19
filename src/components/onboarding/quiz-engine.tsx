@@ -8,6 +8,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import type { QuizQuestion } from "@/data/onboardingData";
+import { evaluateQuizCompletion } from "./quiz-engine-state";
 
 interface QuizEngineProps {
   questions: QuizQuestion[];
@@ -57,7 +58,7 @@ export function QuizEngine({
         },
       ]);
     },
-    [showFeedback, currentQuestion]
+    [showFeedback, currentQuestion],
   );
 
   const handleNext = useCallback(() => {
@@ -67,10 +68,14 @@ export function QuizEngine({
       setShowFeedback(false);
     } else {
       setIsFinished(true);
-      const finalScore = score + (isCorrect ? 1 : 0);
-      onComplete?.(finalScore, totalQuestions, passed);
+      const completion = evaluateQuizCompletion(
+        score,
+        totalQuestions,
+        passingScore,
+      );
+      onComplete?.(completion.score, totalQuestions, completion.passed);
     }
-  }, [currentIndex, totalQuestions, score, isCorrect, passed, onComplete]);
+  }, [currentIndex, totalQuestions, score, passingScore, onComplete]);
 
   const handleRestart = useCallback(() => {
     setCurrentIndex(0);
@@ -94,9 +99,17 @@ export function QuizEngine({
           }}
         >
           {passed ? (
-            <Trophy size={40} style={{ color: "#059669" }} className="mx-auto mb-3" />
+            <Trophy
+              size={40}
+              style={{ color: "#059669" }}
+              className="mx-auto mb-3"
+            />
           ) : (
-            <AlertTriangle size={40} style={{ color: "#D97706" }} className="mx-auto mb-3" />
+            <AlertTriangle
+              size={40}
+              style={{ color: "#D97706" }}
+              className="mx-auto mb-3"
+            />
           )}
           <h3
             className="text-[20px] font-bold mb-1"
@@ -104,26 +117,41 @@ export function QuizEngine({
           >
             {passed ? "Module Assessment Passed" : "Assessment Not Passed"}
           </h3>
-          <p className="text-[14px] mb-3" style={{ color: passed ? "#065F46" : "#92400E" }}>
+          <p
+            className="text-[14px] mb-3"
+            style={{ color: passed ? "#065F46" : "#92400E" }}
+          >
             {passed
               ? `Congratulations! You scored ${pctCorrect}% and have successfully completed this module.`
               : `You scored ${pctCorrect}%. A score of ${passingScore}% is required to pass. Review the explanations below and try again.`}
           </p>
           <div className="flex items-center justify-center gap-4">
             <div className="text-center">
-              <p className="text-[28px] font-bold" style={{ color: passed ? "#059669" : "#D97706" }}>
+              <p
+                className="text-[28px] font-bold"
+                style={{ color: passed ? "#059669" : "#D97706" }}
+              >
                 {score}/{totalQuestions}
               </p>
-              <p className="text-[12px]" style={{ color: "var(--topbar-subtitle)" }}>
+              <p
+                className="text-[12px]"
+                style={{ color: "var(--topbar-subtitle)" }}
+              >
                 Correct
               </p>
             </div>
             <div className="w-px h-10 bg-gray-200" />
             <div className="text-center">
-              <p className="text-[28px] font-bold" style={{ color: passed ? "#059669" : "#D97706" }}>
+              <p
+                className="text-[28px] font-bold"
+                style={{ color: passed ? "#059669" : "#D97706" }}
+              >
                 {pctCorrect}%
               </p>
-              <p className="text-[12px]" style={{ color: "var(--topbar-subtitle)" }}>
+              <p
+                className="text-[12px]"
+                style={{ color: "var(--topbar-subtitle)" }}
+              >
                 Score
               </p>
             </div>
@@ -132,7 +160,10 @@ export function QuizEngine({
               <p className="text-[28px] font-bold" style={{ color: "#245C5A" }}>
                 {passingScore}%
               </p>
-              <p className="text-[12px]" style={{ color: "var(--topbar-subtitle)" }}>
+              <p
+                className="text-[12px]"
+                style={{ color: "var(--topbar-subtitle)" }}
+              >
                 Required
               </p>
             </div>
@@ -141,7 +172,10 @@ export function QuizEngine({
 
         {/* Answer Review */}
         <div className="space-y-3">
-          <h4 className="text-[14px] font-semibold" style={{ color: "var(--topbar-title)" }}>
+          <h4
+            className="text-[14px] font-semibold"
+            style={{ color: "var(--topbar-title)" }}
+          >
             Answer Review
           </h4>
           {questions.map((q, i) => {
@@ -158,23 +192,43 @@ export function QuizEngine({
               >
                 <div className="flex items-start gap-2 mb-2">
                   {wasCorrect ? (
-                    <CheckCircle size={18} style={{ color: "#059669" }} className="flex-shrink-0 mt-0.5" />
+                    <CheckCircle
+                      size={18}
+                      style={{ color: "#059669" }}
+                      className="flex-shrink-0 mt-0.5"
+                    />
                   ) : (
-                    <XCircle size={18} style={{ color: "#DC2626" }} className="flex-shrink-0 mt-0.5" />
+                    <XCircle
+                      size={18}
+                      style={{ color: "#DC2626" }}
+                      className="flex-shrink-0 mt-0.5"
+                    />
                   )}
                   <div>
-                    <p className="text-[13px] font-medium" style={{ color: "var(--topbar-title)" }}>
+                    <p
+                      className="text-[13px] font-medium"
+                      style={{ color: "var(--topbar-title)" }}
+                    >
                       {i + 1}. {q.question}
                     </p>
                     {!wasCorrect && (
-                      <p className="text-[12px] mt-1" style={{ color: "#991B1B" }}>
+                      <p
+                        className="text-[12px] mt-1"
+                        style={{ color: "#991B1B" }}
+                      >
                         Your answer: {q.options[answer?.selectedIndex ?? 0]}
                       </p>
                     )}
-                    <p className="text-[12px] mt-1 font-medium" style={{ color: wasCorrect ? "#065F46" : "#065F46" }}>
+                    <p
+                      className="text-[12px] mt-1 font-medium"
+                      style={{ color: wasCorrect ? "#065F46" : "#065F46" }}
+                    >
                       Correct answer: {q.options[q.correctIndex]}
                     </p>
-                    <p className="text-[12px] mt-1" style={{ color: "var(--topbar-subtitle)" }}>
+                    <p
+                      className="text-[12px] mt-1"
+                      style={{ color: "var(--topbar-subtitle)" }}
+                    >
                       {q.explanation}
                     </p>
                   </div>
@@ -199,7 +253,10 @@ export function QuizEngine({
           <button
             onClick={onCancel}
             className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-medium border transition-all hover:shadow-sm"
-            style={{ borderColor: "var(--card-border)", color: "var(--topbar-title)" }}
+            style={{
+              borderColor: "var(--card-border)",
+              color: "var(--topbar-title)",
+            }}
           >
             Back to Module
           </button>
@@ -218,16 +275,22 @@ export function QuizEngine({
             <div
               className="h-full rounded-full transition-all duration-300"
               style={{
-                width: `${((currentIndex) / totalQuestions) * 100}%`,
+                width: `${(currentIndex / totalQuestions) * 100}%`,
                 backgroundColor: "#245C5A",
               }}
             />
           </div>
-          <span className="text-[12px] font-medium flex-shrink-0" style={{ color: "var(--topbar-subtitle)" }}>
+          <span
+            className="text-[12px] font-medium flex-shrink-0"
+            style={{ color: "var(--topbar-subtitle)" }}
+          >
             {currentIndex + 1} of {totalQuestions}
           </span>
         </div>
-        <span className="text-[12px] font-medium ml-3 flex-shrink-0" style={{ color: "#245C5A" }}>
+        <span
+          className="text-[12px] font-medium ml-3 flex-shrink-0"
+          style={{ color: "#245C5A" }}
+        >
           Score: {score}/{currentIndex}
         </span>
       </div>
@@ -254,11 +317,23 @@ export function QuizEngine({
             if (isCorrectOption) {
               borderColor = "#059669";
               bgColor = "#ECFDF5";
-              icon = <CheckCircle size={18} style={{ color: "#059669" }} className="flex-shrink-0" />;
+              icon = (
+                <CheckCircle
+                  size={18}
+                  style={{ color: "#059669" }}
+                  className="flex-shrink-0"
+                />
+              );
             } else if (isSelected && !isCorrectOption) {
               borderColor = "#DC2626";
               bgColor = "#FEE2E2";
-              icon = <XCircle size={18} style={{ color: "#DC2626" }} className="flex-shrink-0" />;
+              icon = (
+                <XCircle
+                  size={18}
+                  style={{ color: "#DC2626" }}
+                  className="flex-shrink-0"
+                />
+              );
             } else {
               borderColor = "#E2E8F0";
               bgColor = "#F8FAFB";
@@ -278,19 +353,33 @@ export function QuizEngine({
                 borderColor,
                 backgroundColor: bgColor,
                 cursor: showFeedback ? "default" : "pointer",
-                opacity: showFeedback && !isSelected && !isCorrectOption ? 0.5 : 1,
+                opacity:
+                  showFeedback && !isSelected && !isCorrectOption ? 0.5 : 1,
               }}
             >
               <span
                 className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[13px] font-bold"
                 style={{
-                  backgroundColor: isSelected || (showFeedback && isCorrectOption) ? (isCorrectOption ? "#059669" : isSelected ? "#245C5A" : "#E2E8F0") : "#F1F5F9",
-                  color: isSelected || (showFeedback && isCorrectOption) ? "#fff" : "#64748B",
+                  backgroundColor:
+                    isSelected || (showFeedback && isCorrectOption)
+                      ? isCorrectOption
+                        ? "#059669"
+                        : isSelected
+                          ? "#245C5A"
+                          : "#E2E8F0"
+                      : "#F1F5F9",
+                  color:
+                    isSelected || (showFeedback && isCorrectOption)
+                      ? "#fff"
+                      : "#64748B",
                 }}
               >
                 {String.fromCharCode(65 + index)}
               </span>
-              <span className="text-[14px] flex-1" style={{ color: "var(--topbar-title)" }}>
+              <span
+                className="text-[14px] flex-1"
+                style={{ color: "var(--topbar-title)" }}
+              >
                 {option}
               </span>
               {icon}
@@ -314,7 +403,10 @@ export function QuizEngine({
           >
             {isCorrect ? "Correct!" : "Incorrect"}
           </p>
-          <p className="text-[13px]" style={{ color: isCorrect ? "#065F46" : "#991B1B" }}>
+          <p
+            className="text-[13px]"
+            style={{ color: isCorrect ? "#065F46" : "#991B1B" }}
+          >
             {currentQuestion.explanation}
           </p>
         </div>
@@ -325,7 +417,10 @@ export function QuizEngine({
         <button
           onClick={onCancel}
           className="px-4 py-2 rounded-lg text-[13px] font-medium border transition-all"
-          style={{ borderColor: "var(--card-border)", color: "var(--topbar-subtitle)" }}
+          style={{
+            borderColor: "var(--card-border)",
+            color: "var(--topbar-subtitle)",
+          }}
         >
           Cancel
         </button>
@@ -335,7 +430,9 @@ export function QuizEngine({
             className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-medium text-white transition-all hover:shadow-md"
             style={{ backgroundColor: "#245C5A" }}
           >
-            {currentIndex < totalQuestions - 1 ? "Next Question" : "View Results"}
+            {currentIndex < totalQuestions - 1
+              ? "Next Question"
+              : "View Results"}
             <ArrowRight size={14} />
           </button>
         )}

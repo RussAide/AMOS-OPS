@@ -1,6 +1,7 @@
 import {
   Activity,
   Building2,
+  GraduationCap,
   Home,
   LayoutDashboard,
   ListTodo,
@@ -13,7 +14,7 @@ import { authorizeClientRoute } from "@/constants/access-control";
 import type { DivisionId } from "@/constants/organization";
 import { navItems, type NavItem } from "@/data/navData";
 
-export type SidebarRuntimeMode = "demo" | "production";
+export type SidebarRuntimeMode = "demo" | "production" | "training";
 
 export interface SidebarNavLink {
   type: "link";
@@ -119,6 +120,21 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
     ),
   ]),
   group(
+    "training",
+    "Training",
+    GraduationCap,
+    [
+      link("training-academy", "Onboarding Academy", "/onboarding"),
+      link(
+        "training-modules",
+        "Modules",
+        "/onboarding/training",
+        "/onboarding",
+      ),
+    ],
+    { modes: ["training"] },
+  ),
+  group(
     "bhc",
     "Behavioral Health Center",
     Activity,
@@ -126,8 +142,16 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
       link("bhc-dashboard", "BHC Dashboard", "/bhc", "/clinical"),
       group("bhc-ccmg", "CCMG", Users, [
         link("bhc-ccmg-oversight", "Oversight", "/ccmg"),
-        link("bhc-ccmg-referrals", "Referrals and Intake", "/clinical/referrals"),
-        link("bhc-ccmg-cans", "CANS/TRR Assessments", "/clinical/cans-assessments"),
+        link(
+          "bhc-ccmg-referrals",
+          "Referrals and Intake",
+          "/clinical/referrals",
+        ),
+        link(
+          "bhc-ccmg-cans",
+          "CANS/TRR Assessments",
+          "/clinical/cans-assessments",
+        ),
         link(
           "bhc-ccmg-medication-quality",
           "Medication and quality coordination",
@@ -137,7 +161,12 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
       ]),
       group("bhc-mhtcm", "MHTCM", ListTodo, [
         link("bhc-mhtcm-case-management", "Case Management", "/mhtcm"),
-        link("bhc-mhtcm-care-coordination", "Care Coordination", "/cases", "/clinical"),
+        link(
+          "bhc-mhtcm-care-coordination",
+          "Care Coordination",
+          "/cases",
+          "/clinical",
+        ),
         link(
           "bhc-mhtcm-transitions",
           "Referrals, discharge and aftercare",
@@ -146,13 +175,29 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
       ]),
       group("bhc-mhrs", "MHRS", Activity, [
         link("bhc-mhrs-program-operations", "Program Operations", "/mhrs"),
-        link("bhc-mhrs-service-delivery", "Service Delivery", "/clinical/service-delivery"),
-        link("bhc-mhrs-clinical-sessions", "Clinical Sessions", "/clinical/sessions"),
+        link(
+          "bhc-mhrs-service-delivery",
+          "Service Delivery",
+          "/clinical/service-delivery",
+        ),
+        link(
+          "bhc-mhrs-clinical-sessions",
+          "Clinical Sessions",
+          "/clinical/sessions",
+        ),
         link("bhc-mhrs-outcomes", "Outcomes", "/clinical/outcome-measures"),
       ]),
       group("bhc-shared-clinical", "Shared Clinical Services", Activity, [
-        link("bhc-treatment-plans", "Treatment Plans", "/clinical/treatment-plans"),
-        link("bhc-insurance", "Insurance and Authorization", "/clinical/insurance-plans"),
+        link(
+          "bhc-treatment-plans",
+          "Treatment Plans",
+          "/clinical/treatment-plans",
+        ),
+        link(
+          "bhc-insurance",
+          "Insurance and Authorization",
+          "/clinical/insurance-plans",
+        ),
         link(
           "bhc-clinical-intelligence",
           "Clinical Intelligence",
@@ -231,7 +276,11 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
         "Decision Intelligence",
         "/executive/decision-intelligence",
       ),
-      link("eo-strategic-projects", "Strategic Projects", "/executive/strategic-projects"),
+      link(
+        "eo-strategic-projects",
+        "Strategic Projects",
+        "/executive/strategic-projects",
+      ),
       link("eo-mgma", "MGMA Scorecard", "/executive/mgma"),
       link("eo-analytics", "Enterprise Analytics", "/analytics"),
       link(
@@ -258,15 +307,20 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
       ]),
       link("eo-quality-compliance", "Quality and Compliance", "/qa"),
       link("eo-revenue-cycle", "Revenue Cycle", "/revenue"),
-      group("eo-knowledge-documents", "Knowledge and Documents", LayoutDashboard, [
-        link("eo-document-studio", "Document Studio", "/documents"),
-        link("eo-knowledge", "Knowledge and SOP", "/knowledge"),
-        link(
-          "eo-document-intelligence",
-          "Document Intelligence",
-          "/knowledge/document-intelligence",
-        ),
-      ]),
+      group(
+        "eo-knowledge-documents",
+        "Knowledge and Documents",
+        LayoutDashboard,
+        [
+          link("eo-document-studio", "Document Studio", "/documents"),
+          link("eo-knowledge", "Knowledge and SOP", "/knowledge"),
+          link(
+            "eo-document-intelligence",
+            "Document Intelligence",
+            "/knowledge/document-intelligence",
+          ),
+        ],
+      ),
     ],
     { division: "eo" },
   ),
@@ -275,16 +329,29 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
     "System Administration",
     Settings,
     [
-      link("admin-organization", "Organization and Roles", "/admin/organization"),
+      link(
+        "admin-organization",
+        "Organization and Roles",
+        "/admin/organization",
+      ),
       link("admin-settings", "System Settings", "/admin/settings"),
       link(
         "admin-microsoft-integration",
         "Microsoft 365 and Entra Integrations",
         "/operations-hub/microsoft-integrations",
       ),
-      link("admin-workflows", "Workflow Configuration", "/admin/workflow", "/admin/workflows"),
+      link(
+        "admin-workflows",
+        "Workflow Configuration",
+        "/admin/workflow",
+        "/admin/workflows",
+      ),
       link("admin-intelligence", "AMOS Intelligence/NIL", "/nil"),
-      link("admin-mobile", "Mobile and Offline Configuration", "/operations-hub/mobile-offline"),
+      link(
+        "admin-mobile",
+        "Mobile and Offline Configuration",
+        "/operations-hub/mobile-offline",
+      ),
       link("admin-enhancements", "Enhancement Register", "/admin/enhancements"),
       link(
         "admin-demo-tools",
@@ -294,7 +361,7 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
         ["demo"],
       ),
     ],
-    { adminOnly: true },
+    { adminOnly: true, modes: ["demo", "production"] },
   ),
 ];
 
@@ -313,6 +380,9 @@ function filterNode(
   if (!modeAllows(node.modes, runtimeMode)) return null;
 
   if (node.type === "link") {
+    if (runtimeMode === "training" && node.href.startsWith("/onboarding")) {
+      return node;
+    }
     return authorizeClientRoute(role, node.href).allowed ? node : null;
   }
 
@@ -334,9 +404,13 @@ export function getSidebarNavigation(
   role: string,
   runtimeMode: SidebarRuntimeMode,
 ): readonly SidebarNavNode[] {
-  return SIDEBAR_NAVIGATION.map((node) =>
-    filterNode(node, role, runtimeMode),
-  ).filter((node): node is SidebarNavNode => node !== null);
+  const workspaceNodes =
+    runtimeMode === "training"
+      ? SIDEBAR_NAVIGATION.filter((node) => node.id === "training")
+      : SIDEBAR_NAVIGATION;
+  return workspaceNodes
+    .map((node) => filterNode(node, role, runtimeMode))
+    .filter((node): node is SidebarNavNode => node !== null);
 }
 
 export function flattenSidebarLinks(

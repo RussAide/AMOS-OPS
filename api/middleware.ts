@@ -103,6 +103,10 @@ export const createRouter = t.router;
 export const anonymousQuery = t.procedure;
 // ─── Unified identity + deny-by-default authorization ─────
 
+export function isTrainingProcedureFamilyAllowed(path: string): boolean {
+  return path.startsWith("auth.") || path.startsWith("training.");
+}
+
 function rawObject(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -210,6 +214,13 @@ export const authedQuery = t.procedure.use(
       throw new TRPCError({
         code: "FORBIDDEN",
         message: "This account cannot access the requested workspace.",
+      });
+    }
+    if (dataScope === "training" && !isTrainingProcedureFamilyAllowed(path)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message:
+          "This Training pilot is limited to authentication and approved orientation procedures.",
       });
     }
     if (

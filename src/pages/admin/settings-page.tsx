@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ROLE_DEFINITIONS, useAuth } from "@/hooks/use-auth";
+import { useState, type FormEvent } from "react";
+import { ROLE_DEFINITIONS, useAuth, type UserRole } from "@/hooks/use-auth";
 import { trpc } from "@/providers/trpc";
 import {
   Settings,
@@ -36,6 +36,569 @@ interface User {
   trainingAccess: boolean;
   sponsorName: string | null;
   accessExpiresAt: string | null;
+}
+
+type TrainingIdentityType = "workforce" | "external_guest";
+
+export interface TrainingAccountDraft {
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+  identityType: TrainingIdentityType;
+  sponsorName: string;
+  accessExpiresAt: string;
+  rationale: string;
+  syntheticOnlyAcknowledged: boolean;
+}
+
+interface TrainingAccountRequest {
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+  identityType: TrainingIdentityType;
+  sponsorName: string;
+  accessExpiresAt: string;
+  rationale: string;
+}
+
+interface TrainingAccountResult {
+  invitationToken: string;
+  expiresAt: string;
+}
+
+type TrainingAccountFieldErrors = Partial<
+  Record<keyof TrainingAccountDraft | "form", string>
+>;
+
+const INITIAL_TRAINING_ACCOUNT_DRAFT: TrainingAccountDraft = {
+  email: "",
+  firstName: "",
+  lastName: "",
+  role: "training-coordinator",
+  identityType: "workforce",
+  sponsorName: "",
+  accessExpiresAt: "",
+  rationale: "",
+  syntheticOnlyAcknowledged: false,
+};
+
+// Exported for focused TA.1 control-contract tests.
+// eslint-disable-next-line react-refresh/only-export-components
+export function validateTrainingAccountDraft(
+  draft: TrainingAccountDraft,
+  defaultSponsorName: string,
+  now = new Date(),
+): {
+  errors: TrainingAccountFieldErrors;
+  request?: TrainingAccountRequest;
+} {
+  const errors: TrainingAccountFieldErrors = {};
+  const email = draft.email.trim();
+  const firstName = draft.firstName.trim();
+  const lastName = draft.lastName.trim();
+  const rationale = draft.rationale.trim();
+  const sponsorName =
+    draft.identityType === "external_guest"
+      ? draft.sponsorName.trim()
+      : defaultSponsorName.trim();
+  const roleIsCanonical = ROLE_DEFINITIONS.some(
+    (definition) => definition.id === draft.role,
+  );
+  const accessExpiry = new Date(draft.accessExpiresAt);
+
+  if (!email) {
+    errors.email = "Enter the person's work email.";
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errors.email = "Enter a valid work email address.";
+  }
+  if (!firstName) errors.firstName = "Enter the person's first name.";
+  if (!lastName) errors.lastName = "Enter the person's last name.";
+  if (!roleIsCanonical) errors.role = "Select a canonical AMOS-OPS role.";
+  if (!draft.accessExpiresAt) {
+    errors.accessExpiresAt = "Set an access-expiration date and time.";
+  } else if (
+    Number.isNaN(accessExpiry.getTime()) ||
+    accessExpiry.getTime() <= now.getTime()
+  ) {
+    errors.accessExpiresAt = "Access expiration must be in the future.";
+  }
+  if (draft.identityType === "external_guest" && !sponsorName) {
+    errors.sponsorName = "Name the Adolbi sponsor for this external user.";
+  }
+  if (draft.identityType === "workforce" && !sponsorName) {
+    errors.form =
+      "The approving administrator could not be identified. Sign in again before creating the account.";
+  }
+  if (rationale.length < 5) {
+    errors.rationale = "Enter a rationale of at least 5 characters.";
+  }
+  if (!draft.syntheticOnlyAcknowledged) {
+    errors.syntheticOnlyAcknowledged =
+      "Confirm that this account is for synthetic-only training with no PHI.";
+  }
+
+  if (Object.keys(errors).length > 0) return { errors };
+
+  return {
+    errors,
+    request: {
+      email,
+      firstName,
+      lastName,
+      role: draft.role,
+      identityType: draft.identityType,
+      sponsorName,
+      accessExpiresAt: accessExpiry.toISOString(),
+      rationale,
+    },
+  };
+}
+
+// Exported for focused TA.1 invitation URL tests.
+// eslint-disable-next-line react-refresh/only-export-components
+export function buildTrainingInvitationUrl(
+  origin: string,
+  invitationToken: string,
+): string {
+  return `${origin}/login#invite=${encodeURIComponent(invitationToken)}`;
+}
+
+export function TrainingAccountCreationPanel({
+  defaultSponsorName,
+  isPending,
+  onCreate,
+  onClose,
+}: {
+  defaultSponsorName: string;
+  isPending: boolean;
+  onCreate: (request: TrainingAccountRequest) => Promise<TrainingAccountResult>;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState<TrainingAccountDraft>(
+    INITIAL_TRAINING_ACCOUNT_DRAFT,
+  );
+  const [errors, setErrors] = useState<TrainingAccountFieldErrors>({});
+  const [invitationUrl, setInvitationUrl] = useState<string | null>(null);
+  const [invitationExpiresAt, setInvitationExpiresAt] = useState<string | null>(
+    null,
+  );
+  const [copyMessage, setCopyMessage] = useState("");
+
+  const setField = <Key extends keyof TrainingAccountDraft>(
+    field: Key,
+    value: TrainingAccountDraft[Key],
+  ) => {
+    setDraft((current) => ({ ...current, [field]: value }));
+    setErrors((current) => ({
+      ...current,
+      [field]: undefined,
+      form: undefined,
+    }));
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setCopyMessage("");
+    const validation = validateTrainingAccountDraft(draft, defaultSponsorName);
+    setErrors(validation.errors);
+    if (!validation.request) return;
+
+    try {
+      const result = await onCreate(validation.request);
+      setInvitationUrl(
+        buildTrainingInvitationUrl(
+          window.location.origin,
+          result.invitationToken,
+        ),
+      );
+      setInvitationExpiresAt(result.expiresAt);
+    } catch (error) {
+      setErrors({
+        form:
+          error instanceof Error
+            ? error.message
+            : "The Training account could not be created.",
+      });
+    }
+  };
+
+  const handleCopyInvitation = async () => {
+    if (!invitationUrl || !navigator.clipboard) {
+      setCopyMessage(
+        "Clipboard access is unavailable. Select and copy the link manually.",
+      );
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(invitationUrl);
+      setCopyMessage("Invitation link copied.");
+    } catch {
+      setCopyMessage("Copy was blocked. Select and copy the link manually.");
+    }
+  };
+
+  const closeAndClear = () => {
+    setInvitationUrl(null);
+    setInvitationExpiresAt(null);
+    setCopyMessage("");
+    onClose();
+  };
+
+  if (invitationUrl) {
+    return (
+      <section
+        id="training-account-creation-panel"
+        role="status"
+        aria-live="polite"
+        aria-labelledby="training-invitation-title"
+        className="border-b bg-emerald-50 p-4"
+        style={{ borderColor: "var(--card-border)" }}
+      >
+        <h4
+          id="training-invitation-title"
+          className="text-[13px] font-semibold text-emerald-900"
+        >
+          Training account created
+        </h4>
+        <p className="mt-1 text-[11px] text-emerald-800">
+          This one-time invitation URL is the only invitation secret shown. Send
+          it through an approved secure channel, then hide it.
+        </p>
+        <label
+          htmlFor="training-invitation-url"
+          className="mt-3 block text-[11px] font-semibold text-emerald-950"
+        >
+          One-time invitation URL
+        </label>
+        <div className="mt-1 flex flex-col gap-2 sm:flex-row">
+          <input
+            id="training-invitation-url"
+            aria-label="One-time invitation URL"
+            value={invitationUrl}
+            readOnly
+            autoComplete="off"
+            className="min-w-0 flex-1 rounded border border-emerald-300 bg-white px-3 py-2 text-[11px]"
+          />
+          <button
+            type="button"
+            onClick={() => void handleCopyInvitation()}
+            className="rounded bg-[#245C5A] px-3 py-2 text-[11px] font-semibold text-white"
+          >
+            Copy secure link
+          </button>
+        </div>
+        {invitationExpiresAt && (
+          <p className="mt-2 text-[10px] text-emerald-800">
+            Invitation expires {formatTimestamp(invitationExpiresAt)}.
+          </p>
+        )}
+        {copyMessage && (
+          <p className="mt-2 text-[11px] text-emerald-900">{copyMessage}</p>
+        )}
+        <button
+          type="button"
+          onClick={closeAndClear}
+          className="mt-3 rounded border border-emerald-700 px-3 py-1.5 text-[11px] font-semibold text-emerald-900"
+        >
+          Done — hide invitation link
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      id="training-account-creation-panel"
+      role="region"
+      aria-labelledby="training-account-form-title"
+      className="border-b bg-amber-50 p-4"
+      style={{ borderColor: "var(--card-border)" }}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h4
+            id="training-account-form-title"
+            className="text-[13px] font-semibold text-amber-950"
+          >
+            Create synthetic-only Training account
+          </h4>
+          <p className="mt-1 text-[11px] text-amber-900">
+            Training access is isolated from operational data. Never enter PHI,
+            real patient information, or production documents.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={isPending}
+          aria-label="Cancel Training account creation"
+          className="rounded border border-amber-300 px-2 py-1 text-[11px] font-semibold text-amber-900 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+
+      <form
+        className="mt-4 space-y-4"
+        noValidate
+        onSubmit={(event) => void handleSubmit(event)}
+      >
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <TrainingTextField
+            id="training-email"
+            label="Work email"
+            type="email"
+            value={draft.email}
+            error={errors.email}
+            onChange={(value) => setField("email", value)}
+            autoComplete="email"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <TrainingTextField
+              id="training-first-name"
+              label="First name"
+              value={draft.firstName}
+              error={errors.firstName}
+              onChange={(value) => setField("firstName", value)}
+              autoComplete="given-name"
+            />
+            <TrainingTextField
+              id="training-last-name"
+              label="Last name"
+              value={draft.lastName}
+              error={errors.lastName}
+              onChange={(value) => setField("lastName", value)}
+              autoComplete="family-name"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="training-role"
+              className="block text-[11px] font-semibold text-amber-950"
+            >
+              Canonical AMOS-OPS role
+            </label>
+            <select
+              id="training-role"
+              value={draft.role}
+              onChange={(event) =>
+                setField("role", event.target.value as UserRole)
+              }
+              aria-invalid={Boolean(errors.role)}
+              aria-describedby={errors.role ? "training-role-error" : undefined}
+              className="mt-1 w-full rounded border bg-white px-3 py-2 text-[12px]"
+              style={{
+                borderColor: errors.role ? "#DC2626" : "var(--card-border)",
+              }}
+            >
+              {ROLE_DEFINITIONS.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.label} — {role.department}
+                </option>
+              ))}
+            </select>
+            {errors.role && (
+              <FieldError id="training-role-error">{errors.role}</FieldError>
+            )}
+          </div>
+
+          <div>
+            <label
+              htmlFor="training-identity-type"
+              className="block text-[11px] font-semibold text-amber-950"
+            >
+              Identity type
+            </label>
+            <select
+              id="training-identity-type"
+              value={draft.identityType}
+              onChange={(event) =>
+                setField(
+                  "identityType",
+                  event.target.value as TrainingIdentityType,
+                )
+              }
+              className="mt-1 w-full rounded border bg-white px-3 py-2 text-[12px]"
+              style={{ borderColor: "var(--card-border)" }}
+            >
+              <option value="workforce">Workforce</option>
+              <option value="external_guest">External stakeholder</option>
+            </select>
+          </div>
+
+          {draft.identityType === "external_guest" ? (
+            <TrainingTextField
+              id="training-sponsor"
+              label="Adolbi sponsor"
+              value={draft.sponsorName}
+              error={errors.sponsorName}
+              onChange={(value) => setField("sponsorName", value)}
+              autoComplete="name"
+            />
+          ) : (
+            <div className="rounded border border-amber-200 bg-white px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                Approving administrator
+              </p>
+              <p className="mt-1 text-[11px] text-amber-950">
+                {defaultSponsorName || "Unavailable — sign in again"}
+              </p>
+            </div>
+          )}
+
+          <TrainingTextField
+            id="training-access-expiry"
+            label="Access expiration"
+            type="datetime-local"
+            value={draft.accessExpiresAt}
+            error={errors.accessExpiresAt}
+            onChange={(value) => setField("accessExpiresAt", value)}
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="training-rationale"
+            className="block text-[11px] font-semibold text-amber-950"
+          >
+            Access rationale
+          </label>
+          <textarea
+            id="training-rationale"
+            value={draft.rationale}
+            onChange={(event) => setField("rationale", event.target.value)}
+            aria-invalid={Boolean(errors.rationale)}
+            aria-describedby={
+              errors.rationale ? "training-rationale-error" : undefined
+            }
+            maxLength={1_000}
+            rows={3}
+            className="mt-1 w-full rounded border bg-white px-3 py-2 text-[12px]"
+            style={{
+              borderColor: errors.rationale ? "#DC2626" : "var(--card-border)",
+            }}
+          />
+          {errors.rationale && (
+            <FieldError id="training-rationale-error">
+              {errors.rationale}
+            </FieldError>
+          )}
+        </div>
+
+        <div>
+          <label className="flex items-start gap-2 rounded border border-amber-300 bg-white p-3 text-[11px] text-amber-950">
+            <input
+              type="checkbox"
+              checked={draft.syntheticOnlyAcknowledged}
+              onChange={(event) =>
+                setField("syntheticOnlyAcknowledged", event.target.checked)
+              }
+              aria-invalid={Boolean(errors.syntheticOnlyAcknowledged)}
+              aria-describedby={
+                errors.syntheticOnlyAcknowledged
+                  ? "training-acknowledgement-error"
+                  : undefined
+              }
+              className="mt-0.5"
+            />
+            <span>
+              I confirm this account is limited to synthetic-only Training and
+              will not be used for PHI, operational records, or real documents.
+            </span>
+          </label>
+          {errors.syntheticOnlyAcknowledged && (
+            <FieldError id="training-acknowledgement-error">
+              {errors.syntheticOnlyAcknowledged}
+            </FieldError>
+          )}
+        </div>
+
+        {errors.form && (
+          <p
+            role="alert"
+            className="rounded bg-red-50 px-3 py-2 text-[11px] text-red-700"
+          >
+            {errors.form}
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isPending}
+            className="rounded border px-3 py-2 text-[11px] font-semibold disabled:opacity-50"
+            style={{ borderColor: "var(--card-border)" }}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isPending}
+            className="rounded bg-[#245C5A] px-3 py-2 text-[11px] font-semibold text-white disabled:opacity-50"
+          >
+            {isPending
+              ? "Creating Training account…"
+              : "Create Training account"}
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function TrainingTextField({
+  id,
+  label,
+  type = "text",
+  value,
+  error,
+  autoComplete,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  type?: string;
+  value: string;
+  error?: string;
+  autoComplete?: string;
+  onChange: (value: string) => void;
+}) {
+  const errorId = `${id}-error`;
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className="block text-[11px] font-semibold text-amber-950"
+      >
+        {label}
+      </label>
+      <input
+        id={id}
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        required
+        autoComplete={autoComplete}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
+        className="mt-1 w-full rounded border bg-white px-3 py-2 text-[12px]"
+        style={{ borderColor: error ? "#DC2626" : "var(--card-border)" }}
+      />
+      {error && <FieldError id={errorId}>{error}</FieldError>}
+    </div>
+  );
+}
+
+function FieldError({ id, children }: { id: string; children: string }) {
+  return (
+    <p id={id} className="mt-1 text-[10px] text-red-700">
+      {children}
+    </p>
+  );
 }
 
 const THEME_OPTIONS = ["Light", "Dark", "System Default"];
@@ -111,6 +674,8 @@ export default function SettingsPage() {
   const [editIdentityType, setEditIdentityType] =
     useState<User["identityType"]>("workforce");
   const [editTrainingAccess, setEditTrainingAccess] = useState(false);
+  const [trainingAccountPanelOpen, setTrainingAccountPanelOpen] =
+    useState(false);
 
   const identityPanelEnabled =
     activeTab === "users" || activeTab === "security";
@@ -251,35 +816,6 @@ export default function SettingsPage() {
       id: directoryUser.id,
       isActive: directoryUser.status !== "active",
     });
-  };
-
-  const handleCreateTrainingAccount = async () => {
-    const email = window.prompt("Training user email:")?.trim();
-    if (!email) return;
-    const firstName = window.prompt("First name:")?.trim();
-    if (!firstName) return;
-    const lastName = window.prompt("Last name:")?.trim();
-    if (!lastName) return;
-    const sponsorName = window.prompt("Adolbi sponsor:")?.trim();
-    if (!sponsorName) return;
-    const external = window.confirm("Is this person an external stakeholder?");
-    const result = await createTrainingAccountMutation.mutateAsync({
-      email,
-      firstName,
-      lastName,
-      role: "rcs-day",
-      identityType: external ? "external_guest" : "workforce",
-      sponsorName,
-      rationale: external
-        ? "Authorized stakeholder Training access."
-        : "Pre-clearance workforce Training access.",
-    });
-    const invitationUrl = `${window.location.origin}/login?invite=${encodeURIComponent(result.invitationToken)}`;
-    await navigator.clipboard?.writeText(invitationUrl);
-    window.prompt(
-      "Invitation link (copied when browser permissions allow):",
-      invitationUrl,
-    );
   };
 
   const handleAccessReview = async (
@@ -617,8 +1153,10 @@ export default function SettingsPage() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => void handleCreateTrainingAccount()}
+                  onClick={() => setTrainingAccountPanelOpen(true)}
                   disabled={createTrainingAccountMutation.isPending}
+                  aria-expanded={trainingAccountPanelOpen}
+                  aria-controls="training-account-creation-panel"
                   className="rounded bg-[#245C5A] px-3 py-1.5 text-[11px] font-semibold text-white"
                 >
                   Add Training User
@@ -631,6 +1169,16 @@ export default function SettingsPage() {
                 </span>
               </div>
             </div>
+            {trainingAccountPanelOpen && (
+              <TrainingAccountCreationPanel
+                defaultSponsorName={currentUser?.name ?? ""}
+                isPending={createTrainingAccountMutation.isPending}
+                onCreate={(request) =>
+                  createTrainingAccountMutation.mutateAsync(request)
+                }
+                onClose={() => setTrainingAccountPanelOpen(false)}
+              />
+            )}
             <div className="overflow-x-auto">
               <table className="w-full text-[12px]">
                 <thead>

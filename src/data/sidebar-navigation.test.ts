@@ -10,9 +10,7 @@ import {
 
 function groupLabels(nodes: readonly SidebarNavNode[]): string[] {
   return nodes.flatMap((node) =>
-    node.type === "group"
-      ? [node.label, ...groupLabels(node.children)]
-      : [],
+    node.type === "group" ? [node.label, ...groupLabels(node.children)] : [],
   );
 }
 
@@ -224,6 +222,34 @@ describe("department-grouped sidebar navigation", () => {
     );
     expect(flattenSidebarLinks(demo).map((link) => link.href)).toContain(
       "/operations-hub/enterprise-demo",
+    );
+  });
+
+  it("adds a focused training group without exposing administration", () => {
+    const training = getSidebarNavigation("super-admin", "training");
+    const topLevelLabels = training.map((node) => node.label);
+    const links = flattenSidebarLinks(training);
+
+    expect(topLevelLabels).toContain("Training");
+    expect(topLevelLabels).not.toContain("System Administration");
+    expect(links.map((link) => [link.label, link.href])).toEqual(
+      expect.arrayContaining([
+        ["Onboarding Academy", "/onboarding"],
+        ["Modules", "/onboarding/training"],
+      ]),
+    );
+    expect(links.map((link) => link.href)).not.toContain(
+      "/operations-hub/enterprise-demo",
+    );
+  });
+
+  it("keeps training navigation available to frontline training accounts", () => {
+    const navigation = getSidebarNavigation("rcs-day", "training");
+    const links = flattenSidebarLinks(navigation);
+
+    expect(navigation.map((node) => node.id)).toEqual(["training"]);
+    expect(links.map((link) => link.href)).toEqual(
+      expect.arrayContaining(["/onboarding", "/onboarding/training"]),
     );
   });
 
