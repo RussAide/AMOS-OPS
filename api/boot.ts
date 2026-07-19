@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { serve } from "@hono/node-server";
@@ -19,6 +19,7 @@ import { enforceDatabaseStartupPolicy } from "./startup-policy";
 import { createPublicRuntimeConfig } from "./runtime-mode";
 import { blockedProductionSyntheticProcedures } from "./lib/production-data-boundary";
 import { inheritResponseHeaders } from "./response-headers";
+import { createIdentityOperator, verifyOperatorRequest } from "./security/identity-operator";
 import { canonicalWebLocation } from "./canonical-web";
 
 const logger = createStructuredLogger("amos-ops-api");
@@ -43,6 +44,7 @@ const BACKUP_DIR = path.resolve(process.cwd(), env.backupPath);
 const DIST_DIR = path.join(process.cwd(), "dist", "public");
 const INDEX_HTML = path.join(DIST_DIR, "index.html");
 const publicRuntimeConfig = createPublicRuntimeConfig(env);
+const identityOperator = createIdentityOperator(operationalSqlite, env);
 
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -162,6 +164,36 @@ app.get("/api/runtime-config", (c) => {
   c.header("Cache-Control", "no-store, no-cache, must-revalidate");
   c.header("Pragma", "no-cache");
   return c.json(publicRuntimeConfig);
+});
+
+async function authorizeIdentityOperator(c: Context, body: string) {
+  if (!env.isProduction || body.length > 4096) return false;
+  const timestamp = c.req.header("x-amos-operator-timestamp") ?? "";
+  const operationId = c.req.header("x-amos-operator-operation-id") ?? "";
+  const signature = c.req.header("x-amos-operator-signature") ?? "";
+  return Boolean(operationId && verifyOperatorRequest({
+    secret: env.appSecret, timestamp, operationId, signature,
+    method: c.req.method, path: c.req.path, body,
+  }));
+}
+
+app.post("/api/operator/identity/diagnosis", async (c) => {
+  const body = await c.req.text();
+  if (!(await authorizeIdentityOperator(c, body))) return c.json({ error: "Operator authorization failed" }, 401);
+  return c.json(identityOperator.diagnose());
+});
+
+app.post("/api/operator/identity/recovery", async (c) => {
+  const body = await c.req.text();
+  if (!(await authorizeIdentityOperator(c, body))) return c.json({ error: "Operator authorization failed" }, 401);
+  try {
+    const input = JSON.parse(body) as { operationId?: string; tokenHash?: string; expiresAt?: string };
+    const headerOperationId = c.req.header("x-amos-operator-operation-id") ?? "";
+    if (!input.operationId || input.operationId !== headerOperationId || !input.tokenHash || !input.expiresAt) return c.json({ error: "Recovery request invalid" }, 400);
+    return c.json(identityOperator.activateRecovery({ operationId: input.operationId, tokenHash: input.tokenHash, expiresAt: input.expiresAt }));
+  } catch {
+    return c.json({ error: "Recovery request invalid" }, 400);
+  }
 });
 
 // ─── Health Check ────────────────────────────────────────────

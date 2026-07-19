@@ -165,6 +165,7 @@ describe("identity lifecycle", () => {
       now: () => now,
       policy: { passwordHashRounds: 4 },
     });
+    expect(service.commissionInitialAdministrator()).toBe("commissioned");
 
     expect(service.listUsers()).toEqual([
       expect.objectContaining({
@@ -241,7 +242,7 @@ describe("identity lifecycle", () => {
       ).toISOString(),
     };
 
-    createIdentityService(sqlite, {
+    const restartedOnce = createIdentityService(sqlite, {
       environment: recoveryEnvironment,
       now: () => now,
       policy: { passwordHashRounds: 4 },
@@ -260,7 +261,7 @@ describe("identity lifecycle", () => {
           )
           .get(recoveryTokenHash) as { count: number }
       ).count,
-    ).toBe(1);
+    ).toBe(0);
 
     const rotatedRecoveryToken =
       "rotated-existing-admin-recovery-token-fixture-2026";
@@ -274,9 +275,10 @@ describe("identity lifecycle", () => {
         now.getTime() + 3 * 60 * 60_000,
       ).toISOString(),
     };
+    const restartNow = new Date(now.getTime() + 31_000);
     const recoveredService = createIdentityService(sqlite, {
       environment: rotatedRecoveryEnvironment,
-      now: () => now,
+      now: () => restartNow,
       policy: { passwordHashRounds: 4 },
     });
     createIdentityService(sqlite, {
@@ -285,12 +287,7 @@ describe("identity lifecycle", () => {
       policy: { passwordHashRounds: 4 },
     });
 
-    await expect(
-      recoveredService.resetPassword({
-        token: recoveryToken,
-        newPassword: "Superseded!Admin2026",
-      }),
-    ).rejects.toMatchObject({ code: "RESET_TOKEN_INVALID" });
+    expect(restartedOnce.commissionInitialAdministrator()).toBe("already_commissioned");
     expect(
       (
         sqlite
@@ -299,35 +296,23 @@ describe("identity lifecycle", () => {
           )
           .get(rotatedRecoveryTokenHash) as { count: number }
       ).count,
-    ).toBe(1);
+    ).toBe(0);
 
-    const rotatedReset = await recoveredService.resetPassword({
-      token: rotatedRecoveryToken,
-      newPassword: "Recovered!Admin2026",
-    });
-    expect(rotatedReset.totpSetup?.secret).toMatch(/^[A-Z2-7]{32}$/);
-    expect(rotatedReset.totpSetup?.secret).not.toBe(reset.totpSetup?.secret);
-    await expect(
-      recoveredService.login({
-        email: "e.o.aideyan@adobicarebhc.com",
-        password: "Authorized!Admin2026",
-      }),
-    ).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
     const recoveredLogin = await recoveredService.login({
       email: "e.o.aideyan@adobicarebhc.com",
-      password: "Recovered!Admin2026",
+      password: "Authorized!Admin2026",
     });
     expect(recoveredLogin).toMatchObject({
       status: "mfa_required",
       deliveryMethod: "totp",
     });
-    if (recoveredLogin.status !== "mfa_required" || !rotatedReset.totpSetup) {
-      throw new Error("expected rotated TOTP challenge");
+    if (recoveredLogin.status !== "mfa_required" || !reset.totpSetup) {
+      throw new Error("expected preserved TOTP challenge");
     }
     await expect(
       recoveredService.verifyMfa({
         challengeId: recoveredLogin.challengeId,
-        code: totpCodeForTest(rotatedReset.totpSetup.secret, now),
+        code: totpCodeForTest(reset.totpSetup.secret, restartNow),
       }),
     ).resolves.toMatchObject({ status: "authenticated", mfaVerified: true });
 
@@ -399,13 +384,12 @@ describe("identity lifecycle", () => {
       ).toISOString(),
     });
 
-    expect(() =>
-      createIdentityService(sqlite, {
+    const service = createIdentityService(sqlite, {
         environment,
         now: () => now,
         policy: { passwordHashRounds: 4 },
-      }),
-    ).toThrow(/INITIAL_ADMIN_INVITATION_EXPIRED/);
+      });
+    expect(() => service.commissionInitialAdministrator()).toThrow(/INITIAL_ADMIN_INVITATION_EXPIRED/);
     expect(
       (
         sqlite.prepare("SELECT COUNT(*) AS count FROM users").get() as {
@@ -458,6 +442,7 @@ describe("identity lifecycle", () => {
       now: () => now,
       policy: { passwordHashRounds: 4 },
     });
+    expect(firstService.commissionInitialAdministrator()).toBe("commissioned");
     const reset = await firstService.resetPassword({
       token: invitationToken,
       newPassword: "Persistent!Admin2026",

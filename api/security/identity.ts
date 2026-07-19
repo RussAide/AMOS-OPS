@@ -531,8 +531,8 @@ export function createIdentityService(
       );
   };
 
-  const bootstrapInitialAdministrator = (): void => {
-    if (!environment.initialAdminEmail) return;
+  const commissionInitialAdministrator = (): "commissioned" | "already_commissioned" | "not_configured" => {
+    if (!environment.initialAdminEmail) return "not_configured";
 
     const existing = getUserByEmail(environment.initialAdminEmail);
     const administratorCount = (
@@ -569,7 +569,7 @@ export function createIdentityService(
           Date.parse(environment.initialAdminInvitationExpiresAt!) <=
           recoveryNow.getTime()
         ) {
-          return;
+          return "already_commissioned";
         }
         const now = nowIso(recoveryNow);
         sqlite.transaction(() => {
@@ -600,7 +600,7 @@ export function createIdentityService(
             );
         })();
       }
-      return;
+      return "already_commissioned";
     }
     if (administratorCount !== 0) {
       throw new Error(
@@ -689,9 +689,8 @@ export function createIdentityService(
           nowIso(now),
         );
     })();
+    return "commissioned";
   };
-
-  bootstrapInitialAdministrator();
 
   const recordAttempt = (
     email: string,
@@ -1272,6 +1271,7 @@ export function createIdentityService(
     const rotatesTotp = new Set([
       "controlled-initial-admin-bootstrap",
       "controlled-initial-admin-recovery",
+      "controlled-operator-recovery",
       "admin-invitation",
       "admin-account-recovery",
     ]).has(row.requested_ip ?? "");
@@ -1298,12 +1298,15 @@ export function createIdentityService(
                     THEN mfa_totp_last_counter ELSE NULL END,
                   mfa_totp_enrolled_at = CASE WHEN ? IS NULL
                     THEN mfa_totp_enrolled_at ELSE NULL END,
+                  credential_version = credential_version + 1,
+                  authenticator_version = authenticator_version + CASE WHEN ? IS NULL THEN 0 ELSE 1 END,
                   updated_at = ?
             WHERE id = ?`,
         )
         .run(
           passwordHash,
           nowIso(now),
+          encryptedTotpSecret,
           encryptedTotpSecret,
           encryptedTotpSecret,
           encryptedTotpSecret,
@@ -2036,6 +2039,7 @@ export function createIdentityService(
     deleteUser,
     listAccessReviews,
     completeAccessReview,
+    commissionInitialAdministrator,
   };
 }
 
