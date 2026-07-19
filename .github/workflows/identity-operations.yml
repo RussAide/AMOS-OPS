@@ -1,0 +1,53 @@
+name: Protected Identity Operations
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        options: [diagnose, activate-recovery]
+        required: true
+      recovery_minutes:
+        required: false
+        default: "45"
+
+permissions: { contents: read }
+concurrency: { group: amos-ops-production-identity, cancel-in-progress: false }
+
+jobs:
+  operate:
+    environment: amos-production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Execute signed, privacy-safe operation
+        shell: bash
+        env:
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          RECOVERY_TOKEN: ${{ secrets.AMOS_ADMIN_RECOVERY_TOKEN }}
+          OPERATION: ${{ inputs.operation }}
+          RECOVERY_MINUTES: ${{ inputs.recovery_minutes }}
+        run: |
+          set -euo pipefail
+          test -n "$APP_SECRET"
+          operation_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${OPERATION}"
+          timestamp="$(date -u +%FT%TZ)"
+          path=/api/operator/identity/diagnosis
+          body='{}'
+          if test "$OPERATION" = activate-recovery; then
+            test -n "$RECOVERY_TOKEN"
+            test "$RECOVERY_MINUTES" -ge 1
+            test "$RECOVERY_MINUTES" -le 60
+            path=/api/operator/identity/recovery
+            expires_at="$(date -u -d "+${RECOVERY_MINUTES} minutes" +%FT%TZ)"
+            token_hash="$(printf %s "$RECOVERY_TOKEN" | openssl dgst -sha256 -hmac "$APP_SECRET" -hex | awk '{print $2}')"
+            body="$(jq -nc --arg operationId "$operation_id" --arg tokenHash "$token_hash" --arg expiresAt "$expires_at" '{operationId:$operationId,tokenHash:$tokenHash,expiresAt:$expiresAt}')"
+          fi
+          digest="$(printf %s "$body" | sha256sum | awk '{print $1}')"
+          canonical="$(printf 'v1\n%s\n%s\nPOST\n%s\n%s' "$timestamp" "$operation_id" "$path" "$digest")"
+          signature="$(printf %s "$canonical" | openssl dgst -sha256 -hmac "$APP_SECRET" -hex | awk '{print $2}')"
+          curl --fail-with-body --silent --show-error -X POST "https://amos-ops-production.up.railway.app$path" \
+            -H "content-type: application/json" \
+            -H "x-amos-operator-timestamp: $timestamp" \
+            -H "x-amos-operator-operation-id: $operation_id" \
+            -H "x-amos-operator-signature: $signature" \
+            --data "$body" | jq 'del(.keyFingerprint, .accountId)'

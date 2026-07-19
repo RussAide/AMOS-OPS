@@ -25,6 +25,8 @@ const USER_IDENTITY_COLUMNS = [
   ["clearance_reviewed_by", "TEXT"],
   ["clearance_reviewed_at", "TEXT"],
   ["clearance_evidence_reference", "TEXT"],
+  ["credential_version", "INTEGER NOT NULL DEFAULT 1"],
+  ["authenticator_version", "INTEGER NOT NULL DEFAULT 1"],
 ] as const;
 
 function ensureUserColumns(sqlite: Database.Database): void {
@@ -192,6 +194,17 @@ export function ensureIdentitySchema(sqlite: Database.Database): void {
       key_fingerprint TEXT NOT NULL,
       created_at TEXT NOT NULL,
       verified_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS identity_operator_operations (
+      id TEXT PRIMARY KEY,
+      operation_type TEXT NOT NULL,
+      target_user_id TEXT NOT NULL,
+      outcome TEXT NOT NULL,
+      requested_at TEXT NOT NULL,
+      completed_at TEXT NOT NULL,
+      details TEXT,
+      FOREIGN KEY (target_user_id) REFERENCES users(id) ON DELETE CASCADE
     );
   `);
 }
