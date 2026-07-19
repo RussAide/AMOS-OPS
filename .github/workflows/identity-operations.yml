@@ -1,6 +1,8 @@
 name: Protected Identity Operations
 
 on:
+  push:
+    branches: [agent/auth-stab-1-recovery-activation-20260719]
   workflow_dispatch:
     inputs:
       operation:
@@ -24,8 +26,8 @@ jobs:
         env:
           APP_SECRET: ${{ secrets.APP_SECRET }}
           RECOVERY_TOKEN: ${{ secrets.AMOS_ADMIN_RECOVERY_TOKEN }}
-          OPERATION: ${{ inputs.operation }}
-          RECOVERY_MINUTES: ${{ inputs.recovery_minutes }}
+          OPERATION: ${{ inputs.operation || 'activate-recovery' }}
+          RECOVERY_MINUTES: ${{ inputs.recovery_minutes || '45' }}
         run: |
           set -euo pipefail
           test -n "$APP_SECRET"
