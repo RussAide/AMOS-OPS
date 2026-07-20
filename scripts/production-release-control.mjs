@@ -77,6 +77,11 @@ export function validateConfiguration(env = process.env) {
   if (!RELEASE_ID.test(releaseId)) fail("RELEASE_ID has an invalid format.");
   if (!requiredEnv("CHANGE_REFERENCE", env))
     fail("CHANGE_REFERENCE is required.");
+  const recoveryValue = requiredEnv("RECOVERY_RELEASE", env);
+  if (!new Set(["true", "false"]).has(recoveryValue)) {
+    fail("RECOVERY_RELEASE must be true or false.");
+  }
+  const recoveryRelease = recoveryValue === "true";
 
   const ids = [
     "RAILWAY_PROJECT_ID",
@@ -142,6 +147,7 @@ export function validateConfiguration(env = process.env) {
   return Object.freeze({
     releaseSha,
     releaseId,
+    recoveryRelease,
     railwayOrigin,
     netlifyOrigin,
     allowedOrigins: allowedOrigins.join(","),
@@ -477,15 +483,13 @@ async function optionalPublicManifest(
 async function createSnapshot(configuration, env = process.env) {
   await proveRailwayScope(env);
   await readRailwayVariables(configuration, env);
-  const [railwayDeployments, netlifyState, railwayHealth] = await Promise.all([
+  const [railwayDeployments, netlifyState, readiness] = await Promise.all([
     readRailwayDeployments(env),
     readNetlifyState(env),
-    request(`${configuration.railwayOrigin}/api/health/ready`),
+    readRailwayReadiness(configuration.railwayOrigin),
   ]);
   const { current, rollbackTarget } = chooseRailwayBaseline(railwayDeployments);
-  const readiness = await railwayHealth.json();
-  if (readiness.ready !== true)
-    fail("Railway Production readiness is not true.");
+  assertRailwayBaselineReadiness(readiness, configuration.recoveryRelease);
   const [railwayManifest, netlifyManifest] = await Promise.all([
     optionalPublicManifest(
       configuration.railwayOrigin,
@@ -498,6 +502,8 @@ async function createSnapshot(configuration, env = process.env) {
     capturedAt: new Date().toISOString(),
     releaseId: configuration.releaseId,
     releaseSha: configuration.releaseSha,
+    recoveryRelease: configuration.recoveryRelease,
+    baselineReady: readiness?.ready === true,
     targets: {
       railway: {
         projectId: requiredEnv("RAILWAY_PROJECT_ID", env),
@@ -519,6 +525,20 @@ async function createSnapshot(configuration, env = process.env) {
       },
     },
   };
+}
+
+async function readRailwayReadiness(origin) {
+  try {
+    const response = await request(`${origin}/api/health/ready`);
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+export function assertRailwayBaselineReadiness(readiness, recoveryRelease) {
+  if (readiness?.ready === true) return;
+  if (!recoveryRelease) fail("Railway Production readiness is not true.");
 }
 
 function readJson(filePath) {

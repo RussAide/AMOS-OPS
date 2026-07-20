@@ -17,6 +17,8 @@ test("Production release is manual and environment-protected", () => {
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /release_sha:/);
   assert.match(workflow, /release_id:/);
+  assert.match(workflow, /recovery_release:/);
+  assert.match(workflow, /RECOVERY_RELEASE: \$\{\{ inputs\.recovery_release/);
 });
 
 test("checkout and host tools are pinned", () => {

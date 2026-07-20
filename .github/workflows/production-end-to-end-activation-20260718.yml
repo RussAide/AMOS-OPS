@@ -15,6 +15,11 @@ on:
         description: Approved change-control reference
         required: true
         type: string
+      recovery_release:
+        description: Permit a protected restoration when the existing Railway backend is unhealthy
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -33,6 +38,7 @@ jobs:
       RELEASE_SHA: ${{ inputs.release_sha }}
       RELEASE_ID: ${{ inputs.release_id }}
       CHANGE_REFERENCE: ${{ inputs.change_reference }}
+      RECOVERY_RELEASE: ${{ inputs.recovery_release && 'true' || 'false' }}
       RAILWAY_CREDENTIAL: ${{ secrets.RAILWAY_TOKEN }}
       RAILWAY_TOKEN_TYPE: ${{ vars.RAILWAY_TOKEN_TYPE || 'project' }}
       RAILWAY_PROJECT_ID: f9357da4-00c4-4f25-a52d-5c53f6ce07dc
