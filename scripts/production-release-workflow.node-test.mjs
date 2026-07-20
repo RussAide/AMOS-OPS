@@ -28,7 +28,33 @@ test("checkout and host tools are pinned", () => {
   assert.match(workflow, /ref: \$\{\{ inputs\.release_sha \}\}/);
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /RAILWAY_CREDENTIAL: \$\{\{ secrets\.RAILWAY_TOKEN \}\}/);
-  assert.match(workflow, /RAILWAY_API_TOKEN: \$\{\{ vars\.RAILWAY_TOKEN_TYPE == 'account'/);
+  assert.match(workflow, /RAILWAY_API_TOKEN: \$\{\{ env\.RAILWAY_TOKEN_TYPE == 'account'/);
+});
+
+test("verification and built-runtime checks are isolated from deployment paths", () => {
+  for (const stepName of [
+    "Verify source and identity boundary before any host mutation",
+    "Build frontend and backend once from the same tree",
+    "Verify built runtime and deep links",
+  ]) {
+    const start = workflow.indexOf(`- name: ${stepName}`);
+    assert.ok(start > 0, `${stepName} must exist`);
+    const next = workflow.indexOf("\n      - name:", start + 1);
+    const step = workflow.slice(start, next < 0 ? undefined : next);
+    for (const name of [
+      "PERSISTENT_ROOT",
+      "DATABASE_PATH",
+      "TRAINING_DATABASE_PATH",
+      "UPLOAD_PATH",
+      "TRAINING_UPLOAD_PATH",
+      "BACKUP_PATH",
+    ]) {
+      assert.match(step, new RegExp(`${name}: ""`));
+    }
+  }
+  assert.doesNotMatch(workflow, /^      AMOS_PRODUCTION_RELEASE_ID:/m);
+  assert.doesNotMatch(workflow, /^      AMOS_BUILD_SHA:/m);
+  assert.doesNotMatch(workflow, /^      VITE_AMOS_API_ORIGIN:/m);
 });
 
 test("verification precedes the single build and every mutation", () => {
@@ -107,6 +133,18 @@ test("Production target identifiers and origins are explicit", () => {
     /RAILWAY_PUBLIC_ORIGIN: https:\/\/amos-ops-production\.up\.railway\.app/,
   );
   assert.match(workflow, /NETLIFY_PUBLIC_ORIGIN: https:\/\/amos-ops\.com/);
+  assert.match(
+    workflow,
+    /NETLIFY_SITE_ID: 53a02d95-9cd5-4d22-8c17-8ed2378b91e8/,
+  );
+  assert.match(
+    workflow,
+    /RAILWAY_TOKEN_TYPE: \$\{\{ vars\.RAILWAY_TOKEN_TYPE \|\| 'project' \}\}/,
+  );
+  assert.match(
+    workflow,
+    /EXPECTED_ALLOWED_ORIGINS: \$\{\{ vars\.AMOS_ALLOWED_ORIGINS \|\| 'https:\/\/amos-ops\.com' \}\}/,
+  );
 });
 
 test("legacy standalone host workflows are staging-only", () => {
