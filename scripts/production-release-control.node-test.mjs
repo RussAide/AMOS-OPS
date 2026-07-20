@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   chooseRailwayBaseline,
+  chooseNetlifyPublishedDeploy,
   parseCommandArgs,
   validateConfiguration,
   validateNetlifyReleasePath,
@@ -77,6 +78,31 @@ test("selects a successful active deployment and proven rollback target", () => 
     () => chooseRailwayBaseline([deployments[0]]),
     /mutation is blocked/,
   );
+});
+
+test("resolves the active Netlify Production deploy from published_deploy", () => {
+  const published = {
+    id: "published-production-deploy",
+    state: "ready",
+    published_at: "2026-07-20T14:00:00Z",
+  };
+  const older = {
+    id: "older-production-deploy",
+    state: "ready",
+    published_at: "2026-07-19T14:00:00Z",
+  };
+  assert.equal(
+    chooseNetlifyPublishedDeploy(
+      { published_deploy: published },
+      [older, published],
+    ),
+    published,
+  );
+  assert.equal(
+    chooseNetlifyPublishedDeploy({ published_deploy: published }, []),
+    published,
+  );
+  assert.equal(chooseNetlifyPublishedDeploy({}, [published]), null);
 });
 
 test("requires all persistent paths and identity controls on Railway", () => {

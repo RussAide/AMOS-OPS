@@ -425,9 +425,18 @@ async function readNetlifyState(env = process.env) {
   const site = await siteResponse.json();
   const deploys = await deployResponse.json();
   validateNetlifyReleasePath(site, env);
-  const current = deploys.find((deploy) => deploy.state === "current");
+  const current = chooseNetlifyPublishedDeploy(site, deploys);
   if (!current?.id) fail("Netlify has no current Production deploy.");
   return { site, deploys, current };
+}
+
+export function chooseNetlifyPublishedDeploy(site, deploys) {
+  const publishedId = site?.published_deploy?.id;
+  if (typeof publishedId !== "string" || !publishedId) return null;
+  return (
+    deploys.find((deploy) => deploy.id === publishedId) ??
+    site.published_deploy
+  );
 }
 
 function parseManifest(value) {
