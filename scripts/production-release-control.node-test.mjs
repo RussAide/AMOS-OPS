@@ -210,6 +210,30 @@ test("requires all persistent paths and identity controls on Railway", () => {
       env,
     ),
   );
+  assert.throws(
+    () =>
+      validateRailwayVariables(
+        {
+          ...variables,
+          AMOS_RM2_STATUS: "paused",
+          AMOS_STORAGE_ENCRYPTION_REQUIRED: "true",
+        },
+        configuration,
+        env,
+      ),
+    /AMOS_STORAGE_ENCRYPTION_REQUIRED/,
+  );
+  assert.doesNotThrow(() =>
+    validateRailwayVariables(
+      {
+        ...variables,
+        AMOS_RM2_STATUS: "paused",
+        AMOS_STORAGE_ENCRYPTION_REQUIRED: "false",
+      },
+      configuration,
+      env,
+    ),
+  );
 });
 
 test("parses explicit control commands without accepting flags without values", () => {

@@ -341,6 +341,27 @@ export function validateRailwayVariables(
   ) {
     fail("Railway Production variable AMOS_RM2_STATUS is contradictory.");
   }
+  const encryptionRequired = variables?.AMOS_STORAGE_ENCRYPTION_REQUIRED;
+  if (
+    expectedRm2Status === "paused" &&
+    typeof encryptionRequired === "string" &&
+    ["1", "true", "yes", "on"].includes(encryptionRequired.trim().toLowerCase())
+  ) {
+    fail(
+      "Railway Production variable AMOS_STORAGE_ENCRYPTION_REQUIRED contradicts paused RM.2.",
+    );
+  }
+  if (
+    expectedRm2Status === "active" &&
+    (typeof encryptionRequired !== "string" ||
+      !["1", "true", "yes", "on"].includes(
+        encryptionRequired.trim().toLowerCase(),
+      ))
+  ) {
+    fail(
+      "Railway Production variable AMOS_STORAGE_ENCRYPTION_REQUIRED must be enabled when RM.2 is active.",
+    );
+  }
   for (const name of ["APP_SECRET", "JWT_SECRET"]) {
     const value = variables?.[name];
     if (
@@ -845,15 +866,24 @@ async function rollbackBoth(snapshot, configuration, env = process.env) {
   if (railway.status === "rejected" || netlifyResult.status === "rejected") {
     return { evidence, failed: true };
   }
-  const [health, netlifyState] = await Promise.all([
-    request(`${configuration.railwayOrigin}/api/health/ready`),
-    readNetlifyState(env),
-  ]);
-  const readiness = await health.json();
+  const netlifyState = await readNetlifyState(env);
+  if (netlifyState.current.id !== snapshot.targets.netlify.currentDeployId) {
+    evidence.verification = "failed";
+    return { evidence, failed: true };
+  }
   if (
-    readiness.ready !== true ||
-    netlifyState.current.id !== snapshot.targets.netlify.currentDeployId
+    snapshot.baselineReady === false &&
+    !snapshot.targets.railway.rollbackTargetDeploymentId
   ) {
+    evidence.verification =
+      "netlify-restored-railway-unavailable-before-recovery";
+    return { evidence, failed: false };
+  }
+  const health = await request(
+    `${configuration.railwayOrigin}/api/health/ready`,
+  );
+  const readiness = await health.json();
+  if (readiness.ready !== true) {
     evidence.verification = "failed";
     return { evidence, failed: true };
   }
