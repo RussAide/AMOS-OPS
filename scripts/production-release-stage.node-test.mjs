@@ -31,10 +31,13 @@ test("assembles a prebuilt stage without source files or a second app build", ()
   const { root, output } = fixture();
   assembleStage(root, output);
   const dockerfile = readFileSync(path.join(output, "Dockerfile"), "utf8");
+  const railway = readFileSync(path.join(output, "railway.toml"), "utf8");
   assert.match(dockerfile, /COPY dist \.\/dist/);
   assert.match(dockerfile, /npm ci --omit=dev/);
   assert.match(dockerfile, /AMOS_RM2_STATUS=paused/);
   assert.doesNotMatch(dockerfile, /npm run build/);
+  assert.match(railway, /healthcheckPath = "\/api\/health\/ready"/);
+  assert.match(railway, /healthcheckTimeout = 300/);
   assert.equal(
     readFileSync(path.join(output, "dist/boot.js"), "utf8"),
     "console.log('server')",
