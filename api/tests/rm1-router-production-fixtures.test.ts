@@ -7,6 +7,7 @@ const productionEnvironment = {
   NODE_ENV: "production",
   AMOS_ENVIRONMENT_ID: "amos-ops-production",
   CREDENTIAL_NAMESPACE: "amos-ops/production",
+  RAILWAY_VOLUME_MOUNT_PATH: "/app/persistent",
   PERSISTENT_ROOT: "/app/persistent",
   DATABASE_PATH: "/app/persistent/data/production/amos-ops.db",
   TRAINING_DATABASE_PATH:
