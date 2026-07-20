@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { serve } from "@hono/node-server";
@@ -19,6 +19,15 @@ import { enforceDatabaseStartupPolicy } from "./startup-policy";
 import { createPublicRuntimeConfig } from "./runtime-mode";
 import { blockedProductionSyntheticProcedures } from "./lib/production-data-boundary";
 import { inheritResponseHeaders } from "./response-headers";
+import { createIdentityOperator, verifyOperatorRequest } from "./security/identity-operator";
+import { canonicalWebLocation } from "./canonical-web";
+import { loadRuntimeReleaseIdentity } from "./release-identity";
+import {
+  diagnoseOperationalAlerts,
+  OperationalAlertReconciliationError,
+  reconcileOperationalAlerts,
+} from "./operational-alert-operator";
+import { isReadOnlyOperatorDiagnosisRequest } from "./operator-boundary";
 import {
   enforceEncryptedDirectory,
   readEncryptedFile,
@@ -49,7 +58,25 @@ const TRAINING_UPLOAD_DIR = path.resolve(process.cwd(), env.trainingUploadPath);
 const BACKUP_DIR = path.resolve(process.cwd(), env.backupPath);
 const DIST_DIR = path.join(process.cwd(), "dist", "public");
 const INDEX_HTML = path.join(DIST_DIR, "index.html");
-const publicRuntimeConfig = createPublicRuntimeConfig(env);
+const releaseIdentity = loadRuntimeReleaseIdentity();
+if (env.isProduction && !releaseIdentity.verified) {
+  throw new Error(
+    `RELEASE_IDENTITY_UNVERIFIED: ${releaseIdentity.reason ?? "immutable release manifest is unavailable"}`,
+  );
+}
+const runtimeReleaseEnvironment = releaseIdentity.verified
+  ? {
+      ...env,
+      productionReleaseId: releaseIdentity.releaseId,
+      buildId: releaseIdentity.releaseId,
+      sourceDigest: releaseIdentity.sourceDigest,
+    }
+  : env;
+const publicRuntimeConfig = createPublicRuntimeConfig(
+  runtimeReleaseEnvironment,
+  runtimeReleaseEnvironment.buildId,
+);
+const identityOperator = createIdentityOperator(operationalSqlite, env);
 
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -162,21 +189,26 @@ app.use("*", async (c, next) => {
       details: observation,
     });
     try {
-      operationalMonitor.recordRequest(observation);
-      if (!["GET", "HEAD", "OPTIONS"].includes(c.req.method) || status >= 400) {
-        const { resolveIdentityUser } = await import("./security/identity");
-        const identity = resolveIdentityUser(c.req.raw);
-        operationalMonitor.captureAuditEvent({
-          eventType: "http.request",
-          action: `${c.req.method} ${c.req.path}`,
-          actor: identity ? `${identity.id}:${identity.email}` : "anonymous",
-          resource: c.req.path,
-          outcome:
-            status >= 500 ? "failure" : status >= 400 ? "denied" : "success",
-          correlationId: trace.correlationId,
-          traceId: trace.traceId,
-          details: { status, durationMs },
-        });
+      if (!isReadOnlyOperatorDiagnosisRequest(c.req.method, c.req.path)) {
+        operationalMonitor.recordRequest(observation);
+        if (
+          !["GET", "HEAD", "OPTIONS"].includes(c.req.method) ||
+          status >= 400
+        ) {
+          const { resolveIdentityUser } = await import("./security/identity");
+          const identity = resolveIdentityUser(c.req.raw);
+          operationalMonitor.captureAuditEvent({
+            eventType: "http.request",
+            action: `${c.req.method} ${c.req.path}`,
+            actor: identity ? `${identity.id}:${identity.email}` : "anonymous",
+            resource: c.req.path,
+            outcome:
+              status >= 500 ? "failure" : status >= 400 ? "denied" : "success",
+            correlationId: trace.correlationId,
+            traceId: trace.traceId,
+            details: { status, durationMs },
+          });
+        }
       }
     } catch (error) {
       logger.error("observability.capture_failed", {
@@ -225,7 +257,138 @@ app.get("/api/runtime-config", (c) => {
   return c.json(publicRuntimeConfig);
 });
 
+app.get("/api/release-identity", (c) => {
+  c.header("Cache-Control", "no-store, no-cache, must-revalidate");
+  return c.json(
+    releaseIdentity.verified
+      ? {
+          verified: true,
+          schemaVersion: releaseIdentity.schemaVersion,
+          releaseId: releaseIdentity.releaseId,
+          commitSha: releaseIdentity.commitSha,
+          treeSha: releaseIdentity.treeSha,
+          sourceDigest: releaseIdentity.sourceDigest,
+          frontendArtifactDigest: releaseIdentity.frontendArtifactDigest,
+          backendArtifactDigest: releaseIdentity.backendArtifactDigest,
+        }
+      : { verified: false, reason: releaseIdentity.reason },
+  );
+});
+
+async function authorizeIdentityOperator(c: Context, body: string) {
+  if (!env.isProduction || body.length > 4096) return false;
+  const timestamp = c.req.header("x-amos-operator-timestamp") ?? "";
+  const operationId = c.req.header("x-amos-operator-operation-id") ?? "";
+  const signature = c.req.header("x-amos-operator-signature") ?? "";
+  return Boolean(
+    operationId &&
+    verifyOperatorRequest({
+      secret: env.appSecret,
+      timestamp,
+      operationId,
+      signature,
+      method: c.req.method,
+      path: c.req.path,
+      body,
+    }),
+  );
+}
+
+// Diagnosis is a signed GET so the global POST audit middleware cannot turn a
+// read-only inspection into a Production database mutation. The response is
+// redacted by the identity operator before it reaches this boundary.
+app.get("/api/operator/identity/diagnosis", async (c) => {
+  const body = "";
+  if (!(await authorizeIdentityOperator(c, body)))
+    return c.json({ error: "Operator authorization failed" }, 401);
+  c.header("Cache-Control", "no-store");
+  return c.json(identityOperator.diagnose());
+});
+
+app.post("/api/operator/identity/recovery", async (c) => {
+  const body = await c.req.text();
+  if (!(await authorizeIdentityOperator(c, body)))
+    return c.json({ error: "Operator authorization failed" }, 401);
+  c.header("Cache-Control", "no-store");
+  try {
+    const input = JSON.parse(body) as {
+      operationId?: string;
+      tokenHash?: string;
+      expiresAt?: string;
+    };
+    const headerOperationId =
+      c.req.header("x-amos-operator-operation-id") ?? "";
+    if (
+      !input.operationId ||
+      input.operationId !== headerOperationId ||
+      !input.tokenHash ||
+      !input.expiresAt
+    )
+      return c.json({ error: "Recovery request invalid" }, 400);
+    return c.json(
+      identityOperator.activateRecovery({
+        operationId: input.operationId,
+        tokenHash: input.tokenHash,
+        expiresAt: input.expiresAt,
+      }),
+    );
+  } catch {
+    return c.json({ error: "Recovery request invalid" }, 400);
+  }
+});
+
 // ─── Health Check ────────────────────────────────────────────
+// Operational-alert diagnosis is privacy-safe and SELECT-only. Reconciliation
+// is a separate signed mutation that can act only on the exact diagnosed open
+// set and only for records older than the caller-supplied cutoff.
+app.get("/api/operator/operational-alerts/diagnosis", async (c) => {
+  const body = "";
+  if (!(await authorizeIdentityOperator(c, body))) {
+    return c.json({ error: "Operator authorization failed" }, 401);
+  }
+  c.header("Cache-Control", "no-store");
+  return c.json(diagnoseOperationalAlerts(operationalSqlite));
+});
+
+app.post("/api/operator/operational-alerts/reconciliation", async (c) => {
+  const body = await c.req.text();
+  if (!(await authorizeIdentityOperator(c, body))) {
+    return c.json({ error: "Operator authorization failed" }, 401);
+  }
+  c.header("Cache-Control", "no-store");
+  try {
+    const input = JSON.parse(body) as {
+      operationId?: string;
+      cutoff?: string;
+      diagnosisFingerprint?: string;
+    };
+    const headerOperationId =
+      c.req.header("x-amos-operator-operation-id") ?? "";
+    if (
+      !input.operationId ||
+      input.operationId !== headerOperationId ||
+      !input.cutoff ||
+      !input.diagnosisFingerprint
+    ) {
+      return c.json({ error: "Alert reconciliation request invalid" }, 400);
+    }
+    return c.json(
+      reconcileOperationalAlerts(operationalSqlite, {
+        cutoff: input.cutoff,
+        diagnosisFingerprint: input.diagnosisFingerprint,
+      }),
+    );
+  } catch (error) {
+    if (error instanceof OperationalAlertReconciliationError) {
+      return c.json(
+        { error: error.message, code: error.code },
+        error.code === "FINGERPRINT_MISMATCH" ? 409 : 400,
+      );
+    }
+    return c.json({ error: "Alert reconciliation request invalid" }, 400);
+  }
+});
+
 app.get("/api/health/live", (c) => {
   return c.json({
     status: "alive",
@@ -443,8 +606,16 @@ app.use("/api/trpc/*", async (c) => {
   }
 });
 
-// ─── Serve Frontend (Production SPA) ─────────────────────────
-if (fs.existsSync(DIST_DIR)) {
+// ─── API 404 Boundary ────────────────────────────────────────
+app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
+
+// ─── Canonical Web Surface ───────────────────────────────────
+// Netlify is the sole Production web surface. Railway remains the durable API
+// and redirects browser/deep-link traffic to the canonical site, preventing a
+// second embedded frontend artifact from drifting or rendering blank.
+if (env.isProduction) {
+  app.get("*", (c) => c.redirect(canonicalWebLocation(c.req.url), 308));
+} else if (fs.existsSync(DIST_DIR)) {
   app.use("/*", serveStatic({ root: DIST_DIR }));
   app.get("*", (c) => {
     try {
@@ -458,9 +629,6 @@ if (fs.existsSync(DIST_DIR)) {
   logger.warn("frontend.build_missing", { details: { directory: DIST_DIR } });
   app.get("/", (c) => c.json({ message: "AMOS-OPS API Server", status: "ok" }));
 }
-
-// ─── 404 Fallback ────────────────────────────────────────────
-app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 
 // ─── Start Server ────────────────────────────────────────────
 const port = env.port;

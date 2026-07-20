@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { authorizeClientRoute } from "@/constants/access-control";
+import { appDeepLinkPath, appRoutePath } from "@/data/app-route-registry";
 import type { DivisionId } from "@/constants/organization";
 import { navItems, type NavItem } from "@/data/navData";
 
@@ -81,41 +82,60 @@ function group(
  */
 export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
   group("home", "Home", Home, [
-    link("home-enterprise-overview", "Enterprise Overview", "/"),
-    link("home-alerts", "Alerts and priorities", "/home/alerts", "/"),
-    link("home-division-status", "Division status", "/home/divisions", "/"),
-    link("home-quick-actions", "Quick actions", "/home/quick-actions", "/"),
+    link(
+      "home-enterprise-overview",
+      "Enterprise Overview",
+      appRoutePath("home"),
+    ),
+    link(
+      "home-alerts",
+      "Alerts and priorities",
+      appRoutePath("home-alerts"),
+      appRoutePath("home"),
+    ),
+    link(
+      "home-division-status",
+      "Division status",
+      appRoutePath("home-divisions"),
+      appRoutePath("home"),
+    ),
+    link(
+      "home-quick-actions",
+      "Quick actions",
+      appRoutePath("home-quick-actions"),
+      appRoutePath("home"),
+    ),
   ]),
   group("my-work", "My Work", ListTodo, [
     link(
       "my-work-today",
       "Today’s work",
-      "/workflows/my-work-today",
-      "/workflows",
+      appRoutePath("workflows-my-work-today"),
+      appRoutePath("workflows"),
     ),
     link(
       "my-work-assigned",
       "Assigned tasks",
-      "/workflows/assigned-tasks",
-      "/workflows",
+      appRoutePath("workflows-assigned-tasks"),
+      appRoutePath("workflows"),
     ),
     link(
       "my-work-attention",
       "Items requiring attention",
-      "/workflows/attention",
-      "/workflows",
+      appRoutePath("workflows-attention"),
+      appRoutePath("workflows"),
     ),
     link(
       "my-work-calendar",
       "Calendar and deadlines",
-      "/workflows/calendar",
-      "/workflows",
+      appRoutePath("workflows-calendar"),
+      appRoutePath("workflows"),
     ),
     link(
       "my-work-recent",
       "Recent activity",
-      "/workflows/recent-activity",
-      "/workflows",
+      appRoutePath("workflows-recent-activity"),
+      appRoutePath("workflows"),
     ),
   ]),
   group(
@@ -123,40 +143,86 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
     "Behavioral Health Center",
     Activity,
     [
-      link("bhc-dashboard", "BHC Dashboard", "/bhc", "/clinical"),
+      link(
+        "bhc-dashboard",
+        "BHC Dashboard",
+        appRoutePath("bhc"),
+        appRoutePath("clinical"),
+      ),
       group("bhc-ccmg", "CCMG", Users, [
-        link("bhc-ccmg-oversight", "Oversight", "/ccmg"),
-        link("bhc-ccmg-referrals", "Referrals and Intake", "/clinical/referrals"),
-        link("bhc-ccmg-cans", "CANS/TRR Assessments", "/clinical/cans-assessments"),
+        link("bhc-ccmg-oversight", "Oversight", appRoutePath("ccmg")),
+        link(
+          "bhc-ccmg-referrals",
+          "Referrals and Intake",
+          appRoutePath("clinical-referrals"),
+        ),
+        link(
+          "bhc-ccmg-cans",
+          "Governed CANS profiles",
+          appRoutePath("clinical-cans-assessments"),
+        ),
         link(
           "bhc-ccmg-medication-quality",
           "Medication and quality coordination",
-          "/medications",
-          "/clinical",
+          appRoutePath("medications"),
+          appRoutePath("clinical"),
         ),
       ]),
       group("bhc-mhtcm", "MHTCM", ListTodo, [
-        link("bhc-mhtcm-case-management", "Case Management", "/mhtcm"),
-        link("bhc-mhtcm-care-coordination", "Care Coordination", "/cases", "/clinical"),
+        link(
+          "bhc-mhtcm-case-management",
+          "Case Management",
+          appRoutePath("mhtcm"),
+        ),
+        link(
+          "bhc-mhtcm-care-coordination",
+          "Care Coordination",
+          appRoutePath("cases"),
+          appRoutePath("clinical"),
+        ),
         link(
           "bhc-mhtcm-transitions",
           "Referrals, discharge and aftercare",
-          "/continuum",
+          appRoutePath("continuum"),
         ),
       ]),
       group("bhc-mhrs", "MHRS", Activity, [
-        link("bhc-mhrs-program-operations", "Program Operations", "/mhrs"),
-        link("bhc-mhrs-service-delivery", "Service Delivery", "/clinical/service-delivery"),
-        link("bhc-mhrs-clinical-sessions", "Clinical Sessions", "/clinical/sessions"),
-        link("bhc-mhrs-outcomes", "Outcomes", "/clinical/outcome-measures"),
+        link(
+          "bhc-mhrs-program-operations",
+          "Program Operations",
+          appRoutePath("mhrs"),
+        ),
+        link(
+          "bhc-mhrs-service-delivery",
+          "Service Delivery",
+          appRoutePath("clinical-service-delivery"),
+        ),
+        link(
+          "bhc-mhrs-clinical-sessions",
+          "Clinical Sessions",
+          appRoutePath("clinical-sessions"),
+        ),
+        link(
+          "bhc-mhrs-outcomes",
+          "Outcomes",
+          appRoutePath("clinical-outcome-measures"),
+        ),
       ]),
       group("bhc-shared-clinical", "Shared Clinical Services", Activity, [
-        link("bhc-treatment-plans", "Treatment Plans", "/clinical/treatment-plans"),
-        link("bhc-insurance", "Insurance and Authorization", "/clinical/insurance-plans"),
+        link(
+          "bhc-treatment-plans",
+          "Treatment Plans",
+          appRoutePath("clinical-treatment-plans"),
+        ),
+        link(
+          "bhc-insurance",
+          "Insurance and Authorization",
+          appRoutePath("clinical-insurance-plans"),
+        ),
         link(
           "bhc-clinical-intelligence",
           "Clinical Intelligence",
-          "/clinical/intelligence-fabric",
+          appRoutePath("clinical-intelligence-fabric"),
         ),
       ]),
     ],
@@ -167,16 +233,24 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
     "General Residential Operations",
     Home,
     [
-      link("gro-dashboard", "GRO Dashboard", "/gro"),
+      link("gro-dashboard", "GRO Dashboard", appRoutePath("gro")),
       group("gro-shift-operations", "Shift Operations", ListTodo, [
-        link("gro-shift-logs", "Shift Logs", "/gro/shift-logs"),
-        link("gro-care-logs", "Care Logs", "/gro/care-logs"),
-        link("gro-handoffs", "Shift Handoffs", "/gro/handoffs"),
+        link("gro-shift-logs", "Shift Logs", appRoutePath("gro-shift-logs")),
+        link("gro-care-logs", "Care Logs", appRoutePath("gro-care-logs")),
+        link("gro-handoffs", "Shift Handoffs", appRoutePath("gro-handoffs")),
       ]),
       group("gro-safety-supervision", "Safety and Supervision", Shield, [
-        link("gro-safety-rounds", "Safety Rounds", "/gro/safety-rounds"),
-        link("gro-supervision", "Youth Supervision", "/gro/supervision"),
-        link("gro-incidents", "Incidents", "/gro/incidents"),
+        link(
+          "gro-safety-rounds",
+          "Safety Rounds",
+          appRoutePath("gro-safety-rounds"),
+        ),
+        link(
+          "gro-supervision",
+          "Youth Supervision",
+          appRoutePath("gro-supervision"),
+        ),
+        link("gro-incidents", "Incidents", appRoutePath("gro-incidents")),
       ]),
     ],
     { division: "gro" },
@@ -186,36 +260,36 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
     "General Administration",
     Building2,
     [
-      link("gad-dashboard", "GAD Dashboard", "/gad"),
+      link("gad-dashboard", "GAD Dashboard", appRoutePath("gad")),
       link(
         "gad-facilities-work-orders",
         "Facilities and Work Orders",
-        "/gad/facilities-work-orders",
-        "/gad",
+        appRoutePath("gad-facilities-work-orders"),
+        appRoutePath("gad"),
       ),
       link(
         "gad-procurement-vendors",
         "Procurement and Vendors",
-        "/gad/procurement-vendors",
-        "/gad",
+        appRoutePath("gad-procurement-vendors"),
+        appRoutePath("gad"),
       ),
       link(
         "gad-safety-emergency",
         "Safety and Emergency Preparedness",
-        "/gad/safety-emergency-preparedness",
-        "/gad",
+        appRoutePath("gad-safety-emergency-preparedness"),
+        appRoutePath("gad"),
       ),
       link(
         "gad-transportation-logistics",
         "Transportation and Logistics",
-        "/gad/transportation-logistics",
-        "/gad",
+        appRoutePath("gad-transportation-logistics"),
+        appRoutePath("gad"),
       ),
       link(
         "gad-regulatory-support",
         "Regulatory Support",
-        "/gad/regulatory-support",
-        "/gad",
+        appRoutePath("gad-regulatory-support"),
+        appRoutePath("gad"),
       ),
     ],
     { division: "gad" },
@@ -225,48 +299,81 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
     "Executive Office",
     Building2,
     [
-      link("eo-dashboard", "Executive Dashboard", "/executive"),
+      link("eo-dashboard", "Executive Dashboard", appRoutePath("executive")),
       link(
         "eo-decision-intelligence",
         "Decision Intelligence",
-        "/executive/decision-intelligence",
+        appRoutePath("executive-decision-intelligence"),
       ),
-      link("eo-strategic-projects", "Strategic Projects", "/executive/strategic-projects"),
-      link("eo-mgma", "MGMA Scorecard", "/executive/mgma"),
-      link("eo-analytics", "Enterprise Analytics", "/analytics"),
+      link(
+        "eo-strategic-projects",
+        "Strategic Projects",
+        appRoutePath("executive-strategic-projects"),
+      ),
+      link("eo-mgma", "MGMA Scorecard", appRoutePath("executive-mgma")),
+      link("eo-analytics", "Enterprise Analytics", appRoutePath("analytics")),
       link(
         "eo-corporate-continuum",
         "Corporate and Continuum Operations",
-        "/corporate-operations",
+        appRoutePath("corporate-operations"),
       ),
       group("eo-human-resources", "Human Resources", Users, [
         group("eo-workforce-activation", "Workforce Activation", Users, [
-          link("eo-recruitment", "Recruitment", "/hr/recruitment"),
-          link("eo-screening", "Screening", "/hr/screening"),
-          link("eo-offers", "Offers", "/hr/offers"),
-          link("eo-orientation", "Orientation", "/hr/orientation"),
-          link("eo-onboarding", "Onboarding", "/hr/onboarding-workflow"),
-          link("eo-clearance", "Clearance", "/hr/clearance"),
+          link("eo-recruitment", "Recruitment", appRoutePath("hr-recruitment")),
+          link("eo-screening", "Screening", appRoutePath("hr-screening")),
+          link("eo-offers", "Offers", appRoutePath("hr-offers")),
+          link("eo-orientation", "Orientation", appRoutePath("hr-orientation")),
+          link(
+            "eo-onboarding",
+            "Onboarding",
+            appRoutePath("hr-onboarding-workflow"),
+          ),
+          link("eo-clearance", "Clearance", appRoutePath("hr-clearance")),
         ]),
         group("eo-workforce-management", "Workforce Management", Users, [
-          link("eo-personnel-files", "Personnel Files", "/hr/personnel-files"),
-          link("eo-credentials", "Credentials", "/hr/credentials-tracker"),
-          link("eo-performance", "Performance", "/hr/performance-reviews"),
-          link("eo-hr-compliance", "Compliance", "/hr/compliance"),
-          link("eo-separation", "Separation", "/hr/separations"),
+          link(
+            "eo-personnel-files",
+            "Personnel Files",
+            appDeepLinkPath("hr-personnel-files"),
+          ),
+          link(
+            "eo-credentials",
+            "Credentials",
+            appRoutePath("hr-credentials-tracker"),
+          ),
+          link(
+            "eo-performance",
+            "Performance",
+            appRoutePath("hr-performance-reviews"),
+          ),
+          link("eo-hr-compliance", "Compliance", appRoutePath("hr-compliance")),
+          link("eo-separation", "Separation", appRoutePath("hr-separations")),
         ]),
       ]),
-      link("eo-quality-compliance", "Quality and Compliance", "/qa"),
-      link("eo-revenue-cycle", "Revenue Cycle", "/revenue"),
-      group("eo-knowledge-documents", "Knowledge and Documents", LayoutDashboard, [
-        link("eo-document-studio", "Document Studio", "/documents"),
-        link("eo-knowledge", "Knowledge and SOP", "/knowledge"),
-        link(
-          "eo-document-intelligence",
-          "Document Intelligence",
-          "/knowledge/document-intelligence",
-        ),
-      ]),
+      link(
+        "eo-quality-compliance",
+        "Quality and Compliance",
+        appRoutePath("qa"),
+      ),
+      link("eo-revenue-cycle", "Revenue Cycle", appRoutePath("revenue")),
+      group(
+        "eo-knowledge-documents",
+        "Knowledge and Documents",
+        LayoutDashboard,
+        [
+          link(
+            "eo-document-studio",
+            "Document Studio",
+            appRoutePath("documents"),
+          ),
+          link("eo-knowledge", "Knowledge and SOP", appRoutePath("knowledge")),
+          link(
+            "eo-document-intelligence",
+            "Document Intelligence",
+            appRoutePath("knowledge-document-intelligence"),
+          ),
+        ],
+      ),
     ],
     { division: "eo" },
   ),
@@ -275,22 +382,44 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
     "System Administration",
     Settings,
     [
-      link("admin-organization", "Organization and Roles", "/admin/organization"),
-      link("admin-settings", "System Settings", "/admin/settings"),
+      link(
+        "admin-organization",
+        "Organization and Roles",
+        appRoutePath("admin-organization"),
+      ),
+      link(
+        "admin-access-recovery",
+        "Account Recovery",
+        appRoutePath("admin-access-recovery"),
+      ),
+      link("admin-settings", "System Settings", appRoutePath("admin-settings")),
       link(
         "admin-microsoft-integration",
         "Microsoft 365 and Entra Integrations",
-        "/operations-hub/microsoft-integrations",
+        appRoutePath("operations-hub-microsoft-integrations"),
       ),
-      link("admin-workflows", "Workflow Configuration", "/admin/workflow", "/admin/workflows"),
-      link("admin-intelligence", "AMOS Intelligence/NIL", "/nil"),
-      link("admin-mobile", "Mobile and Offline Configuration", "/operations-hub/mobile-offline"),
-      link("admin-enhancements", "Enhancement Register", "/admin/enhancements"),
+      link(
+        "admin-workflows",
+        "Workflow Configuration",
+        appRoutePath("admin-workflow"),
+        appRoutePath("admin-workflows"),
+      ),
+      link("admin-intelligence", "AMOS Intelligence/NIL", appRoutePath("nil")),
+      link(
+        "admin-mobile",
+        "Mobile and Offline Configuration",
+        appRoutePath("operations-hub-mobile-offline"),
+      ),
+      link(
+        "admin-enhancements",
+        "Enhancement Register",
+        appRoutePath("admin-enhancements"),
+      ),
       link(
         "admin-demo-tools",
         "Demo Tools",
-        "/operations-hub/enterprise-demo",
-        "/operations-hub/enterprise-demo",
+        appRoutePath("operations-hub-enterprise-demo"),
+        appRoutePath("operations-hub-enterprise-demo"),
         ["demo"],
       ),
     ],
@@ -318,7 +447,7 @@ function filterNode(
 
   if (
     node.adminOnly &&
-    !authorizeClientRoute(role, "/admin/settings").allowed
+    !authorizeClientRoute(role, appRoutePath("admin-settings")).allowed
   ) {
     return null;
   }

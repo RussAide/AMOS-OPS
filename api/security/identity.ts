@@ -34,6 +34,7 @@ export interface IdentityPolicy {
   mfaChallengeMinutes: number;
   mfaMaximumAttempts: number;
   passwordResetMinutes: number;
+  administratorRecoveryMinutes: number;
   accessReviewDays: number;
   mfaPolicy: MfaPolicy;
 }
@@ -48,6 +49,7 @@ export const DEFAULT_IDENTITY_POLICY: Readonly<IdentityPolicy> = Object.freeze({
   mfaChallengeMinutes: 5,
   mfaMaximumAttempts: 5,
   passwordResetMinutes: 15,
+  administratorRecoveryMinutes: 60,
   accessReviewDays: 90,
   mfaPolicy: env.mfaPolicy,
 });
@@ -72,6 +74,12 @@ const PRIVILEGED_ROLES = new Set([
   "chart-auditor",
 ]);
 const CANONICAL_ROLES = new Set<string>(ALL_ROLES);
+const IDENTITY_RECOVERY_ADMIN_ROLES = new Set([
+  "super-admin",
+  "managing-director",
+  "administrator",
+  "hr-director",
+]);
 
 interface UserRow {
   id: string;
@@ -126,6 +134,7 @@ interface PasswordResetRow {
   user_id: string;
   expires_at: string;
   consumed_at: string | null;
+  requested_ip: string | null;
 }
 
 export type AccessStatus = "training" | "cleared" | "suspended" | "deactivated";
@@ -180,6 +189,12 @@ export interface IdentityUserSummary {
   department: string | null;
   isActive: boolean;
   mfaEnabled: boolean;
+  mfaMethod: string;
+  mfaEnrolledAt: string | null;
+  failedLoginCount: number;
+  lockedUntil: string | null;
+  mustChangePassword: boolean;
+  pendingRecoveryExpiresAt: string | null;
   lastLoginAt: string | null;
   nextAccessReviewAt: string | null;
   createdAt: string | null;
@@ -250,6 +265,15 @@ export interface PasswordResetResult {
   success: true;
   sessionsRevoked: number;
   totpSetup?: TotpSetup;
+}
+
+export interface AdministratorRecoveryResult {
+  success: true;
+  userId: string;
+  email: string;
+  recoveryToken: string;
+  expiresAt: string;
+  sessionsRevoked: number;
 }
 
 export class IdentityError extends Error {
@@ -393,6 +417,46 @@ export function createIdentityService(
   const hashKey =
     environment.appSecret || environment.jwtSecret || environment.environmentId;
 
+  const keyFingerprint = createHash("sha256")
+    .update("AMOS-OPS identity key binding v1\u0000")
+    .update(hashKey)
+    .digest("hex");
+  const keyBinding = sqlite
+    .prepare(
+      `SELECT key_fingerprint AS keyFingerprint
+         FROM identity_runtime_key_bindings
+        WHERE environment_id = ?`,
+    )
+    .get(environment.environmentId) as { keyFingerprint: string } | undefined;
+  if (keyBinding && keyBinding.keyFingerprint !== keyFingerprint) {
+    throw new Error(
+      "IDENTITY_KEY_MISMATCH: the persistent identity database is bound to a different APP_SECRET. Restore the prior Production secret before starting AMOS-OPS.",
+    );
+  }
+  const keyVerifiedAt = nowIso(clock());
+  if (keyBinding) {
+    sqlite
+      .prepare(
+        `UPDATE identity_runtime_key_bindings
+            SET verified_at = ?
+          WHERE environment_id = ?`,
+      )
+      .run(keyVerifiedAt, environment.environmentId);
+  } else {
+    sqlite
+      .prepare(
+        `INSERT INTO identity_runtime_key_bindings
+           (environment_id, key_fingerprint, created_at, verified_at)
+         VALUES (?, ?, ?, ?)`,
+      )
+      .run(
+        environment.environmentId,
+        keyFingerprint,
+        keyVerifiedAt,
+        keyVerifiedAt,
+      );
+  }
+
   const hashOpaqueValue = (value: string): string =>
     createHmac("sha256", hashKey).update(value).digest("hex");
 
@@ -426,8 +490,49 @@ export function createIdentityService(
       )
       .get(id) as UserRow | undefined;
 
-  const bootstrapInitialAdministrator = (): void => {
-    if (!environment.initialAdminEmail) return;
+  const requireRecoveryAdministrator = (actorId: string): UserRow => {
+    const actor = getUserById(actorId);
+    if (
+      !actor ||
+      !actor.is_active ||
+      !accountAccessAvailable(actor, clock()) ||
+      actor.access_status !== "cleared" ||
+      actor.identity_type !== "workforce" ||
+      !IDENTITY_RECOVERY_ADMIN_ROLES.has(actor.role)
+    ) {
+      throw new IdentityError(
+        "RECOVERY_ADMIN_REQUIRED",
+        "An active AMOS-OPS administrator is required for account recovery.",
+      );
+    }
+    return actor;
+  };
+
+  const recordSecurityEvent = (input: {
+    userId: string;
+    actorId?: string | null;
+    eventType: string;
+    rationale: string;
+    occurredAt?: Date;
+  }): void => {
+    sqlite
+      .prepare(
+        `INSERT INTO identity_security_events
+           (id, user_id, actor_id, event_type, rationale, occurred_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        randomUUID(),
+        input.userId,
+        input.actorId ?? null,
+        input.eventType,
+        input.rationale.trim(),
+        nowIso(input.occurredAt ?? clock()),
+      );
+  };
+
+  const commissionInitialAdministrator = (): "commissioned" | "already_commissioned" | "not_configured" => {
+    if (!environment.initialAdminEmail) return "not_configured";
 
     const existing = getUserByEmail(environment.initialAdminEmail);
     const administratorCount = (
@@ -450,7 +555,11 @@ export function createIdentityService(
           "INITIAL_ADMIN_ACCOUNT_CONFLICT: the configured account is not an active, cleared workforce super-admin.",
         );
       }
-      return;
+      // Initial commissioning is deliberately a one-way boundary. Once the
+      // administrator exists, ordinary startup and every release/restart path
+      // must be incapable of creating, consuming, rotating, or reactivating a
+      // recovery credential from deployment configuration.
+      return "already_commissioned";
     }
     if (administratorCount !== 0) {
       throw new Error(
@@ -459,6 +568,13 @@ export function createIdentityService(
     }
 
     const now = clock();
+    if (
+      Date.parse(environment.initialAdminInvitationExpiresAt!) <= now.getTime()
+    ) {
+      throw new Error(
+        "INITIAL_ADMIN_INVITATION_EXPIRED: rotate the controlled initial-administrator invitation before first startup.",
+      );
+    }
     const userId = `AMOS-INITIAL-ADMIN-${createHash("sha256")
       .update(environment.initialAdminEmail)
       .digest("hex")
@@ -532,9 +648,8 @@ export function createIdentityService(
           nowIso(now),
         );
     })();
+    return "commissioned";
   };
-
-  bootstrapInitialAdministrator();
 
   const recordAttempt = (
     email: string,
@@ -614,6 +729,12 @@ export function createIdentityService(
     const challengeId = randomUUID();
     const usesTotp =
       user.mfa_method === "totp" && Boolean(user.mfa_totp_secret);
+    if (environment.isProduction && !usesTotp) {
+      throw new IdentityError(
+        "MFA_ENROLLMENT_REQUIRED",
+        "Authenticator enrollment is required. Ask an AMOS-OPS administrator to issue a secure account-recovery link.",
+      );
+    }
     const reviewOwner =
       !usesTotp &&
       environment.reviewDeployment &&
@@ -1031,6 +1152,12 @@ export function createIdentityService(
     email: string;
     ipAddress?: string;
   }): { accepted: true; evaluationToken?: string } => {
+    // Production recovery is administrator-mediated until a verified delivery
+    // provider is configured. A public request must never invalidate a valid
+    // administrator-issued invitation or recovery link.
+    if (!environment.isDemo || !environment.evaluationMode) {
+      return { accepted: true };
+    }
     const user = getUserByEmail(input.email);
     if (!user || !user.is_active) return { accepted: true };
     const now = clock();
@@ -1077,7 +1204,7 @@ export function createIdentityService(
     }
     const row = sqlite
       .prepare(
-        `SELECT id, user_id, expires_at, consumed_at
+        `SELECT id, user_id, expires_at, consumed_at, requested_ip
            FROM identity_password_reset_tokens WHERE token_hash = ?`,
       )
       .get(hashOpaqueValue(input.token)) as PasswordResetRow | undefined;
@@ -1100,8 +1227,15 @@ export function createIdentityService(
       );
     }
     const issuer = "AMOS-OPS";
+    const rotatesTotp = new Set([
+      "controlled-initial-admin-bootstrap",
+      "controlled-initial-admin-recovery",
+      "controlled-operator-recovery",
+      "admin-invitation",
+      "admin-account-recovery",
+    ]).has(row.requested_ip ?? "");
     const totpSecret =
-      user.mfa_method === "totp" && !user.mfa_totp_secret
+      user.mfa_method === "totp" && (rotatesTotp || !user.mfa_totp_secret)
         ? generateTotpSecret()
         : null;
     const encryptedTotpSecret = totpSecret
@@ -1121,6 +1255,10 @@ export function createIdentityService(
                   mfa_totp_secret = COALESCE(?, mfa_totp_secret),
                   mfa_totp_last_counter = CASE WHEN ? IS NULL
                     THEN mfa_totp_last_counter ELSE NULL END,
+                  mfa_totp_enrolled_at = CASE WHEN ? IS NULL
+                    THEN mfa_totp_enrolled_at ELSE NULL END,
+                  credential_version = credential_version + 1,
+                  authenticator_version = authenticator_version + CASE WHEN ? IS NULL THEN 0 ELSE 1 END,
                   updated_at = ?
             WHERE id = ?`,
         )
@@ -1129,15 +1267,32 @@ export function createIdentityService(
           nowIso(now),
           encryptedTotpSecret,
           encryptedTotpSecret,
+          encryptedTotpSecret,
+          encryptedTotpSecret,
           nowIso(now),
           row.user_id,
         );
       sqlite
         .prepare(
-          "UPDATE identity_password_reset_tokens SET consumed_at = ? WHERE id = ?",
+          `UPDATE identity_password_reset_tokens
+              SET consumed_at = ?
+            WHERE user_id = ? AND consumed_at IS NULL`,
         )
-        .run(nowIso(now), row.id);
+        .run(nowIso(now), row.user_id);
+      sqlite
+        .prepare(
+          `UPDATE identity_mfa_challenges
+              SET consumed_at = ?
+            WHERE user_id = ? AND consumed_at IS NULL`,
+        )
+        .run(nowIso(now), row.user_id);
       revoked = revokeAllSessions(row.user_id, "password_reset");
+      recordSecurityEvent({
+        userId: row.user_id,
+        eventType: "password_reset_completed",
+        rationale: `Password reset completed through ${row.requested_ip ?? "self-service"}.`,
+        occurredAt: now,
+      });
     })();
     return {
       success: true,
@@ -1208,6 +1363,12 @@ export function createIdentityService(
         "MFA is required by policy for this account and cannot be disabled.",
       );
     }
+    if (enabled && environment.isProduction && !user.mfa_totp_secret) {
+      throw new IdentityError(
+        "MFA_ENROLLMENT_REQUIRED",
+        "Use secure account recovery to enroll an authenticator before enabling MFA.",
+      );
+    }
     sqlite
       .prepare(
         `UPDATE users
@@ -1246,24 +1407,35 @@ export function createIdentityService(
     (
       sqlite
         .prepare(
-          `SELECT id, email, first_name AS firstName, last_name AS lastName,
+          `SELECT u.id, u.email, u.first_name AS firstName, u.last_name AS lastName,
                 role, department, is_active AS isActive,
-                mfa_enabled AS mfaEnabled, last_login_at AS lastLoginAt,
+                mfa_enabled AS mfaEnabled, mfa_method AS mfaMethod,
+                mfa_totp_enrolled_at AS mfaEnrolledAt,
+                failed_login_count AS failedLoginCount,
+                CASE WHEN locked_until > ? THEN locked_until ELSE NULL END AS lockedUntil,
+                must_change_password AS mustChangePassword,
+                (SELECT MAX(r.expires_at)
+                   FROM identity_password_reset_tokens r
+                  WHERE r.user_id = u.id
+                    AND r.consumed_at IS NULL
+                    AND r.expires_at > ?) AS pendingRecoveryExpiresAt,
+                last_login_at AS lastLoginAt,
                 next_access_review_at AS nextAccessReviewAt,
                 created_at AS createdAt, access_status AS accessStatus,
                 identity_type AS identityType, training_access AS trainingAccess,
                 sponsor_name AS sponsorName, access_expires_at AS accessExpiresAt,
                 clearance_reviewed_at AS clearanceReviewedAt,
                 clearance_evidence_reference AS clearanceEvidenceReference
-           FROM users ORDER BY created_at DESC`,
+           FROM users u ORDER BY created_at DESC`,
         )
-        .all() as Array<
+        .all(nowIso(clock()), nowIso(clock())) as Array<
         Omit<
           IdentityUserSummary,
-          "isActive" | "mfaEnabled" | "trainingAccess"
+          "isActive" | "mfaEnabled" | "mustChangePassword" | "trainingAccess"
         > & {
           isActive: number;
           mfaEnabled: number;
+          mustChangePassword: number;
           trainingAccess: number;
         }
       >
@@ -1271,6 +1443,7 @@ export function createIdentityService(
       ...user,
       isActive: Boolean(user.isActive),
       mfaEnabled: Boolean(user.mfaEnabled),
+      mustChangePassword: Boolean(user.mustChangePassword),
       trainingAccess: Boolean(user.trainingAccess),
     }));
 
@@ -1327,10 +1500,10 @@ export function createIdentityService(
         .prepare(
           `INSERT INTO users
            (id, email, password_hash, first_name, last_name, role, department,
-            is_active, must_change_password, mfa_enabled, access_status,
+            is_active, must_change_password, mfa_enabled, mfa_method, access_status,
             identity_type, training_access, sponsor_name, access_expires_at,
             next_access_review_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 'training', ?, 1, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, 1, 'totp', 'training', ?, 1, ?, ?, ?, ?, ?)`,
         )
         .run(
           userId,
@@ -1384,6 +1557,142 @@ export function createIdentityService(
         );
     })();
     return { success: true, userId, invitationToken, expiresAt };
+  };
+
+  const issueAccountRecovery = (input: {
+    actorId: string;
+    userId: string;
+    rationale: string;
+  }): AdministratorRecoveryResult => {
+    requireRecoveryAdministrator(input.actorId);
+    const user = getUserById(input.userId);
+    const now = clock();
+    if (!user || !user.is_active || !accountAccessAvailable(user, now)) {
+      throw new IdentityError(
+        "ACCOUNT_UNAVAILABLE",
+        "The account must be active and available before access can be recovered.",
+      );
+    }
+    if (!input.rationale.trim()) {
+      throw new IdentityError(
+        "RECOVERY_RATIONALE_REQUIRED",
+        "A rationale is required for administrator account recovery.",
+      );
+    }
+
+    const recoveryToken = randomBytes(32).toString("base64url");
+    const expiresAt = nowIso(
+      addMinutes(now, policy.administratorRecoveryMinutes),
+    );
+    let sessionsRevoked = 0;
+    sqlite.transaction(() => {
+      sqlite
+        .prepare(
+          `UPDATE identity_password_reset_tokens
+              SET consumed_at = ?
+            WHERE user_id = ? AND consumed_at IS NULL`,
+        )
+        .run(nowIso(now), user.id);
+      sqlite
+        .prepare(
+          `UPDATE identity_mfa_challenges
+              SET consumed_at = ?
+            WHERE user_id = ? AND consumed_at IS NULL`,
+        )
+        .run(nowIso(now), user.id);
+      sqlite
+        .prepare(
+          `UPDATE users
+              SET failed_login_count = 0,
+                  locked_until = NULL,
+                  must_change_password = 1,
+                  mfa_enabled = 1,
+                  mfa_method = 'totp',
+                  mfa_totp_secret = NULL,
+                  mfa_totp_enrolled_at = NULL,
+                  mfa_totp_last_counter = NULL,
+                  updated_at = ?
+            WHERE id = ?`,
+        )
+        .run(nowIso(now), user.id);
+      sqlite
+        .prepare(
+          `INSERT INTO identity_password_reset_tokens
+             (id, user_id, token_hash, created_at, expires_at, requested_ip)
+           VALUES (?, ?, ?, ?, ?, 'admin-account-recovery')`,
+        )
+        .run(
+          randomUUID(),
+          user.id,
+          hashOpaqueValue(recoveryToken),
+          nowIso(now),
+          expiresAt,
+        );
+      sessionsRevoked = revokeAllSessions(
+        user.id,
+        "administrator_account_recovery",
+      );
+      recordSecurityEvent({
+        userId: user.id,
+        actorId: input.actorId,
+        eventType: "administrator_account_recovery_issued",
+        rationale: input.rationale,
+        occurredAt: now,
+      });
+    })();
+    return {
+      success: true,
+      userId: user.id,
+      email: user.email,
+      recoveryToken,
+      expiresAt,
+      sessionsRevoked,
+    };
+  };
+
+  const unlockAccount = (input: {
+    actorId: string;
+    userId: string;
+    rationale: string;
+  }): { success: true; wasLocked: boolean } => {
+    requireRecoveryAdministrator(input.actorId);
+    const user = getUserById(input.userId);
+    const now = clock();
+    if (!user || !user.is_active || !accountAccessAvailable(user, now)) {
+      throw new IdentityError(
+        "ACCOUNT_UNAVAILABLE",
+        "The account must be active and available before it can be unlocked.",
+      );
+    }
+    if (!input.rationale.trim()) {
+      throw new IdentityError(
+        "RECOVERY_RATIONALE_REQUIRED",
+        "A rationale is required for administrator account unlock.",
+      );
+    }
+    const wasLocked =
+      user.failed_login_count > 0 ||
+      Boolean(
+        user.locked_until &&
+        new Date(user.locked_until).getTime() > now.getTime(),
+      );
+    sqlite.transaction(() => {
+      sqlite
+        .prepare(
+          `UPDATE users
+              SET failed_login_count = 0, locked_until = NULL, updated_at = ?
+            WHERE id = ?`,
+        )
+        .run(nowIso(now), user.id);
+      recordSecurityEvent({
+        userId: user.id,
+        actorId: input.actorId,
+        eventType: "administrator_account_unlocked",
+        rationale: input.rationale,
+        occurredAt: now,
+      });
+    })();
+    return { success: true, wasLocked };
   };
 
   const updateUser = (input: {
@@ -1683,10 +1992,13 @@ export function createIdentityService(
     listSessions,
     listUsers,
     createTrainingAccount,
+    issueAccountRecovery,
+    unlockAccount,
     updateUser,
     deleteUser,
     listAccessReviews,
     completeAccessReview,
+    commissionInitialAdministrator,
   };
 }
 

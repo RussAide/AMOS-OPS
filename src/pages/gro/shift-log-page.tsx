@@ -12,18 +12,49 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
-  ClipboardList, Plus, Search, Clock, Calendar, ChevronRight, RefreshCw, XCircle, Play, Square
+  ClipboardList,
+  Plus,
+  Search,
+  Clock,
+  Calendar,
+  ChevronRight,
+  RefreshCw,
+  XCircle,
+  Play,
+  Square,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { runtimeConfig } from "@/config/runtime";
+import { useAuth } from "@/hooks/use-auth";
 
 interface ShiftLogEntry {
   time: string;
@@ -39,16 +70,35 @@ const SHIFT_TYPES = [
 ] as const;
 
 const STATUS_OPTIONS = [
-  { value: "active", label: "Active", color: "bg-green-100 text-green-700 border-green-200" },
-  { value: "completed", label: "Completed", color: "bg-blue-100 text-blue-700 border-blue-200" },
-  { value: "no_show", label: "No Show", color: "bg-red-100 text-red-700 border-red-200" },
-  { value: "absent", label: "Absent", color: "bg-gray-100 text-gray-700 border-gray-200" },
+  {
+    value: "active",
+    label: "Active",
+    color: "bg-green-100 text-green-700 border-green-200",
+  },
+  {
+    value: "completed",
+    label: "Completed",
+    color: "bg-blue-100 text-blue-700 border-blue-200",
+  },
+  {
+    value: "no_show",
+    label: "No Show",
+    color: "bg-red-100 text-red-700 border-red-200",
+  },
+  {
+    value: "absent",
+    label: "Absent",
+    color: "bg-gray-100 text-gray-700 border-gray-200",
+  },
 ] as const;
-type ShiftType = typeof SHIFT_TYPES[number]["value"];
-type ShiftStatus = typeof STATUS_OPTIONS[number]["value"];
+type ShiftType = (typeof SHIFT_TYPES)[number]["value"];
+type ShiftStatus = (typeof STATUS_OPTIONS)[number]["value"];
 
 export default function ShiftLogPage() {
   const utils = trpc.useUtils();
+  const { workspace } = useAuth();
+  const demonstrationWorkspace =
+    runtimeConfig.evaluationMode || workspace === "training";
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"" | ShiftStatus>("");
   const [filterType, setFilterType] = useState<"" | ShiftType>("");
@@ -64,16 +114,26 @@ export default function ShiftLogPage() {
   const [entryCategory, setEntryCategory] = useState("");
   const [entryNote, setEntryNote] = useState("");
 
-  const { data: logs = [], isLoading } = trpc.groResidential.listShiftLogs.useQuery(
-    filterStatus || filterType ? { status: filterStatus || undefined, shiftType: filterType || undefined } : undefined
+  const {
+    data: logs = [],
+    isLoading,
+    isError,
+  } = trpc.groResidential.listShiftLogs.useQuery(
+    filterStatus || filterType
+      ? {
+          status: filterStatus || undefined,
+          shiftType: filterType || undefined,
+        }
+      : undefined,
   );
 
   const { data: detail } = trpc.groResidential.getShiftLog.useQuery(
     { id: selectedId! },
-    { enabled: !!selectedId }
+    { enabled: !!selectedId },
   );
 
-  const { data: dashboard } = trpc.groResidential.residentialDashboard.useQuery();
+  const { data: dashboard } =
+    trpc.groResidential.residentialDashboard.useQuery();
 
   const createShift = trpc.groResidential.createShiftLog.useMutation({
     onSuccess: () => {
@@ -145,15 +205,21 @@ export default function ShiftLogPage() {
   });
 
   const statusColor = (s: string) =>
-    s === "active" ? "bg-green-100 text-green-700 border-green-200" :
-    s === "completed" ? "bg-blue-100 text-blue-700 border-blue-200" :
-    s === "no_show" ? "bg-red-100 text-red-700 border-red-200" :
-    "bg-gray-100 text-gray-700 border-gray-200";
+    s === "active"
+      ? "bg-green-100 text-green-700 border-green-200"
+      : s === "completed"
+        ? "bg-blue-100 text-blue-700 border-blue-200"
+        : s === "no_show"
+          ? "bg-red-100 text-red-700 border-red-200"
+          : "bg-gray-100 text-gray-700 border-gray-200";
 
   return (
-    <PageLayout category="Residential" title="Shift Logs" subtitle="Digital shift logs with timestamps">
+    <PageLayout
+      category="Residential"
+      title="Shift Logs"
+      subtitle="Digital shift logs with timestamps"
+    >
       <div className="px-4 md:px-6 pt-4 pb-8 max-w-7xl mx-auto space-y-6">
-
         {/* Dashboard Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card>
@@ -163,7 +229,9 @@ export default function ShiftLogPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-700">{dashboard?.shiftLogs.active ?? 0}</div>
+              <div className="text-2xl font-bold text-green-700">
+                {dashboard?.shiftLogs.active ?? 0}
+              </div>
               <p className="text-xs text-gray-500">Currently active</p>
             </CardContent>
           </Card>
@@ -174,7 +242,9 @@ export default function ShiftLogPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-700">{dashboard?.shiftLogs.today ?? 0}</div>
+              <div className="text-2xl font-bold text-blue-700">
+                {dashboard?.shiftLogs.today ?? 0}
+              </div>
               <p className="text-xs text-gray-500">Shifts today</p>
             </CardContent>
           </Card>
@@ -185,7 +255,9 @@ export default function ShiftLogPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gray-700">{dashboard?.shiftLogs.total ?? 0}</div>
+              <div className="text-2xl font-bold text-gray-700">
+                {dashboard?.shiftLogs.total ?? 0}
+              </div>
               <p className="text-xs text-gray-500">All shift logs</p>
             </CardContent>
           </Card>
@@ -202,47 +274,83 @@ export default function ShiftLogPage() {
               className="pl-9"
             />
           </div>
-          <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as typeof filterStatus)}>
+          <Select
+            value={filterStatus}
+            onValueChange={(value) =>
+              setFilterStatus(value as typeof filterStatus)
+            }
+          >
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="All Statuses" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="">All Statuses</SelectItem>
               {STATUS_OPTIONS.map((s) => (
-                <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Select value={filterType} onValueChange={(value) => setFilterType(value as typeof filterType)}>
+          <Select
+            value={filterType}
+            onValueChange={(value) => setFilterType(value as typeof filterType)}
+          >
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="All Types" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="">All Types</SelectItem>
               {SHIFT_TYPES.map((t) => (
-                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={() => setShowCreate(true)} className="bg-[#2e8b8b] hover:bg-[#267373]">
+          <Button
+            onClick={() => setShowCreate(true)}
+            className="bg-[#2e8b8b] hover:bg-[#267373]"
+          >
             <Plus className="h-4 w-4 mr-1.5" /> New Shift
           </Button>
-          <Button variant="outline" size="icon" onClick={() => seedData.mutate()} disabled={seedData.isPending}>
-            <RefreshCw className={cn("h-4 w-4", seedData.isPending && "animate-spin")} />
-          </Button>
+          {demonstrationWorkspace && (
+            <Button
+              aria-label="Seed demonstration data"
+              variant="outline"
+              size="icon"
+              onClick={() => seedData.mutate()}
+              disabled={seedData.isPending}
+            >
+              <RefreshCw
+                className={cn("h-4 w-4", seedData.isPending && "animate-spin")}
+              />
+            </Button>
+          )}
         </div>
 
         {/* List */}
         {isLoading ? (
           <div className="space-y-2">
-            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
           </div>
+        ) : isError ? (
+          <Card className="border-red-200 bg-red-50">
+            <CardContent className="p-8 text-center text-sm text-red-800">
+              Connected shift-log data is unavailable. No demonstration records
+              were substituted.
+            </CardContent>
+          </Card>
         ) : filtered.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="p-8 text-center">
               <ClipboardList className="h-10 w-10 text-gray-300 mx-auto mb-3" />
               <p className="text-sm text-gray-500">No shift logs found</p>
-              <p className="text-xs text-gray-400 mt-1">Create a new shift or seed demo data</p>
+              <p className="text-xs text-gray-400 mt-1">
+                Create a new shift to begin the operational record.
+              </p>
             </CardContent>
           </Card>
         ) : (
@@ -262,24 +370,52 @@ export default function ShiftLogPage() {
               </TableHeader>
               <TableBody>
                 {filtered.map((log) => {
-                  const entries = JSON.parse(log.entriesJson ?? "[]") as ShiftLogEntry[];
+                  const entries = JSON.parse(
+                    log.entriesJson ?? "[]",
+                  ) as ShiftLogEntry[];
                   return (
-                    <TableRow key={log.id} className="cursor-pointer hover:bg-gray-50" onClick={() => { setSelectedId(log.id); setShowDetail(true); }}>
-                      <TableCell className="text-xs font-medium">{log.shiftDate}</TableCell>
-                      <TableCell className="text-xs capitalize">{log.shiftType}</TableCell>
+                    <TableRow
+                      key={log.id}
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => {
+                        setSelectedId(log.id);
+                        setShowDetail(true);
+                      }}
+                    >
+                      <TableCell className="text-xs font-medium">
+                        {log.shiftDate}
+                      </TableCell>
+                      <TableCell className="text-xs capitalize">
+                        {log.shiftType}
+                      </TableCell>
                       <TableCell className="text-xs">{log.staffName}</TableCell>
                       <TableCell className="text-xs font-mono">
-                        {log.clockInAt ? new Date(log.clockInAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
+                        {log.clockInAt
+                          ? new Date(log.clockInAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "—"}
                       </TableCell>
                       <TableCell className="text-xs font-mono">
-                        {log.clockOutAt ? new Date(log.clockOutAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
+                        {log.clockOutAt
+                          ? new Date(log.clockOutAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "—"}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={cn("text-[10px]", statusColor(log.status))}>
+                        <Badge
+                          variant="outline"
+                          className={cn("text-[10px]", statusColor(log.status))}
+                        >
                           {log.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs">{entries.length}</TableCell>
+                      <TableCell className="text-xs">
+                        {entries.length}
+                      </TableCell>
                       <TableCell>
                         <ChevronRight className="h-4 w-4 text-gray-400" />
                       </TableCell>
@@ -295,42 +431,72 @@ export default function ShiftLogPage() {
         <Dialog open={showCreate} onOpenChange={setShowCreate}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2"><Play className="h-5 w-5 text-green-600" />Start New Shift</DialogTitle>
-              <DialogDescription>Create a new shift log entry.</DialogDescription>
+              <DialogTitle className="flex items-center gap-2">
+                <Play className="h-5 w-5 text-green-600" />
+                Start New Shift
+              </DialogTitle>
+              <DialogDescription>
+                Create a new shift log entry.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
               <div>
                 <Label>Staff Name *</Label>
-                <Input value={formStaffName} onChange={(e) => setFormStaffName(e.target.value)} placeholder="Your name" />
+                <Input
+                  value={formStaffName}
+                  onChange={(e) => setFormStaffName(e.target.value)}
+                  placeholder="Your name"
+                />
               </div>
               <div>
                 <Label>Shift Type *</Label>
                 <Select value={formShiftType} onValueChange={setFormShiftType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    {SHIFT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    {SHIFT_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>
+                        {t.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label>Supervisor</Label>
-                <Input value={formSupervisor} onChange={(e) => setFormSupervisor(e.target.value)} placeholder="Supervisor name (optional)" />
+                <Input
+                  value={formSupervisor}
+                  onChange={(e) => setFormSupervisor(e.target.value)}
+                  placeholder="Supervisor name (optional)"
+                />
               </div>
               <div>
                 <Label>Notes</Label>
-                <Textarea value={formNotes} onChange={(e) => setFormNotes(e.target.value)} placeholder="Initial notes..." rows={3} />
+                <Textarea
+                  value={formNotes}
+                  onChange={(e) => setFormNotes(e.target.value)}
+                  placeholder="Initial notes..."
+                  rows={3}
+                />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => setShowCreate(false)}>
+                Cancel
+              </Button>
               <Button
-                onClick={() => createShift.mutate({
-                  shiftDate: new Date().toISOString().split("T")[0],
-                  shiftType: formShiftType as Parameters<typeof createShift.mutate>[0]["shiftType"],
-                  staffName: formStaffName,
-                  supervisorName: formSupervisor || undefined,
-                  notes: formNotes || undefined,
-                })}
+                onClick={() =>
+                  createShift.mutate({
+                    shiftDate: new Date().toISOString().split("T")[0],
+                    shiftType: formShiftType as Parameters<
+                      typeof createShift.mutate
+                    >[0]["shiftType"],
+                    staffName: formStaffName,
+                    supervisorName: formSupervisor || undefined,
+                    notes: formNotes || undefined,
+                  })
+                }
                 disabled={!formStaffName || createShift.isPending}
                 className="bg-green-600 hover:bg-green-700"
               >
@@ -341,7 +507,15 @@ export default function ShiftLogPage() {
         </Dialog>
 
         {/* Detail Modal */}
-        <Dialog open={showDetail} onOpenChange={(o) => { if (!o) { setShowDetail(false); setSelectedId(null); } }}>
+        <Dialog
+          open={showDetail}
+          onOpenChange={(o) => {
+            if (!o) {
+              setShowDetail(false);
+              setSelectedId(null);
+            }
+          }}
+        >
           <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -349,36 +523,80 @@ export default function ShiftLogPage() {
                 Shift Log Detail
               </DialogTitle>
               <DialogDescription>
-                {detail && `${detail.shiftDate} · ${detail.shiftType} · ${detail.staffName}`}
+                {detail &&
+                  `${detail.shiftDate} · ${detail.shiftType} · ${detail.staffName}`}
               </DialogDescription>
             </DialogHeader>
             {detail && (
               <Tabs defaultValue="overview" className="w-full">
                 <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="overview">Overview</TabsTrigger>
-                  <TabsTrigger value="entries">Entries ({JSON.parse(detail.entriesJson ?? "[]").length})</TabsTrigger>
+                  <TabsTrigger value="entries">
+                    Entries ({JSON.parse(detail.entriesJson ?? "[]").length})
+                  </TabsTrigger>
                   <TabsTrigger value="related">Related</TabsTrigger>
                 </TabsList>
                 <TabsContent value="overview" className="space-y-4">
                   <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div><span className="text-xs text-gray-500">Status</span>
-                      <Badge variant="outline" className={cn("text-[10px] ml-2", statusColor(detail.status))}>{detail.status}</Badge>
+                    <div>
+                      <span className="text-xs text-gray-500">Status</span>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] ml-2",
+                          statusColor(detail.status),
+                        )}
+                      >
+                        {detail.status}
+                      </Badge>
                     </div>
-                    <div><span className="text-xs text-gray-500">Clock In</span><div className="font-mono">{new Date(detail.clockInAt).toLocaleString()}</div></div>
-                    {detail.clockOutAt && <div><span className="text-xs text-gray-500">Clock Out</span><div className="font-mono">{new Date(detail.clockOutAt).toLocaleString()}</div></div>}
-                    <div><span className="text-xs text-gray-500">Supervisor</span><div>{detail.supervisorName ?? "—"}</div></div>
-                    <div><span className="text-xs text-gray-500">Safety Rounds</span><div>{detail.safetyRoundsCompleted}</div></div>
-                    <div><span className="text-xs text-gray-500">Care Logs</span><div>{detail.careLogsCompleted}</div></div>
-                    <div><span className="text-xs text-gray-500">Incidents</span><div>{detail.incidentsReported}</div></div>
+                    <div>
+                      <span className="text-xs text-gray-500">Clock In</span>
+                      <div className="font-mono">
+                        {new Date(detail.clockInAt).toLocaleString()}
+                      </div>
+                    </div>
+                    {detail.clockOutAt && (
+                      <div>
+                        <span className="text-xs text-gray-500">Clock Out</span>
+                        <div className="font-mono">
+                          {new Date(detail.clockOutAt).toLocaleString()}
+                        </div>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-xs text-gray-500">Supervisor</span>
+                      <div>{detail.supervisorName ?? "—"}</div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-gray-500">
+                        Safety Rounds
+                      </span>
+                      <div>{detail.safetyRoundsCompleted}</div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-gray-500">Care Logs</span>
+                      <div>{detail.careLogsCompleted}</div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-gray-500">Incidents</span>
+                      <div>{detail.incidentsReported}</div>
+                    </div>
                   </div>
                   {detail.notes && (
                     <div>
                       <span className="text-xs text-gray-500">Notes</span>
-                      <p className="text-sm mt-1 bg-gray-50 p-2 rounded">{detail.notes}</p>
+                      <p className="text-sm mt-1 bg-gray-50 p-2 rounded">
+                        {detail.notes}
+                      </p>
                     </div>
                   )}
                   {detail.status === "active" && (
-                    <Button variant="outline" onClick={() => clockOut.mutate({ id: detail.id })} disabled={clockOut.isPending}>
+                    <Button
+                      variant="outline"
+                      onClick={() => clockOut.mutate({ id: detail.id })}
+                      disabled={clockOut.isPending}
+                    >
                       <Square className="h-4 w-4 mr-1.5" /> Clock Out
                     </Button>
                   )}
@@ -386,23 +604,61 @@ export default function ShiftLogPage() {
                 <TabsContent value="entries" className="space-y-3">
                   {detail.status === "active" && (
                     <div className="flex gap-2">
-                      <Input placeholder="Category" value={entryCategory} onChange={(e) => setEntryCategory(e.target.value)} className="text-xs w-32" />
-                      <Input placeholder="Note text..." value={entryNote} onChange={(e) => setEntryNote(e.target.value)} className="text-xs flex-1" />
-                      <Button size="sm" onClick={() => addEntry.mutate({ id: detail.id, category: entryCategory, note: entryNote })} disabled={!entryCategory || !entryNote}>
+                      <Input
+                        placeholder="Category"
+                        value={entryCategory}
+                        onChange={(e) => setEntryCategory(e.target.value)}
+                        className="text-xs w-32"
+                      />
+                      <Input
+                        placeholder="Note text..."
+                        value={entryNote}
+                        onChange={(e) => setEntryNote(e.target.value)}
+                        className="text-xs flex-1"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          addEntry.mutate({
+                            id: detail.id,
+                            category: entryCategory,
+                            note: entryNote,
+                          })
+                        }
+                        disabled={!entryCategory || !entryNote}
+                      >
                         Add
                       </Button>
                     </div>
                   )}
                   <div className="space-y-1.5">
-                    {(JSON.parse(detail.entriesJson ?? "[]") as ShiftLogEntry[]).length === 0 ? (
-                      <p className="text-xs text-gray-400 text-center py-4">No entries yet</p>
+                    {(JSON.parse(detail.entriesJson ?? "[]") as ShiftLogEntry[])
+                      .length === 0 ? (
+                      <p className="text-xs text-gray-400 text-center py-4">
+                        No entries yet
+                      </p>
                     ) : (
-                      (JSON.parse(detail.entriesJson ?? "[]") as ShiftLogEntry[]).map((entry, i) => (
-                        <div key={i} className="flex gap-3 text-sm p-2 bg-gray-50 rounded">
+                      (
+                        JSON.parse(
+                          detail.entriesJson ?? "[]",
+                        ) as ShiftLogEntry[]
+                      ).map((entry, i) => (
+                        <div
+                          key={i}
+                          className="flex gap-3 text-sm p-2 bg-gray-50 rounded"
+                        >
                           <span className="font-mono text-[10px] text-gray-500 shrink-0 w-[80px]">
-                            {new Date(entry.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            {new Date(entry.time).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
                           </span>
-                          <Badge variant="outline" className="text-[9px] shrink-0 h-5">{entry.category}</Badge>
+                          <Badge
+                            variant="outline"
+                            className="text-[9px] shrink-0 h-5"
+                          >
+                            {entry.category}
+                          </Badge>
                           <span className="text-xs">{entry.note}</span>
                         </div>
                       ))
@@ -411,30 +667,66 @@ export default function ShiftLogPage() {
                 </TabsContent>
                 <TabsContent value="related" className="space-y-3">
                   <div>
-                    <h4 className="text-xs font-semibold text-gray-500 mb-2">Safety Rounds ({detail.safetyRounds?.length ?? 0})</h4>
-                    {Array.isArray(detail?.safetyRounds) ? detail.safetyRounds.map((r) => (
-                      <div key={r.id} className="text-xs p-2 border rounded mb-1 flex justify-between">
-                        <span>{r.area}</span>
-                        <Badge variant="outline" className={cn("text-[9px]", r.allItemsPassed ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700")}>
-                          {r.itemsPassed}/{r.itemsTotal}
-                        </Badge>
-                      </div>
-                    )) : <p className="text-xs text-gray-400">None</p>}
+                    <h4 className="text-xs font-semibold text-gray-500 mb-2">
+                      Safety Rounds ({detail.safetyRounds?.length ?? 0})
+                    </h4>
+                    {Array.isArray(detail?.safetyRounds) ? (
+                      detail.safetyRounds.map((r) => (
+                        <div
+                          key={r.id}
+                          className="text-xs p-2 border rounded mb-1 flex justify-between"
+                        >
+                          <span>{r.area}</span>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-[9px]",
+                              r.allItemsPassed
+                                ? "bg-green-50 text-green-700"
+                                : "bg-red-50 text-red-700",
+                            )}
+                          >
+                            {r.itemsPassed}/{r.itemsTotal}
+                          </Badge>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-gray-400">None</p>
+                    )}
                   </div>
                   <Separator />
                   <div>
-                    <h4 className="text-xs font-semibold text-gray-500 mb-2">Care Logs ({detail.careLogs?.length ?? 0})</h4>
-                    {Array.isArray(detail?.careLogs) ? detail.careLogs.map((c) => (
-                      <div key={c.id} className="text-xs p-2 border rounded mb-1">
-                        <span className="font-medium">{c.youthName}</span> — <Badge variant="outline" className="text-[9px]">{c.careType}</Badge>
-                      </div>
-                    )) : <p className="text-xs text-gray-400">None</p>}
+                    <h4 className="text-xs font-semibold text-gray-500 mb-2">
+                      Care Logs ({detail.careLogs?.length ?? 0})
+                    </h4>
+                    {Array.isArray(detail?.careLogs) ? (
+                      detail.careLogs.map((c) => (
+                        <div
+                          key={c.id}
+                          className="text-xs p-2 border rounded mb-1"
+                        >
+                          <span className="font-medium">{c.youthName}</span> —{" "}
+                          <Badge variant="outline" className="text-[9px]">
+                            {c.careType}
+                          </Badge>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-gray-400">None</p>
+                    )}
                   </div>
                 </TabsContent>
               </Tabs>
             )}
             <DialogFooter>
-              <Button variant="destructive" size="sm" onClick={() => { if (confirm("Delete this shift log?")) deleteShift.mutate({ id: selectedId! }); }}>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  if (confirm("Delete this shift log?"))
+                    deleteShift.mutate({ id: selectedId! });
+                }}
+              >
                 <XCircle className="h-4 w-4 mr-1" /> Delete
               </Button>
             </DialogFooter>

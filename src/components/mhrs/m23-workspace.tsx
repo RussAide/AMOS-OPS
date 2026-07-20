@@ -18,6 +18,8 @@ import {
 import { runtimeConfig } from "@/config/runtime";
 import { mayUseIsolatedFixtures } from "@/context/onboarding-context";
 import { useAuth } from "@/hooks/use-auth";
+import { trpc } from "@/providers/trpc";
+import type { OperationalProgramSummary } from "../../../api/services/operational-program-summary";
 
 const COLORS = {
   teal: "#245C5A",
@@ -206,11 +208,43 @@ function Lineage({ scenario }: { scenario: M23ScenarioViewModel }) {
 export interface M23WorkspaceProps {
   readonly model?: typeof M23_SYNTHETIC_VIEW;
   readonly syntheticDataAllowed?: boolean;
+  readonly operationalSummary?: OperationalProgramSummary | null;
+  readonly operationalLoading?: boolean;
+  readonly operationalError?: boolean;
 }
 
-function M23Unavailable() {
+function M23Unavailable({
+  state = "unavailable",
+}: {
+  state?: "unavailable" | "loading" | "error" | "empty";
+}) {
+  const content = {
+    unavailable: {
+      title: "MHRS operational data unavailable",
+      detail:
+        "No authoritative program records are available. Production does not substitute demonstration workflows, metrics, or claim dispositions.",
+    },
+    loading: {
+      title: "Loading MHRS operational data",
+      detail:
+        "AMOS-OPS is reading the authoritative durable coordination store. No demonstration records are used.",
+    },
+    error: {
+      title: "MHRS operational data could not be loaded",
+      detail:
+        "The authoritative store did not return a safe response. No cached or demonstration records were substituted.",
+    },
+    empty: {
+      title: "No MHRS operational records",
+      detail:
+        "The authoritative durable store is connected and currently contains no Production MHRS work, handoffs, or approved lineage.",
+    },
+  }[state];
   return (
-    <main className="space-y-5 p-4 md:p-6">
+    <main
+      data-testid={`m23-operational-${state}`}
+      className="space-y-5 p-4 md:p-6"
+    >
       <section
         className="rounded-2xl border p-6"
         style={{
@@ -223,15 +257,146 @@ function M23Unavailable() {
           className="mt-4 text-xl font-bold"
           style={{ color: "var(--topbar-title)" }}
         >
-          MHRS operational data unavailable
+          {content.title}
         </h1>
         <p
           className="mt-2 max-w-2xl text-[12px] leading-5"
           style={{ color: "var(--topbar-subtitle)" }}
         >
-          No authoritative program records are available. Production does not
-          substitute demonstration workflows, metrics, or claim dispositions.
+          {content.detail}
         </p>
+      </section>
+    </main>
+  );
+}
+
+function M23OperationalWorkspace({
+  summary,
+  loading,
+  failed,
+}: {
+  summary?: OperationalProgramSummary | null;
+  loading?: boolean;
+  failed?: boolean;
+}) {
+  if (loading) return <M23Unavailable state="loading" />;
+  if (failed) return <M23Unavailable state="error" />;
+  if (!summary) return <M23Unavailable />;
+  if (summary.empty) return <M23Unavailable state="empty" />;
+
+  return (
+    <main
+      data-testid="m23-operational-workspace"
+      className="space-y-5 p-4 md:p-6"
+    >
+      <header
+        className="rounded-2xl border p-5 md:p-6"
+        style={{
+          borderColor: "var(--card-border)",
+          background:
+            "linear-gradient(135deg, #F0FDFA 0%, #FFFFFF 58%, #EFF6FF 100%)",
+        }}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[1px] text-teal-700">
+              AMOS-OPS · Authoritative Production view
+            </p>
+            <h1
+              className="mt-2 text-xl font-bold"
+              style={{ color: "var(--topbar-title)" }}
+            >
+              MHRS Operational Queue
+            </h1>
+            <p
+              className="mt-2 max-w-3xl text-[12px] leading-5"
+              style={{ color: "var(--topbar-subtitle)" }}
+            >
+              Read-only work, handoff, and approved CANS lineage from the
+              durable CCMG operational store.
+            </p>
+          </div>
+          <span className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-[10px] font-bold text-emerald-800">
+            Authoritative · read only
+          </span>
+        </div>
+      </header>
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Active work"
+          value={String(summary.metrics.activeWorkItems)}
+          detail={`${summary.metrics.totalWorkItems} total Production items`}
+        />
+        <MetricCard
+          label="Overdue"
+          value={String(summary.metrics.overdueWorkItems)}
+          detail="Nonterminal items past their due time"
+        />
+        <MetricCard
+          label="Active handoffs"
+          value={String(summary.metrics.activeHandoffs)}
+          detail="Accepted or pending CCMG coordination"
+        />
+        <MetricCard
+          label="Approved lineage"
+          value={String(summary.metrics.approvedLineages)}
+          detail="Immutable approved CANS-to-MHRS routes"
+        />
+      </section>
+
+      <section
+        className="overflow-hidden rounded-xl border"
+        style={{
+          background: "var(--card-bg)",
+          borderColor: "var(--card-border)",
+        }}
+      >
+        <div
+          className="border-b p-5"
+          style={{ borderColor: "var(--card-border)" }}
+        >
+          <h2
+            className="text-[14px] font-bold"
+            style={{ color: "var(--topbar-title)" }}
+          >
+            Production work items
+          </h2>
+          <p
+            className="mt-1 text-[10px]"
+            style={{ color: "var(--topbar-subtitle)" }}
+          >
+            Case identifiers and minimum-necessary coordination fields only.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left text-[11px]">
+            <thead className="bg-slate-50 text-[9px] uppercase tracking-[0.8px] text-slate-500">
+              <tr>
+                <th className="px-5 py-3">Case</th>
+                <th className="px-5 py-3">Work</th>
+                <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3">Priority</th>
+                <th className="px-5 py-3">Due</th>
+                <th className="px-5 py-3">Approval</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.workItems.map((item) => (
+                <tr key={item.id} className="border-t border-slate-100">
+                  <td className="px-5 py-4 font-mono text-[10px]">
+                    {item.caseId}
+                  </td>
+                  <td className="px-5 py-4 font-semibold">{item.title}</td>
+                  <td className="px-5 py-4">{humanize(item.status)}</td>
+                  <td className="px-5 py-4">{humanize(item.priority)}</td>
+                  <td className="px-5 py-4">{item.dueAt}</td>
+                  <td className="px-5 py-4">{humanize(item.approvalStatus)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
     </main>
   );
@@ -251,13 +416,22 @@ export function M23Workspace(props: M23WorkspaceProps = {}) {
 
 function AuthenticatedM23Workspace(props: M23WorkspaceProps) {
   const { workspace } = useAuth();
+  const syntheticDataAllowed = mayUseIsolatedFixtures(
+    runtimeConfig.evaluationMode,
+    workspace,
+  );
+  const [asOf] = useState(() => new Date().toISOString());
+  const summaryQuery = trpc.m23.operationalSummary.useQuery(
+    { asOf },
+    { enabled: !syntheticDataAllowed, retry: false },
+  );
   return (
     <M23WorkspaceContent
       {...props}
-      syntheticDataAllowed={mayUseIsolatedFixtures(
-        runtimeConfig.evaluationMode,
-        workspace,
-      )}
+      syntheticDataAllowed={syntheticDataAllowed}
+      operationalSummary={summaryQuery.data}
+      operationalLoading={summaryQuery.isLoading}
+      operationalError={summaryQuery.isError}
     />
   );
 }
@@ -265,6 +439,9 @@ function AuthenticatedM23Workspace(props: M23WorkspaceProps) {
 function M23WorkspaceContent({
   model: suppliedModel,
   syntheticDataAllowed,
+  operationalSummary,
+  operationalLoading,
+  operationalError,
 }: M23WorkspaceProps & { syntheticDataAllowed: boolean }) {
   const model = syntheticDataAllowed
     ? (suppliedModel ?? M23_SYNTHETIC_VIEW)
@@ -279,6 +456,15 @@ function M23WorkspaceContent({
       model?.scenarios[0],
     [model, selectedId],
   );
+  if (!syntheticDataAllowed) {
+    return (
+      <M23OperationalWorkspace
+        summary={operationalSummary}
+        loading={operationalLoading}
+        failed={operationalError}
+      />
+    );
+  }
   if (!model || !selected) return <M23Unavailable />;
 
   return (

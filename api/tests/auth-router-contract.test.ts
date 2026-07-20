@@ -27,6 +27,9 @@ describe("mounted identity-control contract", () => {
         "setMfa",
         "listSessions",
         "listUsers",
+        "createTrainingAccount",
+        "issueAccountRecovery",
+        "unlockAccount",
         "updateUser",
         "deleteUser",
         "listAccessReviews",
@@ -66,6 +69,18 @@ describe("mounted identity-control contract", () => {
     await expect(caller().auth.listUsers()).rejects.toThrow(
       /Invalid or expired session|Unauthorized/,
     );
+    await expect(
+      caller().auth.issueAccountRecovery({
+        userId: "TEAM-USER-001",
+        rationale: "Verified account recovery request.",
+      }),
+    ).rejects.toThrow(/Invalid or expired session|Unauthorized/);
+    await expect(
+      caller().auth.unlockAccount({
+        userId: "TEAM-USER-001",
+        rationale: "Verified account unlock request.",
+      }),
+    ).rejects.toThrow(/Invalid or expired session|Unauthorized/);
     await expect(caller().auth.listAccessReviews()).rejects.toThrow(
       /Invalid or expired session|Unauthorized/,
     );

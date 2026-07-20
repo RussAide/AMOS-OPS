@@ -1,6 +1,9 @@
 [build]
   command = "npm run build:client"
   publish = "dist/public"
+  # Production publishes only through the protected matching-pair workflow.
+  # This prevents the linked Git repository from racing that controlled path.
+  ignore = "node ./scripts/netlify-git-build-policy.mjs"
 
 [build.environment]
   NODE_VERSION = "24"

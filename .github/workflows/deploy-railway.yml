@@ -1,15 +1,10 @@
-name: Deploy Backend to Railway
+name: Deploy Backend to Railway (Staging only)
 
 on:
   workflow_dispatch:
     inputs:
-      target_environment:
-        description: Controlled environment
-        required: true
-        type: choice
-        options: [staging, production]
       approval_id:
-        description: Approved release identifier
+        description: Approved staging release identifier
         required: true
         type: string
       change_reference:
@@ -23,8 +18,8 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: amos-${{ inputs.target_environment }}
-    concurrency: amos-ops-${{ inputs.target_environment }}
+    environment: amos-staging
+    concurrency: amos-ops-staging
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -34,17 +29,17 @@ jobs:
       - run: npm ci
       - run: npm run env:validate
         env:
-          APP_ENV: ${{ inputs.target_environment }}
+          APP_ENV: staging
           AMOS_RUNTIME_MODE: production
-          AMOS_ENVIRONMENT_ID: amos-ops-${{ inputs.target_environment }}
-          CREDENTIAL_NAMESPACE: amos-ops/${{ inputs.target_environment }}
+          AMOS_ENVIRONMENT_ID: amos-ops-staging
+          CREDENTIAL_NAMESPACE: amos-ops/staging
           NODE_ENV: production
-          PERSISTENT_ROOT: ${{ inputs.target_environment == 'production' && '/app/persistent' || '/app/data/staging' }}
-          DATABASE_PATH: ${{ inputs.target_environment == 'production' && '/app/persistent/data/production/amos-ops.db' || '/app/data/staging/amos-ops.db' }}
-          TRAINING_DATABASE_PATH: ${{ inputs.target_environment == 'production' && '/app/persistent/data/production/training/amos-ops-training.db' || '/app/data/staging/training/amos-ops-training.db' }}
-          UPLOAD_PATH: ${{ inputs.target_environment == 'production' && '/app/persistent/uploads/production' || '/app/uploads/staging' }}
-          TRAINING_UPLOAD_PATH: ${{ inputs.target_environment == 'production' && '/app/persistent/uploads/production/training' || '/app/uploads/staging/training' }}
-          BACKUP_PATH: ${{ inputs.target_environment == 'production' && '/app/persistent/backups/production' || '/app/data/staging/backups' }}
+          PERSISTENT_ROOT: /app/data/staging
+          DATABASE_PATH: /app/data/staging/amos-ops.db
+          TRAINING_DATABASE_PATH: /app/data/staging/training/amos-ops-training.db
+          UPLOAD_PATH: /app/uploads/staging
+          TRAINING_UPLOAD_PATH: /app/uploads/staging/training
+          BACKUP_PATH: /app/data/staging/backups
           APP_SECRET: ${{ secrets.APP_SECRET }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           DEPLOYMENT_APPROVAL_ID: ${{ inputs.approval_id }}
@@ -52,16 +47,12 @@ jobs:
           AMOS_ALLOWED_ORIGINS: ${{ vars.AMOS_ALLOWED_ORIGINS }}
           ALLOW_SELF_REGISTRATION: "false"
           MFA_POLICY: required-all
-          AMOS_PRODUCTION_RELEASE_AUTHORIZED: ${{ inputs.target_environment == 'production' && 'true' || 'false' }}
-          AMOS_PRODUCTION_RELEASE_ID: ${{ inputs.target_environment == 'production' && inputs.approval_id || '' }}
-          AMOS_VALIDATION_COMPONENT: backend-ci
-          AMOS_STORAGE_ENCRYPTION_REQUIRED: ${{ inputs.target_environment == 'production' && 'true' || 'false' }}
-          AMOS_STORAGE_KEY_PROVIDER: ${{ inputs.target_environment == 'production' && 'railway-sealed-variables-v1' || 'none' }}
-          AMOS_STORAGE_MIGRATION_MODE: none
+          AMOS_PRODUCTION_RELEASE_AUTHORIZED: "false"
+          AMOS_PRODUCTION_RELEASE_ID: ""
       - run: npm run verify
       - name: Install Railway CLI
         run: npm install -g @railway/cli
       - name: Deploy to Railway
-        run: railway up --service "${{ vars.RAILWAY_SERVICE }}" --environment "${{ inputs.target_environment }}"
+        run: railway up --service "${{ vars.RAILWAY_SERVICE }}" --environment staging
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

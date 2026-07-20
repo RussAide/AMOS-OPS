@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from "react";
 import { Upload, CheckCircle, Loader2, AlertCircle } from "lucide-react";
 import { useHR } from "@/context/hr-context";
 import { trpc } from "@/providers/trpc";
+import { authenticatedApiFetch } from "@/config/api-request";
 
 interface Props {
   personId: string;
@@ -26,7 +27,8 @@ export function DocumentUpload({ personId, moduleId, recordName, onUploaded, upl
       setError("");
 
       try {
-        // Step 1: Upload file to /api/upload
+        // Step 1: Upload through the verified Railway API origin with the
+        // same environment-scoped identity headers used by tRPC.
         const formData = new FormData();
         formData.append("file", file);
         formData.append("personId", personId);
@@ -34,14 +36,20 @@ export function DocumentUpload({ personId, moduleId, recordName, onUploaded, upl
         formData.append("recordName", recordName);
         formData.append("uploadedBy", uploadedBy);
 
-        const response = await fetch("/api/upload", {
+        const response = await authenticatedApiFetch("/api/upload", {
           method: "POST",
           body: formData,
         });
 
         if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || `Upload failed: ${response.status}`);
+          const errData = (await response.json().catch(() => ({}))) as {
+            error?: string | { message?: string };
+          };
+          const message =
+            typeof errData.error === "string"
+              ? errData.error
+              : errData.error?.message;
+          throw new Error(message || `Upload failed: ${response.status}`);
         }
 
         const uploadResult = await response.json();

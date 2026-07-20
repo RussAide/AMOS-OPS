@@ -15,6 +15,7 @@ import {
 } from "../services/mhrs";
 import type { M23Actor, M23Role } from "../../contracts/mhrs/types";
 import { assertSyntheticScenarioRuntime, env } from "../lib/env";
+import { buildOperationalProgramSummary } from "../services/operational-program-summary";
 
 const m23Roles = [
   "therapist",
@@ -132,6 +133,19 @@ export function getM23SyntheticState(): M23SyntheticState {
 }
 
 export const m23Router = createRouter({
+  operationalSummary: authedQuery
+    .input(z.object({ asOf: timestamp }))
+    .query(({ ctx, input }) => {
+      if (ctx.user.dataScope !== "operational") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            "MHRS operational records are available only in the Operational workspace.",
+        });
+      }
+      return buildOperationalProgramSummary("MHRS", input.asOf);
+    }),
+
   dashboard: authedQuery
     .input(z.object({ asOf: timestamp }))
     .query(({ ctx, input }) =>

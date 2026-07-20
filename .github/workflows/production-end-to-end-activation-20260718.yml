@@ -1,0 +1,177 @@
+name: Protected AMOS-OPS Production Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact verified 40-character commit SHA to release
+        required: true
+        type: string
+      release_id:
+        description: Approved immutable Production release identifier
+        required: true
+        type: string
+      change_reference:
+        description: Approved change-control reference
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: amos-ops-protected-production-release
+  cancel-in-progress: false
+
+jobs:
+  release-matching-pair:
+    name: Verify, publish matching pair, or roll back both
+    environment: amos-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      RELEASE_ID: ${{ inputs.release_id }}
+      CHANGE_REFERENCE: ${{ inputs.change_reference }}
+      RAILWAY_CREDENTIAL: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_TOKEN_TYPE: ${{ vars.RAILWAY_TOKEN_TYPE }}
+      RAILWAY_PROJECT_ID: f9357da4-00c4-4f25-a52d-5c53f6ce07dc
+      RAILWAY_SERVICE_ID: 8fdf6d7e-c7ba-412d-95f0-8b980ba612ba
+      RAILWAY_ENVIRONMENT_ID: 7c22d214-abac-478f-983b-1418a7cbac77
+      RAILWAY_PUBLIC_ORIGIN: https://amos-ops-production.up.railway.app
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+      NETLIFY_PUBLIC_ORIGIN: https://amos-ops.com
+      EXPECTED_ALLOWED_ORIGINS: ${{ vars.AMOS_ALLOWED_ORIGINS }}
+      PERSISTENT_ROOT: /app/persistent
+      DATABASE_PATH: /app/persistent/data/production/amos-ops.db
+      TRAINING_DATABASE_PATH: /app/persistent/data/production/training/amos-ops-training.db
+      UPLOAD_PATH: /app/persistent/uploads/production
+      TRAINING_UPLOAD_PATH: /app/persistent/uploads/production/training
+      BACKUP_PATH: /app/persistent/backups/production
+      VITE_AMOS_API_ORIGIN: https://amos-ops-production.up.railway.app
+      AMOS_PRODUCTION_RELEASE_ID: ${{ inputs.release_id }}
+      AMOS_BUILD_SHA: ${{ inputs.release_sha }}
+
+    steps:
+      - name: Check out the exact approved release
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Use the pinned Node toolchain
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.14.0"
+          cache: npm
+
+      - name: Install the locked dependency graph
+        run: npm ci
+
+      - name: Verify source and identity boundary before any host mutation
+        run: |
+          npm run lint:strict
+          npm run typecheck
+          npm run test
+          npm run verify:release-identity-boundary
+          node --test scripts/production-release-*.node-test.mjs scripts/verify-release-identity-boundary.node-test.mjs
+
+      - name: Enforce the single protected Netlify Production release path
+        run: >-
+          node scripts/production-release-control.mjs enforce-netlify-release-path
+          --output "$RUNNER_TEMP/amos-production-netlify-control.json"
+
+      - name: Prove targets, credentials, paths, domains, and rollback readiness
+        run: >-
+          node scripts/production-release-control.mjs preflight
+          --output "$RUNNER_TEMP/amos-production-before.json"
+
+      - name: Build frontend and backend once from the same tree
+        run: npm run build
+
+      - name: Seal one immutable manifest into both artifacts
+        run: >-
+          node scripts/production-release-manifest.mjs
+          --release-id "$RELEASE_ID"
+          --release-sha "$RELEASE_SHA"
+
+      - name: Verify built runtime and deep links
+        run: |
+          npm run test:dms1:built-runtime
+          npm run test:sidebar:built-runtime
+
+      - name: Assemble the prebuilt Railway release stage
+        run: >-
+          node scripts/production-release-stage.mjs
+          --output "$RUNNER_TEMP/amos-production-release"
+
+      - name: Recheck unchanged targets immediately before mutation
+        run: >-
+          node scripts/production-release-control.mjs assert-snapshot
+          --snapshot "$RUNNER_TEMP/amos-production-before.json"
+
+      - name: Mark the start of the controlled mutation window
+        id: mutation
+        run: echo "started=true" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy the prebuilt backend artifact to Railway
+        env:
+          RAILWAY_TOKEN: ${{ vars.RAILWAY_TOKEN_TYPE == 'project' && secrets.RAILWAY_TOKEN || '' }}
+          RAILWAY_API_TOKEN: ${{ vars.RAILWAY_TOKEN_TYPE == 'account' && secrets.RAILWAY_TOKEN || '' }}
+        run: >-
+          npx --yes @railway/cli@5.27.0 up
+          "$RUNNER_TEMP/amos-production-release"
+          --path-as-root
+          --project "$RAILWAY_PROJECT_ID"
+          --environment "$RAILWAY_ENVIRONMENT_ID"
+          --service "$RAILWAY_SERVICE_ID"
+          --ci
+
+      - name: Confirm the new Railway deployment is healthy
+        run: >-
+          node scripts/production-release-control.mjs wait-railway
+          --snapshot "$RUNNER_TEMP/amos-production-before.json"
+          --output "$RUNNER_TEMP/amos-production-railway.json"
+
+      - name: Deploy the identical frontend artifact to Netlify
+        run: >-
+          npx --yes netlify-cli@23.11.1 deploy
+          --prod
+          --dir dist/public
+          --site "$NETLIFY_SITE_ID"
+          --message "AMOS-OPS $RELEASE_ID $RELEASE_SHA"
+          --json
+          > "$RUNNER_TEMP/amos-production-netlify.json"
+
+      - name: Prove Railway and Netlify expose the same release identity
+        run: >-
+          node scripts/production-release-control.mjs verify-live
+          --manifest dist/release-manifest.json
+          --railway "$RUNNER_TEMP/amos-production-railway.json"
+          --netlify "$RUNNER_TEMP/amos-production-netlify.json"
+          --output "$RUNNER_TEMP/amos-production-proof.json"
+
+      - name: Roll back both hosts after any mutation-window failure
+        if: failure() && steps.mutation.outputs.started == 'true'
+        run: >-
+          node scripts/production-release-control.mjs rollback
+          --snapshot "$RUNNER_TEMP/amos-production-before.json"
+          --output "$RUNNER_TEMP/amos-production-rollback.json"
+
+      - name: Preserve non-secret release evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: amos-production-release-${{ inputs.release_id }}
+          path: |
+            ${{ runner.temp }}/amos-production-before.json
+            ${{ runner.temp }}/amos-production-railway.json
+            ${{ runner.temp }}/amos-production-netlify.json
+            ${{ runner.temp }}/amos-production-netlify-control.json
+            ${{ runner.temp }}/amos-production-proof.json
+            ${{ runner.temp }}/amos-production-rollback.json
+            dist/release-manifest.json
+          if-no-files-found: ignore
+          retention-days: 30

@@ -4,7 +4,7 @@ import {
   AlertTriangle, CheckCircle, UserPlus,
   FileText, Calendar, Ban
 } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useHR } from "@/context/hr-context";
 import { getHRModule, getModuleStatusOptions } from "@/data/hrLifecycleData";
 import { DocumentUpload } from "@/components/hr/document-upload";
@@ -242,8 +242,8 @@ export function HRModulePage() {
                 const docComp = moduleId ? getDocumentCompleteness(p.id, moduleId) : { percent: 0, missing: [] as string[], uploaded: [] as string[] };
                 const docsOpen = expandedDocRow === p.id;
                 return (
-                  <>
-                    <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                  <Fragment key={p.id}>
+                    <tr className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 cursor-pointer"
@@ -328,7 +328,7 @@ export function HRModulePage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })
             )}

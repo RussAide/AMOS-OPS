@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
+import { appRoutePath } from "../../data/app-route-registry";
 import {
   M41C_OUTCOME_MEASURE_PAGE_MODE,
   OutcomeMeasuresPage,
@@ -70,17 +71,17 @@ describe("M4.1C mounted outcome-measure experience quarantine", () => {
     expect(boundary).toContain('to="/clinical/intelligence-fabric"');
   });
 
-  it("keeps the governed page mounted in both route trees with accurate metadata", () => {
-    const activeRoutes = readSource(
-      "../../components/shell/app-shell-routes.tsx",
-    );
-    const retainedRoutes = readSource("../../components/shell/app-shell.tsx");
+  it("keeps the governed page mounted in the canonical route tree with accurate metadata", () => {
+    const routes = readSource("../../components/shell/app-shell.tsx");
     const navigation = readSource("../../data/navData.ts");
+    const routeId = "clinical-outcome-measures";
 
-    for (const routes of [activeRoutes, retainedRoutes]) {
-      expect(routes).toContain('path="/clinical/outcome-measures"');
-      expect(routes).toContain("<OutcomeMeasuresPage />");
-    }
+    expect(appRoutePath(routeId)).toBe("/clinical/outcome-measures");
+    const binding = routes.slice(
+      routes.indexOf(`path={appRoutePath("${routeId}")}`),
+      routes.indexOf(`path={appRoutePath("${routeId}")}`) + 200,
+    );
+    expect(binding).toContain("element={<OutcomeMeasuresPage />}");
     expect(navigation).toContain('title: "Outcome Measure Governance"');
     expect(navigation).toContain("Metadata-only evaluation boundary");
   });

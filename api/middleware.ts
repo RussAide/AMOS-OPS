@@ -225,6 +225,8 @@ export const authedQuery = t.procedure.use(
     const operationalIdentityProcedures = new Set([
       "auth.listUsers",
       "auth.createTrainingAccount",
+      "auth.issueAccountRecovery",
+      "auth.unlockAccount",
       "auth.updateUser",
       "auth.deleteUser",
       "auth.listAccessReviews",

@@ -1,43 +1,36 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { appRoutePath } from "../../src/data/app-route-registry";
 import { getBreadcrumbs, heroConfigs, navItems } from "../../src/data/navData";
 
 const route = "/clinical/intelligence-fabric";
+const routeId = "clinical-intelligence-fabric";
 
 describe("M4.1C Clinical Intelligence Fabric application route", () => {
-  it("mounts the page in the active and retained AppShell route trees", () => {
-    const activeShell = fs.readFileSync(
+  it("mounts the page in the canonical AppShell route tree", () => {
+    const routes = fs.readFileSync(
       path.resolve("src/components/shell/app-shell.tsx"),
       "utf8",
     );
-    const retainedRoutes = fs.readFileSync(
-      path.resolve("src/components/shell/app-shell-routes.tsx"),
-      "utf8",
+    expect(appRoutePath(routeId)).toBe(route);
+    const binding = routes.slice(
+      routes.indexOf(`path={appRoutePath("${routeId}")}`),
+      routes.indexOf(`path={appRoutePath("${routeId}")}`) + 200,
     );
-    for (const source of [activeShell, retainedRoutes]) {
-      expect(source).toContain('path="/clinical/intelligence-fabric"');
-      expect(source).toContain("M41cClinicalIntelligencePage");
-      expect(source).toContain(
-        "@/pages/clinical/m41c-clinical-intelligence-page",
-      );
-    }
+    expect(binding).toContain("element={<M41cClinicalIntelligencePage />}");
+    expect(routes).toContain(
+      "@/pages/clinical/m41c-clinical-intelligence-page",
+    );
   });
 
-  it("routes both shell trees to the narrative-only intake assessment", () => {
-    const activeShell = fs.readFileSync(
+  it("routes the canonical shell to the narrative-only intake assessment", () => {
+    const routes = fs.readFileSync(
       path.resolve("src/components/shell/app-shell.tsx"),
       "utf8",
     );
-    const retainedRoutes = fs.readFileSync(
-      path.resolve("src/components/shell/app-shell-routes.tsx"),
-      "utf8",
-    );
-
-    for (const source of [activeShell, retainedRoutes]) {
-      expect(source).toContain("@/pages/intake/assessment-page");
-      expect(source).not.toContain("@/pages/intake-assessment-page");
-    }
+    expect(routes).toContain("@/pages/intake/assessment-page");
+    expect(routes).not.toContain("@/pages/intake-assessment-page");
   });
 
   it("publishes one navigation item and governed page metadata", () => {

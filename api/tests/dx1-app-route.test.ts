@@ -2,27 +2,25 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { authorizeClientRoute } from "../../src/constants/access-control";
+import { appRoutePath } from "../../src/data/app-route-registry";
 import { getBreadcrumbs, heroConfigs, navItems } from "../../src/data/navData";
 
 const route = "/operations-hub/enterprise-demo";
+const routeId = "operations-hub-enterprise-demo";
 
 describe("DX.1 final cross-enterprise demo application route", () => {
-  it("mounts the experience in the active and retained shell trees", () => {
-    const activeShell = fs.readFileSync(
+  it("mounts the experience in the canonical shell route tree", () => {
+    const routes = fs.readFileSync(
       path.resolve("src/components/shell/app-shell.tsx"),
       "utf8",
     );
-    const retainedRoutes = fs.readFileSync(
-      path.resolve("src/components/shell/app-shell-routes.tsx"),
-      "utf8",
+    expect(appRoutePath(routeId)).toBe(route);
+    const binding = routes.slice(
+      routes.indexOf(`path={appRoutePath("${routeId}")}`),
+      routes.indexOf(`path={appRoutePath("${routeId}")}`) + 200,
     );
-    for (const source of [activeShell, retainedRoutes]) {
-      expect(source).toContain('path="/operations-hub/enterprise-demo"');
-      expect(source).toContain("Dx1EnterpriseDemoPage");
-      expect(source).toContain(
-        "@/pages/operations-hub/dx1-enterprise-demo-page",
-      );
-    }
+    expect(binding).toContain("element={<Dx1EnterpriseDemoPage />}");
+    expect(routes).toContain("@/pages/operations-hub/dx1-enterprise-demo-page");
   });
 
   it("publishes exactly one navigation item and governed metadata", () => {
@@ -37,7 +35,9 @@ describe("DX.1 final cross-enterprise demo application route", () => {
       category: "ENTERPRISE OPERATIONS",
       title: "Final Cross-Enterprise Demo Verification",
     });
-    expect(heroConfigs[route].subtitle).toContain("all twelve enterprise criteria");
+    expect(heroConfigs[route].subtitle).toContain(
+      "all twelve enterprise criteria",
+    );
   });
 
   it("inherits the permission-trimmed Operations Hub access policy", () => {
@@ -54,4 +54,3 @@ describe("DX.1 final cross-enterprise demo application route", () => {
     ]);
   });
 });
-

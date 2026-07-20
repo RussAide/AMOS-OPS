@@ -37,7 +37,7 @@ const configuredApiOrigin = (import.meta.env.VITE_AMOS_API_ORIGIN as string | un
   ?.trim()
   .replace(/\/$/, "");
 
-function apiEndpoint(path: string): string {
+export function apiEndpoint(path: string): string {
   return configuredApiOrigin ? `${configuredApiOrigin}${path}` : path;
 }
 

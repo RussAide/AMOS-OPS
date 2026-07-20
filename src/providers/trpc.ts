@@ -40,6 +40,7 @@ import {
   runtimeConfig,
   type EvaluationFallbackKind,
 } from "@/config/runtime";
+import { identityRequestHeaders } from "@/config/api-request";
 import { createResilientFetch } from "@/providers/resilient-fetch";
 import {
   CCMG_SYNTHETIC_DASHBOARD,
@@ -11169,21 +11170,7 @@ function createRuntimeTrpcClient() {
         url: runtimeConfig.apiUrl,
         transformer: superjson,
         headers() {
-          const token = localStorage.getItem("amos_token");
-          if (!token) return {};
-          const role = localStorage.getItem("amos-role") ?? "rcs-day";
-          const workspace =
-            localStorage.getItem("amos-workspace") === "training"
-              ? "training"
-              : "operational";
-          return {
-            Authorization: `Bearer ${token}`,
-            "X-AMOS-Workspace": workspace,
-            ...(token === EVALUATION_SESSION_TOKEN &&
-            runtimeConfig.evaluationMode
-              ? { "X-AMOS-Evaluation-Role": role }
-              : {}),
-          };
+          return identityRequestHeaders();
         },
         fetch: createResilientFetch({
           timeoutMs: 15_000,

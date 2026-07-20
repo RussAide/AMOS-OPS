@@ -14,7 +14,10 @@ const listBehavioralObservationsProcedure = authedQuery
   .query(async ({ input }) => {
     let sql = "SELECT * FROM behavioral_observations WHERE 1=1";
     const params: unknown[] = [];
-    if (input?.youthId) { sql += " AND youth_id = ?"; params.push(input.youthId); }
+    if (input?.youthId) {
+      sql += " AND youth_id = ?";
+      params.push(input.youthId);
+    }
     sql += " ORDER BY observation_date DESC";
     return sqlite.prepare(sql).all(...params) ?? [];
   });
@@ -22,23 +25,48 @@ const listBehavioralObservationsProcedure = authedQuery
 export const m18Router = createRouter({
   // ─── Bed Census ────────────────────────────────────────────
   getBedCensus: authedQuery.query(async () => {
-    const rows = sqlite.prepare("SELECT * FROM bed_census ORDER BY room_number, bed_letter").all() ?? [];
+    const rows =
+      sqlite
+        .prepare("SELECT * FROM bed_census ORDER BY room_number, bed_letter")
+        .all() ?? [];
     return rows;
   }),
 
   assignBed: authedQuery
-    .input(z.object({ bedId: z.string(), youthId: z.string(), youthName: z.string(), mrn: z.string() }))
+    .input(
+      z.object({
+        bedId: z.string(),
+        youthId: z.string(),
+        youthName: z.string(),
+        mrn: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const actor = ctx.user?.email ?? "unknown";
       const now = new Date().toISOString();
       // Clear any existing bed assignment for this youth
-      sqlite.prepare("UPDATE bed_census SET is_occupied = 0, youth_id = NULL, youth_name = NULL, mrn = NULL, assigned_date = NULL WHERE youth_id = ?").run(input.youthId);
-      sqlite.prepare("UPDATE bed_census SET is_occupied = 1, youth_id = ?, youth_name = ?, mrn = ?, assigned_date = ?, updated_at = ? WHERE id = ?")
+      sqlite
+        .prepare(
+          "UPDATE bed_census SET is_occupied = 0, youth_id = NULL, youth_name = NULL, mrn = NULL, assigned_date = NULL WHERE youth_id = ?",
+        )
+        .run(input.youthId);
+      sqlite
+        .prepare(
+          "UPDATE bed_census SET is_occupied = 1, youth_id = ?, youth_name = ?, mrn = ?, assigned_date = ?, updated_at = ? WHERE id = ?",
+        )
         .run(input.youthId, input.youthName, input.mrn, now, now, input.bedId);
       // Update youth profile
-      sqlite.prepare("UPDATE youth_profiles SET bed_assignment = (SELECT bed_name FROM bed_census WHERE id = ?), updated_at = ? WHERE id = ?")
+      sqlite
+        .prepare(
+          "UPDATE youth_profiles SET bed_assignment = (SELECT bed_name FROM bed_census WHERE id = ?), updated_at = ? WHERE id = ?",
+        )
         .run(input.bedId, now, input.youthId);
-      auditLog({ action: "m16:assignBed", actor, resource: `bed:${input.bedId}`, details: `Assigned ${input.youthName} to bed` });
+      auditLog({
+        action: "m16:assignBed",
+        actor,
+        resource: `bed:${input.bedId}`,
+        details: `Assigned ${input.youthName} to bed`,
+      });
       return { success: true };
     }),
 
@@ -48,19 +76,43 @@ export const m18Router = createRouter({
     .query(async ({ input }) => {
       let sql = "SELECT * FROM shifts WHERE 1=1";
       const params: unknown[] = [];
-      if (input?.date) { sql += " AND shift_date = ?"; params.push(input.date); }
+      if (input?.date) {
+        sql += " AND shift_date = ?";
+        params.push(input.date);
+      }
       sql += " ORDER BY shift_date DESC, start_time DESC";
       return sqlite.prepare(sql).all(...params) ?? [];
     }),
 
   createShift: authedQuery
-    .input(z.object({ shiftDate: z.string(), shiftType: z.enum(["day", "evening", "night", "overnight"]), startTime: z.string(), endTime: z.string(), rcsLeadName: z.string().optional() }))
+    .input(
+      z.object({
+        shiftDate: z.string(),
+        shiftType: z.enum(["day", "evening", "night", "overnight"]),
+        startTime: z.string(),
+        endTime: z.string(),
+        rcsLeadName: z.string().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const actor = ctx.user?.email ?? "unknown";
       const id = randomUUID();
       const now = new Date().toISOString();
-      sqlite.prepare(`INSERT INTO shifts (id, shift_date, shift_type, start_time, end_time, rcs_lead_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(id, input.shiftDate, input.shiftType, input.startTime, input.endTime, input.rcsLeadName ?? null, "scheduled", now, now);
+      sqlite
+        .prepare(
+          `INSERT INTO shifts (id, shift_date, shift_type, start_time, end_time, rcs_lead_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          input.shiftDate,
+          input.shiftType,
+          input.startTime,
+          input.endTime,
+          input.rcsLeadName ?? null,
+          "scheduled",
+          now,
+          now,
+        );
       auditLog({ action: "m16:createShift", actor, resource: `shift:${id}` });
       return { id, ...input, createdAt: now };
     }),
@@ -69,20 +121,39 @@ export const m18Router = createRouter({
   getHandoff: authedQuery
     .input(z.object({ shiftDate: z.string() }))
     .query(async ({ input }) => {
-      const row = sqlite.prepare("SELECT * FROM shift_handoffs WHERE handoff_date = ? ORDER BY created_at DESC LIMIT 1").get(input.shiftDate);
+      const row = sqlite
+        .prepare(
+          "SELECT * FROM shift_handoffs WHERE handoff_date = ? ORDER BY created_at DESC LIMIT 1",
+        )
+        .get(input.shiftDate);
       return row ?? null;
     }),
 
   createHandoff: authedQuery
-    .input(z.object({ fromShiftId: z.string(), handoffDate: z.string(), fromStaffName: z.string() }))
+    .input(z.object({ fromShiftId: z.string(), handoffDate: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const actor = ctx.user?.email ?? "unknown";
+      const actor = ctx.user.email;
       const id = randomUUID();
       const now = new Date().toISOString();
-      sqlite.prepare(`INSERT INTO shift_handoffs (id, from_shift_id, handoff_date, from_staff_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-        .run(id, input.fromShiftId, input.handoffDate, input.fromStaffName, "pending", now, now);
-      auditLog({ action: "m16:createHandoff", actor, resource: `handoff:${id}` });
-      return { id, ...input, createdAt: now };
+      sqlite
+        .prepare(
+          `INSERT INTO shift_handoffs (id, from_shift_id, handoff_date, from_staff_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          input.fromShiftId,
+          input.handoffDate,
+          actor,
+          "pending",
+          now,
+          now,
+        );
+      auditLog({
+        action: "m16:createHandoff",
+        actor,
+        resource: `handoff:${id}`,
+      });
+      return { id, ...input, fromStaffName: actor, createdAt: now };
     }),
 
   // ─── Behavioral Observations ───────────────────────────────
@@ -90,22 +161,54 @@ export const m18Router = createRouter({
   listBehavioralObservations: listBehavioralObservationsProcedure,
 
   createBehavioralObs: authedQuery
-    .input(z.object({
-      youthId: z.string(), youthName: z.string(), mrn: z.string(),
-      observationDate: z.string(), observedBy: z.string(),
-      behaviorType: z.string(), frequency: z.enum(["single", "intermittent", "continuous"]).optional(),
-      intensity: z.enum(["mild", "moderate", "severe"]).optional(), duration: z.string().optional(),
-      triggers: z.string().optional(), interventionUsed: z.string().optional(),
-      outcome: z.string().optional(), followUpNeeded: z.boolean().optional(),
-    }))
+    .input(
+      z.object({
+        youthId: z.string(),
+        youthName: z.string(),
+        mrn: z.string(),
+        observationDate: z.string(),
+        behaviorType: z.string(),
+        frequency: z.enum(["single", "intermittent", "continuous"]).optional(),
+        intensity: z.enum(["mild", "moderate", "severe"]).optional(),
+        duration: z.string().optional(),
+        triggers: z.string().optional(),
+        interventionUsed: z.string().optional(),
+        outcome: z.string().optional(),
+        followUpNeeded: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
-      const actor = ctx.user?.email ?? "unknown";
+      const actor = ctx.user.email;
       const id = randomUUID();
       const now = new Date().toISOString();
-      sqlite.prepare(`INSERT INTO behavioral_observations (id, youth_id, youth_name, mrn, observation_date, observed_by, behavior_type, frequency, intensity, duration, triggers, intervention_used, outcome, follow_up_needed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(id, input.youthId, input.youthName, input.mrn, input.observationDate, input.observedBy ?? actor, input.behaviorType, input.frequency ?? null, input.intensity ?? null, input.duration ?? null, input.triggers ?? null, input.interventionUsed ?? null, input.outcome ?? null, input.followUpNeeded ? 1 : 0, now, now);
-      auditLog({ action: "m16:createBehavioralObs", actor, resource: `behobs:${id}` });
-      return { id, ...input, createdAt: now };
+      sqlite
+        .prepare(
+          `INSERT INTO behavioral_observations (id, youth_id, youth_name, mrn, observation_date, observed_by, behavior_type, frequency, intensity, duration, triggers, intervention_used, outcome, follow_up_needed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          input.youthId,
+          input.youthName,
+          input.mrn,
+          input.observationDate,
+          actor,
+          input.behaviorType,
+          input.frequency ?? null,
+          input.intensity ?? null,
+          input.duration ?? null,
+          input.triggers ?? null,
+          input.interventionUsed ?? null,
+          input.outcome ?? null,
+          input.followUpNeeded ? 1 : 0,
+          now,
+          now,
+        );
+      auditLog({
+        action: "m16:createBehavioralObs",
+        actor,
+        resource: `behobs:${id}`,
+      });
+      return { id, ...input, observedBy: actor, createdAt: now };
     }),
 
   // ─── Milieu Notes ──────────────────────────────────────────
@@ -114,7 +217,10 @@ export const m18Router = createRouter({
     .query(async ({ input }) => {
       let sql = "SELECT * FROM milieu_notes WHERE 1=1";
       const params: unknown[] = [];
-      if (input?.youthId) { sql += " AND youth_id = ?"; params.push(input.youthId); }
+      if (input?.youthId) {
+        sql += " AND youth_id = ?";
+        params.push(input.youthId);
+      }
       sql += " ORDER BY note_date DESC";
       return sqlite.prepare(sql).all(...params) ?? [];
     }),
@@ -125,41 +231,108 @@ export const m18Router = createRouter({
     .query(async ({ input }) => {
       let sql = "SELECT * FROM family_contacts WHERE 1=1";
       const params: unknown[] = [];
-      if (input?.youthId) { sql += " AND youth_id = ?"; params.push(input.youthId); }
+      if (input?.youthId) {
+        sql += " AND youth_id = ?";
+        params.push(input.youthId);
+      }
       sql += " ORDER BY contact_date DESC";
       return sqlite.prepare(sql).all(...params) ?? [];
     }),
 
   createFamilyContact: authedQuery
-    .input(z.object({
-      youthId: z.string(), youthName: z.string(), mrn: z.string(),
-      contactDate: z.string(), contactType: z.enum(["phone_call", "video_call", "in_person_visit", "letter", "email", "family_therapy", "education_session"]),
-      contactedPerson: z.string(), relationship: z.string().optional(), topicsDiscussed: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        youthId: z.string(),
+        youthName: z.string(),
+        mrn: z.string(),
+        contactDate: z.string(),
+        contactType: z.enum([
+          "phone_call",
+          "video_call",
+          "in_person_visit",
+          "letter",
+          "email",
+          "family_therapy",
+          "education_session",
+        ]),
+        contactedPerson: z.string(),
+        relationship: z.string().optional(),
+        topicsDiscussed: z.string().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const actor = ctx.user?.email ?? "unknown";
       const id = randomUUID();
       const now = new Date().toISOString();
-      sqlite.prepare(`INSERT INTO family_contacts (id, youth_id, youth_name, mrn, contact_date, contact_type, contacted_person, relationship, topics_discussed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(id, input.youthId, input.youthName, input.mrn, input.contactDate, input.contactType, input.contactedPerson, input.relationship ?? null, input.topicsDiscussed ?? null, now, now);
-      auditLog({ action: "m16:createFamilyContact", actor, resource: `family:${id}` });
+      sqlite
+        .prepare(
+          `INSERT INTO family_contacts (id, youth_id, youth_name, mrn, contact_date, contact_type, contacted_person, relationship, topics_discussed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          input.youthId,
+          input.youthName,
+          input.mrn,
+          input.contactDate,
+          input.contactType,
+          input.contactedPerson,
+          input.relationship ?? null,
+          input.topicsDiscussed ?? null,
+          now,
+          now,
+        );
+      auditLog({
+        action: "m16:createFamilyContact",
+        actor,
+        resource: `family:${id}`,
+      });
       return { id, ...input, createdAt: now };
     }),
 
   // ─── Restrictive Interventions ─────────────────────────────
   listRestrictiveInt: authedQuery.query(async () => {
-    return sqlite.prepare("SELECT * FROM restrictive_interventions ORDER BY incident_date DESC").all() ?? [];
+    return (
+      sqlite
+        .prepare(
+          "SELECT * FROM restrictive_interventions ORDER BY incident_date DESC",
+        )
+        .all() ?? []
+    );
   }),
 
   // ─── Residential Dashboard Summary ─────────────────────────
   residentialSummary: authedQuery.query(async () => {
-    const totalBeds = sqlite.prepare("SELECT COUNT(*) as c FROM bed_census").get() as CountRow | undefined;
-    const occupiedBeds = sqlite.prepare("SELECT COUNT(*) as c FROM bed_census WHERE is_occupied = 1").get() as CountRow | undefined;
-    const todaysShifts = sqlite.prepare("SELECT COUNT(*) as c FROM shifts WHERE shift_date = date('now')").get() as CountRow | undefined;
-    const pendingHandoffs = sqlite.prepare("SELECT COUNT(*) as c FROM shift_handoffs WHERE status = 'pending'").get() as CountRow | undefined;
-    const todaysBehavioral = sqlite.prepare("SELECT COUNT(*) as c FROM behavioral_observations WHERE observation_date = date('now')").get() as CountRow | undefined;
-    const openFamilyContacts = sqlite.prepare("SELECT COUNT(*) as c FROM family_contacts WHERE follow_up_needed = 1").get() as CountRow | undefined;
-    const pendingDebriefs = sqlite.prepare("SELECT COUNT(*) as c FROM restrictive_interventions WHERE debrief_completed = 0").get() as CountRow | undefined;
+    const totalBeds = sqlite
+      .prepare("SELECT COUNT(*) as c FROM bed_census")
+      .get() as CountRow | undefined;
+    const occupiedBeds = sqlite
+      .prepare("SELECT COUNT(*) as c FROM bed_census WHERE is_occupied = 1")
+      .get() as CountRow | undefined;
+    const todaysShifts = sqlite
+      .prepare(
+        "SELECT COUNT(*) as c FROM shifts WHERE shift_date = date('now')",
+      )
+      .get() as CountRow | undefined;
+    const pendingHandoffs = sqlite
+      .prepare(
+        "SELECT COUNT(*) as c FROM shift_handoffs WHERE status = 'pending'",
+      )
+      .get() as CountRow | undefined;
+    const todaysBehavioral = sqlite
+      .prepare(
+        "SELECT COUNT(*) as c FROM behavioral_observations WHERE observation_date = date('now')",
+      )
+      .get() as CountRow | undefined;
+    const openFamilyContacts = sqlite
+      .prepare(
+        "SELECT COUNT(*) as c FROM family_contacts WHERE follow_up_needed = 1",
+      )
+      .get() as CountRow | undefined;
+    const pendingDebriefs = sqlite
+      .prepare(
+        "SELECT COUNT(*) as c FROM restrictive_interventions WHERE debrief_completed = 0",
+      )
+      .get() as CountRow | undefined;
     const totalBedCount = totalBeds?.c ?? 0;
     const occupiedBedCount = occupiedBeds?.c ?? 0;
 
@@ -167,7 +340,10 @@ export const m18Router = createRouter({
       totalBeds: totalBedCount,
       occupiedBeds: occupiedBedCount,
       availableBeds: totalBedCount - occupiedBedCount,
-      occupancyRate: totalBedCount > 0 ? Math.round((occupiedBedCount / totalBedCount) * 100) : 0,
+      occupancyRate:
+        totalBedCount > 0
+          ? Math.round((occupiedBedCount / totalBedCount) * 100)
+          : 0,
       todaysShifts: todaysShifts?.c ?? 0,
       pendingHandoffs: pendingHandoffs?.c ?? 0,
       todaysBehavioral: todaysBehavioral?.c ?? 0,

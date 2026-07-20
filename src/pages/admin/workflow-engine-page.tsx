@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   GitBranch,
   CheckCircle,
@@ -302,9 +302,8 @@ export default function WorkflowEnginePage() {
                 const IconComp = rule.icon;
                 const isExpanded = expandedRow === rule.id;
                 return (
-                  <>
+                  <Fragment key={rule.id}>
                     <tr
-                      key={rule.id}
                       className="border-b hover:bg-black/[0.02] transition-colors cursor-pointer"
                       style={{ borderColor: "var(--card-border)" }}
                       onClick={() => setExpandedRow(isExpanded ? null : rule.id)}
@@ -399,7 +398,7 @@ export default function WorkflowEnginePage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
               {filtered.length === 0 && (
