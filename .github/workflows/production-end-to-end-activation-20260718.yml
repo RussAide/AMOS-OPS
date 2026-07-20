@@ -34,24 +34,21 @@ jobs:
       RELEASE_ID: ${{ inputs.release_id }}
       CHANGE_REFERENCE: ${{ inputs.change_reference }}
       RAILWAY_CREDENTIAL: ${{ secrets.RAILWAY_TOKEN }}
-      RAILWAY_TOKEN_TYPE: ${{ vars.RAILWAY_TOKEN_TYPE }}
+      RAILWAY_TOKEN_TYPE: ${{ vars.RAILWAY_TOKEN_TYPE || 'project' }}
       RAILWAY_PROJECT_ID: f9357da4-00c4-4f25-a52d-5c53f6ce07dc
       RAILWAY_SERVICE_ID: 8fdf6d7e-c7ba-412d-95f0-8b980ba612ba
       RAILWAY_ENVIRONMENT_ID: 7c22d214-abac-478f-983b-1418a7cbac77
       RAILWAY_PUBLIC_ORIGIN: https://amos-ops-production.up.railway.app
       NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-      NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+      NETLIFY_SITE_ID: 53a02d95-9cd5-4d22-8c17-8ed2378b91e8
       NETLIFY_PUBLIC_ORIGIN: https://amos-ops.com
-      EXPECTED_ALLOWED_ORIGINS: ${{ vars.AMOS_ALLOWED_ORIGINS }}
+      EXPECTED_ALLOWED_ORIGINS: ${{ vars.AMOS_ALLOWED_ORIGINS || 'https://amos-ops.com' }}
       PERSISTENT_ROOT: /app/persistent
       DATABASE_PATH: /app/persistent/data/production/amos-ops.db
       TRAINING_DATABASE_PATH: /app/persistent/data/production/training/amos-ops-training.db
       UPLOAD_PATH: /app/persistent/uploads/production
       TRAINING_UPLOAD_PATH: /app/persistent/uploads/production/training
       BACKUP_PATH: /app/persistent/backups/production
-      VITE_AMOS_API_ORIGIN: https://amos-ops-production.up.railway.app
-      AMOS_PRODUCTION_RELEASE_ID: ${{ inputs.release_id }}
-      AMOS_BUILD_SHA: ${{ inputs.release_sha }}
 
     steps:
       - name: Check out the exact approved release
@@ -71,6 +68,13 @@ jobs:
         run: npm ci
 
       - name: Verify source and identity boundary before any host mutation
+        env:
+          PERSISTENT_ROOT: ""
+          DATABASE_PATH: ""
+          TRAINING_DATABASE_PATH: ""
+          UPLOAD_PATH: ""
+          TRAINING_UPLOAD_PATH: ""
+          BACKUP_PATH: ""
         run: |
           npm run lint:strict
           npm run typecheck
@@ -89,6 +93,14 @@ jobs:
           --output "$RUNNER_TEMP/amos-production-before.json"
 
       - name: Build frontend and backend once from the same tree
+        env:
+          PERSISTENT_ROOT: ""
+          DATABASE_PATH: ""
+          TRAINING_DATABASE_PATH: ""
+          UPLOAD_PATH: ""
+          TRAINING_UPLOAD_PATH: ""
+          BACKUP_PATH: ""
+          VITE_AMOS_API_ORIGIN: https://amos-ops-production.up.railway.app
         run: npm run build
 
       - name: Seal one immutable manifest into both artifacts
@@ -98,6 +110,13 @@ jobs:
           --release-sha "$RELEASE_SHA"
 
       - name: Verify built runtime and deep links
+        env:
+          PERSISTENT_ROOT: ""
+          DATABASE_PATH: ""
+          TRAINING_DATABASE_PATH: ""
+          UPLOAD_PATH: ""
+          TRAINING_UPLOAD_PATH: ""
+          BACKUP_PATH: ""
         run: |
           npm run test:dms1:built-runtime
           npm run test:sidebar:built-runtime
@@ -118,8 +137,8 @@ jobs:
 
       - name: Deploy the prebuilt backend artifact to Railway
         env:
-          RAILWAY_TOKEN: ${{ vars.RAILWAY_TOKEN_TYPE == 'project' && secrets.RAILWAY_TOKEN || '' }}
-          RAILWAY_API_TOKEN: ${{ vars.RAILWAY_TOKEN_TYPE == 'account' && secrets.RAILWAY_TOKEN || '' }}
+          RAILWAY_TOKEN: ${{ env.RAILWAY_TOKEN_TYPE == 'project' && secrets.RAILWAY_TOKEN || '' }}
+          RAILWAY_API_TOKEN: ${{ env.RAILWAY_TOKEN_TYPE == 'account' && secrets.RAILWAY_TOKEN || '' }}
         run: >-
           npx --yes @railway/cli@5.27.0 up
           "$RUNNER_TEMP/amos-production-release"
