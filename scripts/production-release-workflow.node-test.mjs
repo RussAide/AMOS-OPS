@@ -74,6 +74,18 @@ test("verification precedes the single build and every mutation", () => {
   assert.match(workflow, /--path-as-root/);
 });
 
+test("isolated built-runtime checks precede immutable Production sealing", () => {
+  const build = workflow.indexOf("run: npm run build");
+  const builtRuntime = workflow.indexOf("Verify built runtime and deep links");
+  const seal = workflow.indexOf("Seal one immutable manifest into both artifacts");
+  const stage = workflow.indexOf("Assemble the prebuilt Railway release stage");
+  const mutation = workflow.indexOf(
+    "Mark the start of the controlled mutation window",
+  );
+  assert.ok(build > 0 && build < builtRuntime);
+  assert.ok(builtRuntime < seal && seal < stage && stage < mutation);
+});
+
 test("Netlify Git publishing is decoupled before protected release mutation", () => {
   const stopBuilds = workflow.indexOf("enforce-netlify-release-path");
   const preflight = workflow.indexOf(

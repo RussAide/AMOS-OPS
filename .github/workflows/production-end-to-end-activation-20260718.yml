@@ -112,12 +112,6 @@ jobs:
           VITE_AMOS_API_ORIGIN: https://amos-ops-production.up.railway.app
         run: npm run build
 
-      - name: Seal one immutable manifest into both artifacts
-        run: >-
-          node scripts/production-release-manifest.mjs
-          --release-id "$RELEASE_ID"
-          --release-sha "$RELEASE_SHA"
-
       - name: Verify built runtime and deep links
         env:
           RAILWAY_VOLUME_MOUNT_PATH: ""
@@ -130,6 +124,12 @@ jobs:
         run: |
           npm run test:dms1:built-runtime
           npm run test:sidebar:built-runtime
+
+      - name: Seal one immutable manifest into both artifacts
+        run: >-
+          node scripts/production-release-manifest.mjs
+          --release-id "$RELEASE_ID"
+          --release-sha "$RELEASE_SHA"
 
       - name: Assemble the prebuilt Railway release stage
         run: >-
