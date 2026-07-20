@@ -42,6 +42,7 @@ test("verification and built-runtime checks are isolated from deployment paths",
     const next = workflow.indexOf("\n      - name:", start + 1);
     const step = workflow.slice(start, next < 0 ? undefined : next);
     for (const name of [
+      "RAILWAY_VOLUME_MOUNT_PATH",
       "PERSISTENT_ROOT",
       "DATABASE_PATH",
       "TRAINING_DATABASE_PATH",

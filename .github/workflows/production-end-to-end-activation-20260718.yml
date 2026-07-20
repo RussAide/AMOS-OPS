@@ -69,6 +69,7 @@ jobs:
 
       - name: Verify source and identity boundary before any host mutation
         env:
+          RAILWAY_VOLUME_MOUNT_PATH: ""
           PERSISTENT_ROOT: ""
           DATABASE_PATH: ""
           TRAINING_DATABASE_PATH: ""
@@ -94,6 +95,7 @@ jobs:
 
       - name: Build frontend and backend once from the same tree
         env:
+          RAILWAY_VOLUME_MOUNT_PATH: ""
           PERSISTENT_ROOT: ""
           DATABASE_PATH: ""
           TRAINING_DATABASE_PATH: ""
@@ -111,6 +113,7 @@ jobs:
 
       - name: Verify built runtime and deep links
         env:
+          RAILWAY_VOLUME_MOUNT_PATH: ""
           PERSISTENT_ROOT: ""
           DATABASE_PATH: ""
           TRAINING_DATABASE_PATH: ""
