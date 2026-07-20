@@ -99,6 +99,28 @@ test("selects a successful active deployment and proven rollback target", () => 
     () => chooseRailwayBaseline([deployments[0]]),
     /mutation is blocked/,
   );
+  const failedOnly = [
+    {
+      id: "latest-failed",
+      status: "FAILED",
+      canRollback: false,
+      createdAt: "2026-07-20T13:00:00Z",
+    },
+    {
+      id: "older-removed",
+      status: "REMOVED",
+      canRollback: false,
+      createdAt: "2026-07-20T12:00:00Z",
+    },
+  ];
+  assert.throws(
+    () => chooseRailwayBaseline(failedOnly),
+    /no successful Production deployment/,
+  );
+  assert.deepEqual(chooseRailwayBaseline(failedOnly, true), {
+    current: failedOnly[0],
+    rollbackTarget: undefined,
+  });
 });
 
 test("resolves the active Netlify Production deploy from published_deploy", () => {

@@ -208,15 +208,21 @@ function sortDeployments(deployments) {
   );
 }
 
-export function chooseRailwayBaseline(deployments) {
+export function chooseRailwayBaseline(deployments, recoveryRelease = false) {
   const ordered = sortDeployments(deployments);
-  const current = ordered.find((deployment) => deployment.status === "SUCCESS");
-  if (!current) fail("Railway has no successful Production deployment.");
+  if (ordered.length === 0) fail("Railway returned no Production deployments.");
+  const successful = ordered.find(
+    (deployment) => deployment.status === "SUCCESS",
+  );
+  if (!successful && !recoveryRelease) {
+    fail("Railway has no successful Production deployment.");
+  }
+  const current = successful ?? ordered[0];
   const rollbackTarget = ordered.find(
     (deployment) =>
       deployment.status === "SUCCESS" && deployment.canRollback === true,
   );
-  if (!rollbackTarget) {
+  if (!rollbackTarget && !recoveryRelease) {
     fail(
       "Railway exposes no successful deployment with canRollback=true; Production mutation is blocked.",
     );
@@ -488,7 +494,10 @@ async function createSnapshot(configuration, env = process.env) {
     readNetlifyState(env),
     readRailwayReadiness(configuration.railwayOrigin),
   ]);
-  const { current, rollbackTarget } = chooseRailwayBaseline(railwayDeployments);
+  const { current, rollbackTarget } = chooseRailwayBaseline(
+    railwayDeployments,
+    configuration.recoveryRelease,
+  );
   assertRailwayBaselineReadiness(readiness, configuration.recoveryRelease);
   const [railwayManifest, netlifyManifest] = await Promise.all([
     optionalPublicManifest(
@@ -511,7 +520,7 @@ async function createSnapshot(configuration, env = process.env) {
         serviceId: requiredEnv("RAILWAY_SERVICE_ID", env),
         origin: configuration.railwayOrigin,
         currentDeploymentId: current.id,
-        rollbackTargetDeploymentId: rollbackTarget.id,
+        rollbackTargetDeploymentId: rollbackTarget?.id ?? null,
         observedDeploymentIds: railwayDeployments.map(
           (deployment) => deployment.id,
         ),
@@ -561,7 +570,10 @@ async function assertSnapshot(snapshot, env = process.env) {
     readRailwayDeployments(env),
     readNetlifyState(env),
   ]);
-  const { current } = chooseRailwayBaseline(deployments);
+  const { current } = chooseRailwayBaseline(
+    deployments,
+    snapshot.recoveryRelease === true,
+  );
   if (current.id !== snapshot.targets.railway.currentDeploymentId) {
     fail("Railway Production changed after preflight; release is stopped.");
   }
@@ -739,6 +751,14 @@ async function getRailwayDeployment(id, env = process.env) {
 }
 
 async function rollbackRailway(snapshot, env = process.env) {
+  if (!snapshot.targets.railway.rollbackTargetDeploymentId) {
+    return {
+      targetDeploymentId: null,
+      rollbackDeploymentId: null,
+      skipped: true,
+      state: "unavailable-before-recovery",
+    };
+  }
   const preferred = await getRailwayDeployment(
     snapshot.targets.railway.currentDeploymentId,
     env,
