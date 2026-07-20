@@ -33,6 +33,7 @@ test("assembles a prebuilt stage without source files or a second app build", ()
   const dockerfile = readFileSync(path.join(output, "Dockerfile"), "utf8");
   assert.match(dockerfile, /COPY dist \.\/dist/);
   assert.match(dockerfile, /npm ci --omit=dev/);
+  assert.match(dockerfile, /AMOS_RM2_STATUS=paused/);
   assert.doesNotMatch(dockerfile, /npm run build/);
   assert.equal(
     readFileSync(path.join(output, "dist/boot.js"), "utf8"),

@@ -46,6 +46,7 @@ function evaluationEnvironment(): EnvironmentConfig {
     uploadPath: "uploads/demo",
     trainingUploadPath: "uploads/demo/training",
     backupPath: "backups/demo",
+    rm2Status: "paused",
     storageEncryptionEnabled: false,
     storageKeyProvider: "none",
     storageMigrationMode: "none",

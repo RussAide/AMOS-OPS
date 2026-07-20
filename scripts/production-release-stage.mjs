@@ -13,7 +13,7 @@ import { parseArgs } from "./production-release-manifest.mjs";
 
 const DOCKERFILE = `FROM node:24.14.0-slim
 WORKDIR /app
-ENV APP_ENV=demo AMOS_RUNTIME_MODE=demo AMOS_ENVIRONMENT_ID=amos-ops-demo CREDENTIAL_NAMESPACE=amos-ops/demo NODE_ENV=production PORT=3000 PERSISTENT_ROOT=/app/persistent DATABASE_PATH=/app/data/demo/amos-ops.db TRAINING_DATABASE_PATH=/app/data/demo/training/amos-ops-training.db UPLOAD_PATH=/app/uploads/demo TRAINING_UPLOAD_PATH=/app/uploads/demo/training BACKUP_PATH=/app/data/demo/backups
+ENV APP_ENV=demo AMOS_RUNTIME_MODE=demo AMOS_ENVIRONMENT_ID=amos-ops-demo CREDENTIAL_NAMESPACE=amos-ops/demo AMOS_RM2_STATUS=paused NODE_ENV=production PORT=3000 PERSISTENT_ROOT=/app/persistent DATABASE_PATH=/app/data/demo/amos-ops.db TRAINING_DATABASE_PATH=/app/data/demo/training/amos-ops-training.db UPLOAD_PATH=/app/uploads/demo TRAINING_UPLOAD_PATH=/app/uploads/demo/training BACKUP_PATH=/app/data/demo/backups
 RUN apt-get update && apt-get install -y python3 make g++ \\
   && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./

@@ -42,7 +42,13 @@ been demonstrated as FIPS 140 validated.
 
 ## Required Production variables
 
+RM.2 remains inert while `AMOS_RM2_STATUS=paused`. Activation is a separate
+approved gate: set `AMOS_RM2_STATUS=active` only together with the complete
+key contract and migration procedure below. A paused status must never be
+changed by an authentication, route, or ordinary application release.
+
 ```dotenv
+AMOS_RM2_STATUS=active
 AMOS_STORAGE_ENCRYPTION_REQUIRED=true
 AMOS_STORAGE_KEY_PROVIDER=railway-sealed-variables-v1
 AMOS_STORAGE_MIGRATION_MODE=none
