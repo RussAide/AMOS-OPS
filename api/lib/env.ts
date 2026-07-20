@@ -19,6 +19,7 @@ export const APP_ENVIRONMENTS = [
 
 export type AppEnvironment = (typeof APP_ENVIRONMENTS)[number];
 export type MfaPolicy = "optional" | "required-privileged" | "required-all";
+export type Rm2Status = "paused" | "active";
 export const PRODUCTION_PERSISTENT_ROOT = "/app/persistent";
 
 export interface EnvironmentConfig {
@@ -37,6 +38,7 @@ export interface EnvironmentConfig {
   uploadPath: string;
   trainingUploadPath: string;
   backupPath: string;
+  rm2Status: Rm2Status;
   storageEncryptionEnabled: boolean;
   storageKeyProvider: "railway-sealed-variables-v1" | "none";
   storageMigrationMode: StorageMigrationMode;
@@ -274,9 +276,24 @@ export function buildEnvironmentConfig(
       ? path.join(persistentRoot, "backups", appEnvironment)
       : path.join("backups", appEnvironment));
   const evaluationMode = runtimeMode === "demo";
+  const configuredRm2Status = source.AMOS_RM2_STATUS?.trim().toLowerCase();
+  const rm2Status: Rm2Status =
+    configuredRm2Status === "active" || configuredRm2Status === "paused"
+      ? configuredRm2Status
+      : enabled(source.AMOS_STORAGE_ENCRYPTION_REQUIRED)
+        ? "active"
+        : "paused";
+  if (configuredRm2Status && !new Set(["paused", "active"]).has(configuredRm2Status)) {
+    throw new Error("AMOS_RM2_STATUS must be paused or active.");
+  }
+  if (rm2Status === "paused" && enabled(source.AMOS_STORAGE_ENCRYPTION_REQUIRED)) {
+    throw new Error(
+      "AMOS_RM2_STATUS=paused cannot enable RM.2 storage encryption.",
+    );
+  }
   const storageEncryption = loadStorageEncryptionConfiguration(
     source,
-    isProduction,
+    isProduction && rm2Status === "active",
   );
   const storageEncryptionMetadata = {
     storageEncryptionEnabled: storageEncryption.enabled,
@@ -613,6 +630,7 @@ export function buildEnvironmentConfig(
     uploadPath,
     trainingUploadPath,
     backupPath,
+    rm2Status,
     ...storageEncryptionMetadata,
     evaluationMode,
     allowSelfRegistration,

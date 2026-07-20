@@ -14,6 +14,7 @@ const syntheticAdministrator = Object.freeze({
   lastName: "Administrator",
 });
 const productionEncryption = {
+  AMOS_RM2_STATUS: "active",
   AMOS_STORAGE_ENCRYPTION_REQUIRED: "true",
   AMOS_STORAGE_KEY_PROVIDER: "railway-sealed-variables-v1",
   AMOS_STORAGE_MIGRATION_MODE: "none",
@@ -48,8 +49,42 @@ describe("environment isolation controls", () => {
       buildRawEnvironmentConfig({
         APP_ENV: "production",
         NODE_ENV: "production",
+        AMOS_RM2_STATUS: "active",
       }),
     ).toThrow("PRODUCTION_STORAGE_ENCRYPTION_REQUIRED");
+  });
+
+  it("keeps RM.2 explicitly paused without activating storage migration", () => {
+    const production = buildRawEnvironmentConfig({
+      APP_ENV: "production",
+      AMOS_RUNTIME_MODE: "production",
+      NODE_ENV: "production",
+      AMOS_RM2_STATUS: "paused",
+      CREDENTIAL_NAMESPACE: "amos-ops/production",
+      APP_SECRET: testCredential("paused-production-app"),
+      JWT_SECRET: testCredential("paused-production-jwt"),
+      DEPLOYMENT_APPROVAL_ID: "AUTH-STAB-1",
+      DEPLOYMENT_CHANGE_REFERENCE: "AUTH.STAB.1",
+      AMOS_ALLOWED_ORIGINS: "https://amos-ops.com",
+      ALLOW_SELF_REGISTRATION: "false",
+      MFA_POLICY: "required-all",
+      AMOS_PRODUCTION_RELEASE_AUTHORIZED: "true",
+      AMOS_PRODUCTION_RELEASE_ID: "AUTH-STAB-1-PAUSED-RM2",
+    });
+    expect(production.rm2Status).toBe("paused");
+    expect(production.storageEncryptionEnabled).toBe(false);
+    expect(production.storageMigrationMode).toBe("none");
+  });
+
+  it("rejects encryption activation while RM.2 is paused", () => {
+    expect(() =>
+      buildRawEnvironmentConfig({
+        APP_ENV: "production",
+        NODE_ENV: "production",
+        AMOS_RM2_STATUS: "paused",
+        AMOS_STORAGE_ENCRYPTION_REQUIRED: "true",
+      }),
+    ).toThrow(/paused cannot enable/);
   });
 
   it("derives separate database and credential namespaces", () => {

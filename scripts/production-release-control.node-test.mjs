@@ -22,6 +22,7 @@ const env = {
   NETLIFY_SITE_ID: "11111111-2222-4333-8444-555555555555",
   NETLIFY_PUBLIC_ORIGIN: "https://amos-ops.com",
   EXPECTED_ALLOWED_ORIGINS: "https://amos-ops.com,https://www.amos-ops.com",
+  EXPECTED_RM2_STATUS: "paused",
   PERSISTENT_ROOT: "/app/persistent",
   DATABASE_PATH: "/app/persistent/data/production/amos-ops.db",
   TRAINING_DATABASE_PATH:
@@ -123,6 +124,22 @@ test("requires all persistent paths and identity controls on Railway", () => {
         env,
       ),
     /MFA_POLICY/,
+  );
+  assert.throws(
+    () =>
+      validateRailwayVariables(
+        { ...variables, AMOS_RM2_STATUS: "active" },
+        configuration,
+        env,
+      ),
+    /AMOS_RM2_STATUS/,
+  );
+  assert.doesNotThrow(() =>
+    validateRailwayVariables(
+      { ...variables, AMOS_RM2_STATUS: "paused" },
+      configuration,
+      env,
+    ),
   );
 });
 

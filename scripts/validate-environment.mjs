@@ -245,14 +245,28 @@ if (appEnvironment === "production") {
     validationComponent === "backend" ||
     validationComponent === "backend-ci"
   ) {
-    if (
+    const encryptionRequired = /^(?:1|true|yes|on)$/i.test(
+      process.env.AMOS_STORAGE_ENCRYPTION_REQUIRED || "",
+    );
+    const configuredRm2Status = (process.env.AMOS_RM2_STATUS || "")
+      .trim()
+      .toLowerCase();
+    const rm2Status = configuredRm2Status ||
+      (encryptionRequired ? "active" : "paused");
+    if (!new Set(["paused", "active"]).has(rm2Status)) {
+      errors.push("AMOS_RM2_STATUS must be paused or active.");
+    }
+    if (rm2Status === "paused" && encryptionRequired) {
+      errors.push("AMOS_RM2_STATUS=paused cannot enable RM.2 storage encryption.");
+    }
+    if (rm2Status === "active" &&
       !/^(?:1|true|yes|on)$/i.test(
         process.env.AMOS_STORAGE_ENCRYPTION_REQUIRED || "",
       )
     ) {
       errors.push("Production requires AMOS_STORAGE_ENCRYPTION_REQUIRED=true.");
     }
-    if (
+    if (rm2Status === "active" &&
       (process.env.AMOS_STORAGE_KEY_PROVIDER || "") !==
       "railway-sealed-variables-v1"
     ) {
@@ -264,7 +278,7 @@ if (appEnvironment === "production") {
     if (!new Set(["none", "encrypt-plaintext", "rotate"]).has(migrationMode)) {
       errors.push("AMOS_STORAGE_MIGRATION_MODE is invalid.");
     }
-    if (validationComponent === "backend") {
+    if (rm2Status === "active" && validationComponent === "backend") {
       for (const domain of ["database", "upload", "backup"]) {
         validateStorageKeyring(domain);
       }

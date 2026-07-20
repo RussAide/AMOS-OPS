@@ -322,6 +322,13 @@ export function validateRailwayVariables(
     if (variables?.[name] !== expected)
       fail(`Railway Production variable ${name} is missing or contradictory.`);
   }
+  const expectedRm2Status = requiredEnv("EXPECTED_RM2_STATUS", env);
+  if (
+    variables?.AMOS_RM2_STATUS !== undefined &&
+    variables.AMOS_RM2_STATUS !== expectedRm2Status
+  ) {
+    fail("Railway Production variable AMOS_RM2_STATUS is contradictory.");
+  }
   for (const name of ["APP_SECRET", "JWT_SECRET"]) {
     const value = variables?.[name];
     if (
