@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   chooseRailwayBaseline,
   chooseNetlifyPublishedDeploy,
+  assertRailwayBaselineReadiness,
   parseCommandArgs,
   validateConfiguration,
   validateNetlifyReleasePath,
@@ -13,6 +14,7 @@ const env = {
   RELEASE_SHA: "a".repeat(40),
   RELEASE_ID: "AMOS-OPS-PRODUCTION-20260720-001",
   CHANGE_REFERENCE: "AUTH.STAB.1",
+  RECOVERY_RELEASE: "false",
   RAILWAY_CREDENTIAL: "r".repeat(32),
   RAILWAY_TOKEN_TYPE: "project",
   RAILWAY_PROJECT_ID: "f9357da4-00c4-4f25-a52d-5c53f6ce07dc",
@@ -53,6 +55,25 @@ test("rejects branch names and wildcard origins", () => {
       }),
     /contain no wildcard/,
   );
+});
+
+test("requires an explicit recovery posture and limits unhealthy baselines to recovery", () => {
+  assert.equal(validateConfiguration(env).recoveryRelease, false);
+  assert.equal(
+    validateConfiguration({ ...env, RECOVERY_RELEASE: "true" })
+      .recoveryRelease,
+    true,
+  );
+  assert.throws(
+    () => validateConfiguration({ ...env, RECOVERY_RELEASE: "yes" }),
+    /RECOVERY_RELEASE/,
+  );
+  assert.doesNotThrow(() => assertRailwayBaselineReadiness({ ready: true }, false));
+  assert.throws(
+    () => assertRailwayBaselineReadiness(null, false),
+    /readiness is not true/,
+  );
+  assert.doesNotThrow(() => assertRailwayBaselineReadiness(null, true));
 });
 
 test("selects a successful active deployment and proven rollback target", () => {
