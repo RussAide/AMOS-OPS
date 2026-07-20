@@ -7,6 +7,10 @@ import {
   runDx1ExperienceGovernanceStream,
   validateDx1ExperienceGovernanceResult,
 } from "../services/dx1/experience";
+import {
+  APP_ROUTE_REGISTRY,
+  appRoutePath,
+} from "../../src/data/app-route-registry";
 
 describe("DX.1 enterprise experience and governance verification", () => {
   it("completes the exact five assigned criteria with executable assertions", () => {
@@ -87,11 +91,24 @@ describe("DX.1 enterprise experience and governance verification", () => {
       "../..",
     );
     const appRoutes = fs.readFileSync(
-      path.join(sourceRoot, "src/components/shell/app-shell-routes.tsx"),
+      path.join(sourceRoot, "src/components/shell/app-shell.tsx"),
       "utf8",
     );
-    for (const assignment of result.personaAssignments)
-      expect(appRoutes).toContain(`path="${assignment.primaryWorkPath}"`);
+    for (const assignment of result.personaAssignments) {
+      const registeredRoute = APP_ROUTE_REGISTRY.find(
+        ({ path: routePath }) => routePath === assignment.primaryWorkPath,
+      );
+      expect(registeredRoute).toBeDefined();
+      if (!registeredRoute) continue;
+      expect(appRoutePath(registeredRoute.id)).toBe(assignment.primaryWorkPath);
+      const bindingStart = appRoutes.indexOf(
+        `path={appRoutePath("${registeredRoute.id}")}`,
+      );
+      expect(bindingStart).toBeGreaterThan(-1);
+      expect(appRoutes.slice(bindingStart, bindingStart + 260)).toContain(
+        "element={<",
+      );
+    }
   });
 
   it("governs every pilot workflow with ownership, status, evidence, and escalation", () => {

@@ -26,10 +26,10 @@ describe("TOTP security", () => {
   it("builds a standards-based authenticator URI", () => {
     const uri = buildTotpUri(
       "JBSWY3DPEHPK3PXP",
-      "e.o.aideyan@adobicarebhc.com",
+      "original.admin@amos-ops.invalid",
     );
     expect(uri).toContain(
-      "otpauth://totp/AMOS-OPS%3Ae.o.aideyan%40adobicarebhc.com",
+      "otpauth://totp/AMOS-OPS%3Aoriginal.admin%40amos-ops.invalid",
     );
     expect(uri).toContain("issuer=AMOS-OPS");
     expect(uri).toContain("digits=6&period=30");

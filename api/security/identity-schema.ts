@@ -25,6 +25,8 @@ const USER_IDENTITY_COLUMNS = [
   ["clearance_reviewed_by", "TEXT"],
   ["clearance_reviewed_at", "TEXT"],
   ["clearance_evidence_reference", "TEXT"],
+  ["credential_version", "INTEGER NOT NULL DEFAULT 1"],
+  ["authenticator_version", "INTEGER NOT NULL DEFAULT 1"],
 ] as const;
 
 function ensureUserColumns(sqlite: Database.Database): void {
@@ -172,5 +174,37 @@ export function ensureIdentitySchema(sqlite: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_identity_access_profile_events_user
       ON identity_access_profile_events(user_id, occurred_at);
+
+    CREATE TABLE IF NOT EXISTS identity_security_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      actor_id TEXT,
+      event_type TEXT NOT NULL,
+      rationale TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_identity_security_events_user
+      ON identity_security_events(user_id, occurred_at);
+
+    CREATE TABLE IF NOT EXISTS identity_runtime_key_bindings (
+      environment_id TEXT PRIMARY KEY,
+      key_fingerprint TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      verified_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS identity_operator_operations (
+      id TEXT PRIMARY KEY,
+      operation_type TEXT NOT NULL,
+      target_user_id TEXT NOT NULL,
+      outcome TEXT NOT NULL,
+      requested_at TEXT NOT NULL,
+      completed_at TEXT NOT NULL,
+      details TEXT,
+      FOREIGN KEY (target_user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
 }

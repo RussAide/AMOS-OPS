@@ -8,6 +8,9 @@ import {
   PHASE3_DEMO_CONTROL_ROLES,
   mayControlPhase3Demo,
 } from "@contracts/phase3/shared";
+import { appRoutePath } from "../../src/data/app-route-registry";
+
+const corporateOperationsRouteId = "corporate-operations";
 
 describe("Phase 3 control-plane integration", () => {
   it("mounts one authorized router and one active corporate-operations route", () => {
@@ -32,8 +35,15 @@ describe("Phase 3 control-plane integration", () => {
     expect(access).toContain(
       '["/corporate-operations", { domain: "dashboard" }]',
     );
-    expect(shell).toContain('path="/corporate-operations"');
-    expect(shell).toContain("<Phase3CorporateOperationsPage />");
+    expect(appRoutePath(corporateOperationsRouteId)).toBe(
+      "/corporate-operations",
+    );
+    const binding = shell.slice(
+      shell.indexOf(`path={appRoutePath("${corporateOperationsRouteId}")}`),
+      shell.indexOf(`path={appRoutePath("${corporateOperationsRouteId}")}`) +
+        220,
+    );
+    expect(binding).toContain("element={<Phase3CorporateOperationsPage />}");
     expect(navigation).toContain('label: "Corporate Operations"');
   });
 

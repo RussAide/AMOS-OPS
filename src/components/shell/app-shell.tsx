@@ -1,10 +1,24 @@
-import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import {
+  Routes,
+  Route,
+  Navigate,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/providers/trpc";
 import { runtimeConfig } from "@/config/runtime";
+import { authorizeClientRoute } from "@/constants/access-control";
+import {
+  APP_SHELL_BOUNDARY_PATHS,
+  appRoutePath,
+} from "@/data/app-route-registry";
 import ErrorBoundary from "@/components/error-boundary";
 import { AppSidebar } from "./app-sidebar";
+import { AccessDeniedPage } from "./access-denied-page";
+import { NotFoundPage } from "./not-found-page";
 import {
   Menu,
   X,
@@ -82,8 +96,10 @@ import EscalationLadderPage from "@/pages/coordination/escalation-ladder";
 // ─── BHC DASHBOARD ───
 import BhcDashboardPage from "@/pages/bhc/bhc-dashboard-page";
 import CcmgOversightPage from "@/pages/ccmg/ccmg-oversight-page";
+import CcmgReferralDetailPage from "@/pages/ccmg/ccmg-referral-detail-page";
 import M22CaseManagementPage from "@/pages/mhtcm/m22-case-management-page";
 import M23Workspace from "@/components/mhrs/m23-workspace";
+import M24ResidentialOperationsPage from "@/pages/gro/m24-residential-operations-page";
 
 // ─── CAMPUS ───
 import CampusCensusDashboardPage from "@/pages/campus/campus-census-dashboard-page";
@@ -103,6 +119,7 @@ import RegulatoryFrameworkPage from "@/pages/compliance/regulatory-framework-pag
 // ─── TOOLKITS ───
 import ChartAuditPage from "@/pages/toolkits/chart-audit-page";
 import ToolkitHubPage from "@/pages/toolkits/toolkit-hub-page";
+import CANSAssessmentPage from "@/pages/toolkits/cans-assessment-page";
 
 // ─── REVENUE ───
 import RevenueDashboardPage from "@/pages/revenue/revenue-dashboard-page";
@@ -122,7 +139,6 @@ import PerformanceReviewPage from "@/pages/hr/performance-review-page";
 import OnboardingWorkflowPage from "@/pages/hr/onboarding-workflow-page";
 import SeparationManagementPage from "@/pages/hr/separation-management-page";
 import HrModulePage from "@/pages/hr/hr-module-page";
-import HrLayout from "@/pages/hr/hr-layout";
 import TrainingAssignmentPage from "@/pages/hr/training-assignment-page";
 import TrainingTrackerPage from "@/pages/training/training-tracker-page";
 
@@ -153,6 +169,7 @@ import StrategicProjectsPage from "@/pages/executive/strategic-projects-page";
 import SiteReviewPage from "@/pages/executive/site-review-page";
 
 // ─── ADMIN (new) ───
+import AccountRecoveryPage from "@/pages/admin/account-recovery-page";
 import AdminSettingsPage from "@/pages/admin/settings-page";
 import EnhancementRegisterPage from "@/pages/admin/enhancement-register-page";
 import WorkflowEnginePage from "@/pages/admin/workflow-engine-page";
@@ -239,6 +256,14 @@ const SHORTCUTS = [
   { keys: ["Escape"], description: "Close modal / clear search" },
 ];
 
+function ClientRouteGuard() {
+  const location = useLocation();
+  const { currentRole } = useAuth();
+  const access = authorizeClientRoute(currentRole, location.pathname);
+
+  return access.allowed ? <Outlet /> : <AccessDeniedPage reason={access.reason} />;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    AppShell Component
    ═══════════════════════════════════════════════════════════════ */
@@ -261,8 +286,8 @@ export function AppShell({ children }: AppShellProps) {
   if (!user) {
     return (
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path={APP_SHELL_BOUNDARY_PATHS.login} element={<LoginPage />} />
+        <Route path={APP_SHELL_BOUNDARY_PATHS.fallback} element={<Navigate to="/login" replace />} />
       </Routes>
     );
   }
@@ -1009,459 +1034,501 @@ function AppShellAuthenticated({ children }: AppShellProps) {
           <ErrorBoundary>
             {children ?? (
               <Routes>
-                {/* ─── HOME ─── */}
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/home/alerts" element={<DashboardPage focus="alerts" />} />
-                <Route path="/home/divisions" element={<DashboardPage focus="divisions" />} />
-                <Route path="/home/quick-actions" element={<DashboardPage focus="actions" />} />
-                <Route path="/continuum" element={<Phase2ContinuumPage />} />
+                <Route element={<ClientRouteGuard />}>
+                  {/* ─── HOME ─── */}
+                  <Route path={appRoutePath("home")} element={<DashboardPage />} />
+                <Route path={appRoutePath("home-alerts")} element={<DashboardPage focus="alerts" />} />
+                <Route path={appRoutePath("home-divisions")} element={<DashboardPage focus="divisions" />} />
+                <Route path={appRoutePath("home-quick-actions")} element={<DashboardPage focus="actions" />} />
+                <Route path={appRoutePath("continuum")} element={<Phase2ContinuumPage />} />
                 <Route
-                  path="/corporate-operations"
+                  path={appRoutePath("corporate-operations")}
                   element={<Phase3CorporateOperationsPage />}
                 />
 
                 {/* ─── CLINICAL / BHC ─── */}
-                <Route path="/clinical" element={<ClinicalDashboardPage />} />
+                <Route path={appRoutePath("clinical")} element={<ClinicalDashboardPage />} />
                 <Route
-                  path="/clinical/intelligence-fabric"
+                  path={appRoutePath("clinical-intelligence-fabric")}
                   element={<M41cClinicalIntelligencePage />}
                 />
                 <Route
-                  path="/clinical/sessions"
+                  path={appRoutePath("clinical-sessions")}
                   element={<ClinicalSessionsPage />}
                 />
                 <Route
-                  path="/clinical/treatment-plans"
+                  path={appRoutePath("clinical-treatment-plans")}
                   element={<TreatmentPlansPage />}
                 />
                 <Route
-                  path="/clinical/cans-assessments"
+                  path={appRoutePath("clinical-cans-assessments")}
                   element={<CansAssessmentPage />}
                 />
                 <Route
-                  path="/clinical/outcome-measures"
+                  path={appRoutePath("clinical-outcome-measures")}
                   element={<OutcomeMeasuresPage />}
                 />
                 <Route
-                  path="/clinical/insurance-plans"
+                  path={appRoutePath("clinical-insurance-plans")}
                   element={<InsurancePlansPage />}
                 />
                 <Route
-                  path="/clinical/referrals"
+                  path={appRoutePath("clinical-referrals")}
                   element={<ReferralIntakePage />}
                 />
                 <Route
-                  path="/clinical/service-delivery"
+                  path={appRoutePath("clinical-service-delivery")}
                   element={<ServiceDeliveryPage />}
                 />
                 <Route
-                  path="/clinical/patients"
+                  path={appRoutePath("clinical-patients")}
                   element={<PatientListPage />}
                 />
                 <Route
-                  path="/clinical/patient/:id"
+                  path={appRoutePath("clinical-patient-id")}
                   element={<PatientProfilePage />}
                 />
                 <Route
-                  path="/clinical/workspace"
+                  path={appRoutePath("clinical-patients-id")}
+                  element={<PatientProfilePage />}
+                />
+                <Route
+                  path={appRoutePath("clinical-workspace")}
                   element={<ClinicalWorkspacePage />}
                 />
 
                 {/* ─── BHC DASHBOARD ─── */}
-                <Route path="/bhc" element={<BhcDashboardPage />} />
-                <Route path="/ccmg" element={<CcmgOversightPage />} />
-                <Route path="/mhtcm" element={<M22CaseManagementPage />} />
-                <Route path="/mhrs" element={<M23Workspace />} />
+                <Route path={appRoutePath("bhc")} element={<BhcDashboardPage />} />
+                <Route path={appRoutePath("ccmg")} element={<CcmgOversightPage />} />
+                <Route
+                  path={appRoutePath("ccmg-referrals-referralId")}
+                  element={<CcmgReferralDetailPage />}
+                />
+                <Route path={appRoutePath("mhtcm")} element={<M22CaseManagementPage />} />
+                <Route path={appRoutePath("mhrs")} element={<M23Workspace />} />
 
                 {/* ─── INTAKE ─── */}
-                <Route path="/intake" element={<IntakePipelinePage />} />
+                <Route path={appRoutePath("intake")} element={<IntakePipelinePage />} />
                 <Route
-                  path="/intake/pipeline"
+                  path={appRoutePath("intake-pipeline")}
                   element={<IntakePipelinePage />}
                 />
                 <Route
-                  path="/intake/assessment"
+                  path={appRoutePath("intake-assessment")}
                   element={<IntakeAssessmentPage />}
                 />
 
                 {/* ─── CRISIS / CASE ─── */}
-                <Route path="/crisis" element={<CrisisResponsePage />} />
-                <Route path="/cases" element={<CaseManagementPage />} />
+                <Route path={appRoutePath("crisis")} element={<CrisisResponsePage />} />
+                <Route path={appRoutePath("cases")} element={<CaseManagementPage />} />
 
                 {/* ─── GRO / RESIDENTIAL ─── */}
-                <Route path="/gro" element={<GroDashboardPage />} />
-                <Route path="/gro/workspace" element={<GroWorkspacePage />} />
+                <Route path={appRoutePath("gro")} element={<GroDashboardPage />} />
+                <Route path={appRoutePath("gro-workspace")} element={<GroWorkspacePage />} />
                 <Route
-                  path="/gro/compliance"
+                  path={appRoutePath("gro-compliance")}
                   element={<GroComplianceDashboardPage />}
                 />
-                <Route path="/gro/incidents" element={<IncidentReportPage />} />
-                <Route path="/gro/shift-logs" element={<ShiftLogPage />} />
+                <Route path={appRoutePath("gro-incidents")} element={<IncidentReportPage />} />
+                <Route path={appRoutePath("gro-shift-logs")} element={<ShiftLogPage />} />
                 <Route
-                  path="/gro/safety-rounds"
+                  path={appRoutePath("gro-safety-rounds")}
                   element={<SafetyRoundPage />}
                 />
-                <Route path="/gro/care-logs" element={<YouthCareLogPage />} />
+                <Route path={appRoutePath("gro-care-logs")} element={<YouthCareLogPage />} />
                 <Route
-                  path="/gro/supervision"
+                  path={appRoutePath("gro-supervision")}
                   element={<SupervisionNotesPage />}
                 />
                 <Route
-                  path="/gro/handoffs"
+                  path={appRoutePath("gro-handoffs")}
                   element={<ShiftHandoffListPage />}
+                />
+                <Route
+                  path={appRoutePath("gro-residential-operations")}
+                  element={<M24ResidentialOperationsPage />}
                 />
 
                 {/* ─── RESIDENTIAL ─── */}
                 <Route
-                  path="/residential"
+                  path={appRoutePath("residential")}
                   element={<ResidentialDashboardV2Page />}
                 />
-                <Route path="/medications" element={<MedicationAdminPage />} />
-                <Route path="/mobile-mar" element={<MobileMarPage />} />
+                <Route path={appRoutePath("medications")} element={<MedicationAdminPage />} />
+                <Route path={appRoutePath("mobile-mar")} element={<MobileMarPage />} />
                 <Route
-                  path="/mar-facility"
+                  path={appRoutePath("mar-facility")}
                   element={<MarFacilityViewPage facilityId="fac-001" />}
                 />
-                <Route path="/family" element={<FamilyContactPage />} />
-                <Route path="/handoffs" element={<ShiftHandoffPage />} />
+                <Route path={appRoutePath("family")} element={<FamilyContactPage />} />
+                <Route path={appRoutePath("handoffs")} element={<ShiftHandoffPage />} />
                 <Route
-                  path="/residential/analytics"
+                  path={appRoutePath("residential-analytics")}
                   element={<PredictiveAnalyticsPage />}
                 />
 
                 {/* ─── COORDINATION ─── */}
                 <Route
-                  path="/observations"
+                  path={appRoutePath("observations")}
                   element={<DailyObservationsPage />}
                 />
-                <Route path="/meetings" element={<MeetingCadencePage />} />
+                <Route path={appRoutePath("meetings")} element={<MeetingCadencePage />} />
                 <Route
-                  path="/escalation-ladder"
+                  path={appRoutePath("escalation-ladder")}
                   element={<EscalationLadderPage />}
                 />
 
                 {/* ─── CAMPUS ─── */}
-                <Route path="/campus" element={<CampusCensusDashboardPage />} />
+                <Route path={appRoutePath("campus")} element={<CampusCensusDashboardPage />} />
 
                 {/* ─── QA / COMPLIANCE ─── */}
-                <Route path="/qa" element={<QaDashboardPage />} />
-                <Route path="/qa/list" element={<QaListPage />} />
-                <Route path="/qa/audit-binder" element={<AuditBinderPage />} />
-                <Route path="/qa/cap-tracker" element={<CapTrackerPage />} />
+                <Route path={appRoutePath("qa")} element={<QaDashboardPage />} />
+                <Route path={appRoutePath("qa-list")} element={<QaListPage />} />
+                <Route path={appRoutePath("qa-audit-binder")} element={<AuditBinderPage />} />
+                <Route path={appRoutePath("qa-cap-tracker")} element={<CapTrackerPage />} />
                 <Route
-                  path="/qa/compliance-memo"
+                  path={appRoutePath("qa-compliance-memo")}
                   element={<ComplianceMemoPage />}
                 />
                 <Route
-                  path="/qa/deficiency-tracking"
+                  path={appRoutePath("qa-deficiency-tracking")}
                   element={<DeficiencyTrackingPage />}
                 />
                 <Route
-                  path="/qa/evidence-matrix"
+                  path={appRoutePath("qa-evidence-matrix")}
                   element={<EvidenceMatrixPage />}
                 />
                 <Route
-                  path="/compliance/hhsc-export"
+                  path={appRoutePath("compliance-hhsc-export")}
                   element={<HhscExportPage />}
                 />
                 <Route
-                  path="/compliance/part2"
+                  path={appRoutePath("compliance-part2")}
                   element={<Part2DashboardPage />}
                 />
                 <Route
-                  path="/compliance/regulatory-framework"
+                  path={appRoutePath("compliance-regulatory-framework")}
                   element={<RegulatoryFrameworkPage />}
                 />
 
                 {/* ─── TOOLKITS ─── */}
                 <Route
-                  path="/toolkits/chart-audit"
+                  path={appRoutePath("toolkits-chart-audit")}
                   element={<ChartAuditPage />}
                 />
-                <Route path="/toolkits" element={<ToolkitHubPage />} />
+                <Route
+                  path={appRoutePath("toolkits-cans")}
+                  element={<CANSAssessmentPage />}
+                />
+                <Route path={appRoutePath("toolkits")} element={<ToolkitHubPage />} />
 
                 {/* ─── REVENUE ─── */}
-                <Route path="/revenue" element={<RevenueDashboardPage />} />
-                <Route path="/revenue/claims" element={<ClaimsListPage />} />
+                <Route path={appRoutePath("revenue")} element={<RevenueDashboardPage />} />
+                <Route path={appRoutePath("revenue-claims")} element={<ClaimsListPage />} />
                 <Route
-                  path="/revenue/claim-submission"
+                  path={appRoutePath("revenue-claim-submission")}
                   element={<ClaimSubmissionPage />}
                 />
                 <Route
-                  path="/revenue/denials"
+                  path={appRoutePath("revenue-denials")}
                   element={<DenialManagementPage />}
                 />
                 <Route
-                  path="/authorizations"
+                  path={appRoutePath("authorizations")}
                   element={<AuthorizationManagementPage />}
                 />
-                <Route path="/revenue/aging" element={<AgingQueuePage />} />
+                <Route path={appRoutePath("revenue-aging")} element={<AgingQueuePage />} />
                 <Route
-                  path="/revenue/proof-of-service"
+                  path={appRoutePath("revenue-proof-of-service")}
                   element={<ProofOfServiceGatePage />}
                 />
                 <Route
-                  path="/revenue/payer-packets"
+                  path={appRoutePath("revenue-payer-packets")}
                   element={<PayerPacketBuilderPage />}
                 />
 
                 {/* ─── HR ─── */}
-                <Route path="/hr" element={<HrCommandCenterPage />} />
+                <Route path={appRoutePath("hr")} element={<HrCommandCenterPage />} />
                 <Route
-                  path="/hr/personnel-files"
-                  element={<HrPersonProfilePage />}
-                />
-                <Route
-                  path="/hr/credentials"
+                  path={appRoutePath("hr-credentials")}
                   element={<CredentialTrackingPage />}
                 />
                 <Route
-                  path="/hr/performance"
+                  path={appRoutePath("hr-performance")}
                   element={<PerformanceReviewPage />}
                 />
-                <Route path="/hr/onboarding" element={<HrOnboardingPage />} />
+                <Route path={appRoutePath("hr-onboarding")} element={<HrOnboardingPage />} />
                 <Route
-                  path="/hr/separation"
+                  path={appRoutePath("hr-separation")}
                   element={<SeparationManagementPage />}
                 />
-                <Route path="/hr/module" element={<HrModulePage />} />
-                <Route path="/hr/layout" element={<HrLayout />} />
                 <Route
-                  path="/hr/training"
+                  path={appRoutePath("hr-module")}
+                  element={<Navigate to="/hr" replace />}
+                />
+                <Route
+                  path={appRoutePath("hr-layout")}
+                  element={<Navigate to="/hr" replace />}
+                />
+                <Route
+                  path={appRoutePath("hr-training")}
                   element={<TrainingAssignmentPage />}
                 />
-                <Route path="/hr/recruitment" element={<RecruitmentPage />} />
-                <Route path="/hr/tracker" element={<TrainingTrackerPage />} />
+                <Route path={appRoutePath("hr-recruitment")} element={<RecruitmentPage />} />
+                <Route path={appRoutePath("hr-tracker")} element={<TrainingTrackerPage />} />
 
                 {/* ─── HR WORKFORCE ACTIVATION (new) ─── */}
-                <Route path="/hr/screening" element={<ScreeningPage />} />
-                <Route path="/hr/offers" element={<OffersPage />} />
-                <Route path="/hr/orientation" element={<OrientationPage />} />
+                <Route path={appRoutePath("hr-screening")} element={<ScreeningPage />} />
+                <Route path={appRoutePath("hr-offers")} element={<OffersPage />} />
+                <Route path={appRoutePath("hr-orientation")} element={<OrientationPage />} />
 
                 {/* ─── HR WORKFORCE MANAGEMENT (new) ─── */}
-                <Route path="/hr/clearance" element={<ClearancePage />} />
-                <Route path="/hr/compliance" element={<HrCompliancePage />} />
-                <Route path="/hr/separations" element={<SeparationsPage />} />
+                <Route path={appRoutePath("hr-clearance")} element={<ClearancePage />} />
+                <Route path={appRoutePath("hr-compliance")} element={<HrCompliancePage />} />
+                <Route path={appRoutePath("hr-separations")} element={<SeparationsPage />} />
 
                 {/* ─── HR TOOLS (new) ─── */}
                 <Route
-                  path="/hr/credentials-tracker"
+                  path={appRoutePath("hr-credentials-tracker")}
                   element={<CredentialsTrackerPage />}
                 />
                 <Route
-                  path="/hr/training-assignments"
+                  path={appRoutePath("hr-training-assignments")}
                   element={<TrainingAssignmentsPage />}
                 />
                 <Route
-                  path="/hr/performance-reviews"
+                  path={appRoutePath("hr-performance-reviews")}
                   element={<PerformanceReviewsPage />}
                 />
                 <Route
-                  path="/hr/onboarding-workflow"
+                  path={appRoutePath("hr-onboarding-workflow")}
                   element={<OnboardingWorkflowPage />}
                 />
 
                 {/* ─── NEW HR ROUTES ─── */}
-                <Route path="/hr/personnel" element={<PersonnelFilesPage />} />
+                <Route path={appRoutePath("hr-personnel")} element={<PersonnelFilesPage />} />
                 <Route
-                  path="/hr/credential-tracker"
+                  path={appRoutePath("hr-credential-tracker")}
                   element={<CredentialTrackerPage />}
                 />
                 <Route
-                  path="/hr/onboarding-flow"
+                  path={appRoutePath("hr-onboarding-flow")}
                   element={<OnboardingFlowPage />}
                 />
+                <Route
+                  path={appRoutePath("hr-person-personId")}
+                  element={<HrPersonProfilePage />}
+                />
+                <Route path={appRoutePath("hr-moduleId")} element={<HrModulePage />} />
 
                 {/* ─── EXECUTIVE ─── */}
-                <Route path="/executive" element={<ExecutiveDashboardPage />} />
+                <Route path={appRoutePath("executive")} element={<ExecutiveDashboardPage />} />
                 <Route
-                  path="/executive/decision-intelligence"
+                  path={appRoutePath("executive-decision-intelligence")}
                   element={<M41aDecisionIntelligencePage />}
                 />
-                <Route path="/executive/mgma" element={<MgmaScorecardPage />} />
+                <Route path={appRoutePath("executive-mgma")} element={<MgmaScorecardPage />} />
                 <Route
-                  path="/executive/strategic-projects"
+                  path={appRoutePath("executive-strategic-projects")}
                   element={<StrategicProjectsHubPage />}
                 />
                 <Route
-                  path="/executive/marketing-review"
+                  path={appRoutePath("executive-marketing-review")}
                   element={<MarketingSiteReviewPage />}
                 />
 
                 {/* ─── GAD ─── */}
-                <Route path="/gad" element={<GadDashboardPage />} />
+                <Route path={appRoutePath("gad")} element={<GadDashboardPage />} />
                 <Route
-                  path="/gad/facilities-work-orders"
+                  path={appRoutePath("gad-facilities-work-orders")}
                   element={<GadDashboardPage initialTab="workorders" />}
                 />
                 <Route
-                  path="/gad/procurement-vendors"
+                  path={appRoutePath("gad-procurement-vendors")}
                   element={<GadDashboardPage initialTab="procurement" />}
                 />
                 <Route
-                  path="/gad/safety-emergency-preparedness"
+                  path={appRoutePath("gad-safety-emergency-preparedness")}
                   element={<GadDashboardPage initialTab="safety" />}
                 />
                 <Route
-                  path="/gad/transportation-logistics"
+                  path={appRoutePath("gad-transportation-logistics")}
                   element={<GadDashboardPage initialTab="transportation" />}
                 />
                 <Route
-                  path="/gad/regulatory-support"
+                  path={appRoutePath("gad-regulatory-support")}
                   element={<GadDashboardPage initialTab="regulatory" />}
                 />
 
                 {/* ─── NEW EXECUTIVE ROUTES ─── */}
-                <Route path="/mgma" element={<MgmaScorecardPage />} />
+                <Route path={appRoutePath("mgma")} element={<MgmaScorecardPage />} />
                 <Route
-                  path="/strategic-projects"
+                  path={appRoutePath("strategic-projects")}
                   element={<StrategicProjectsPage />}
                 />
-                <Route path="/site-review" element={<SiteReviewPage />} />
+                <Route path={appRoutePath("site-review")} element={<SiteReviewPage />} />
 
                 {/* ─── ANALYTICS ─── */}
-                <Route path="/analytics" element={<AnalyticsPage />} />
+                <Route path={appRoutePath("analytics")} element={<AnalyticsPage />} />
 
                 {/* ─── DOCUMENTS / DMS ─── */}
-                <Route path="/documents" element={<DocumentStudioPage />} />
-                <Route path="/documents/*" element={<DocumentStudioPage />} />
+                <Route path={appRoutePath("documents")} element={<DocumentStudioPage />} />
+                <Route path={appRoutePath("documents-wildcard")} element={<DocumentStudioPage />} />
 
                 {/* ─── KNOWLEDGE ─── */}
-                <Route path="/knowledge" element={<KnowledgePage />} />
+                <Route path={appRoutePath("knowledge")} element={<KnowledgePage />} />
                 <Route
-                  path="/knowledge/document-intelligence"
+                  path={appRoutePath("knowledge-document-intelligence")}
                   element={<M42DocumentKnowledgePage />}
                 />
                 <Route
-                  path="/operations-hub"
+                  path={appRoutePath("operations-hub")}
                   element={<M51AOperationsHubPage />}
                 />
                 <Route
-                  path="/operations-hub/microsoft-integrations"
+                  path={appRoutePath("operations-hub-microsoft-integrations")}
                   element={<M51BMicrosoftIntegrationsPage />}
                 />
                 <Route
-                  path="/operations-hub/mobile-offline"
+                  path={appRoutePath("operations-hub-mobile-offline")}
                   element={<M52MobileOfflinePage />}
                 />
                 <Route
-                  path="/operations-hub/enterprise-demo"
+                  path={appRoutePath("operations-hub-enterprise-demo")}
                   element={<Dx1EnterpriseDemoPage />}
                 />
-                <Route path="/sop-knowledge" element={<SOPKnowledgePage />} />
+                <Route path={appRoutePath("sop-knowledge")} element={<SOPKnowledgePage />} />
 
                 {/* ─── NIL ─── */}
-                <Route path="/nil" element={<NilSearchPage />} />
-                <Route path="/nil/graph" element={<NilGraphPage />} />
+                <Route path={appRoutePath("nil")} element={<NilSearchPage />} />
+                <Route path={appRoutePath("nil-graph")} element={<NilGraphPage />} />
 
                 {/* ─── WORKFLOWS ─── */}
-                <Route path="/workflows" element={<WorkflowsPage />} />
+                <Route path={appRoutePath("workflows")} element={<WorkflowsPage />} />
                 <Route
-                  path="/workflows/intelligence-assistant"
+                  path={appRoutePath("workflows-intelligence-assistant")}
                   element={<M41bIntelligenceAssistantPage />}
                 />
                 <Route
-                  path="/workflows/my-work-today"
+                  path={appRoutePath("workflows-my-work-today")}
                   element={<MyWorkTodayPage view="today" />}
                 />
                 <Route
-                  path="/workflows/assigned-tasks"
+                  path={appRoutePath("workflows-assigned-tasks")}
                   element={<MyWorkTodayPage view="assigned" />}
                 />
                 <Route
-                  path="/workflows/attention"
+                  path={appRoutePath("workflows-attention")}
                   element={<MyWorkTodayPage view="attention" />}
                 />
                 <Route
-                  path="/workflows/calendar"
+                  path={appRoutePath("workflows-calendar")}
                   element={<MyWorkTodayPage view="calendar" />}
                 />
                 <Route
-                  path="/workflows/recent-activity"
+                  path={appRoutePath("workflows-recent-activity")}
                   element={<MyWorkTodayPage view="recent" />}
                 />
-                <Route path="/my-work-today" element={<MyWorkTodayPage />} />
+                <Route path={appRoutePath("my-work-today")} element={<MyWorkTodayPage />} />
 
                 {/* ─── ONBOARDING ─── */}
-                <Route path="/onboarding" element={<OnboardingAcademyPage />} />
+                <Route path={appRoutePath("onboarding")} element={<OnboardingAcademyPage />} />
                 <Route
-                  path="/onboarding/track"
-                  element={<OnboardingTrackPage />}
+                  path={appRoutePath("onboarding-track")}
+                  element={<Navigate to="/onboarding" replace />}
                 />
                 <Route
-                  path="/onboarding/track/universal-orientation"
+                  path={appRoutePath("onboarding-track-universal-orientation")}
                   element={<UniversalOrientationPage />}
                 />
                 <Route
-                  path="/onboarding/module"
+                  path={appRoutePath("onboarding-track-trackId")}
+                  element={<OnboardingTrackPage />}
+                />
+                <Route
+                  path={appRoutePath("onboarding-module")}
+                  element={<Navigate to="/onboarding/training" replace />}
+                />
+                <Route
+                  path={appRoutePath("onboarding-module-moduleId")}
                   element={<OnboardingModulePage />}
                 />
                 <Route
-                  path="/onboarding/employee"
+                  path={appRoutePath("onboarding-employee")}
+                  element={<Navigate to="/onboarding/supervisor" replace />}
+                />
+                <Route
+                  path={appRoutePath("onboarding-employee-id")}
                   element={<OnboardingEmployeePage />}
                 />
                 <Route
-                  path="/onboarding/supervisor"
+                  path={appRoutePath("onboarding-supervisor")}
                   element={<OnboardingSupervisorPage />}
                 />
                 <Route
-                  path="/onboarding/management"
+                  path={appRoutePath("onboarding-management")}
                   element={<OnboardingManagementPage />}
                 />
                 <Route
-                  path="/onboarding/evidence"
+                  path={appRoutePath("onboarding-evidence")}
                   element={<OnboardingEvidencePage />}
                 />
                 <Route
-                  path="/onboarding/training"
+                  path={appRoutePath("onboarding-training")}
                   element={<OnboardingTrainingPage />}
                 />
 
                 {/* ─── ADMIN ─── */}
                 <Route
-                  path="/admin/organization"
+                  path={appRoutePath("admin-organization")}
                   element={<OrganizationModelPage />}
                 />
-                <Route path="/admin/settings" element={<AdminSettingsPage />} />
                 <Route
-                  path="/admin/workflow"
+                  path={appRoutePath("admin-access-recovery")}
+                  element={<AccountRecoveryPage />}
+                />
+                <Route path={appRoutePath("admin-settings")} element={<AdminSettingsPage />} />
+                <Route
+                  path={appRoutePath("admin-workflow")}
                   element={<WorkflowEnginePage />}
                 />
                 <Route
-                  path="/admin/workflows"
+                  path={appRoutePath("admin-workflows")}
                   element={<Navigate to="/workflows" replace />}
                 />
-                <Route path="/admin/entra-id" element={<EntraSyncPage />} />
+                <Route path={appRoutePath("admin-entra-id")} element={<EntraSyncPage />} />
                 <Route
-                  path="/admin/enhancement-register"
+                  path={appRoutePath("admin-enhancement-register")}
                   element={<EnhancementRegisterPage />}
                 />
                 <Route
-                  path="/admin/enhancements"
+                  path={appRoutePath("admin-enhancements")}
                   element={<EnhancementRegisterPage />}
                 />
                 <Route
-                  path="/admin/enhancement"
+                  path={appRoutePath("admin-enhancement")}
                   element={<EnhancementRegisterPage />}
                 />
                 <Route
-                  path="/admin/nil-graph"
+                  path={appRoutePath("admin-nil-graph")}
                   element={<AdminNilGraphPage />}
                 />
-                <Route path="/admin/entra-sync" element={<EntraSyncPage />} />
+                <Route path={appRoutePath("admin-entra-sync")} element={<EntraSyncPage />} />
 
                 {/* ─── AUTH ─── */}
-                <Route path="/authorization" element={<AuthorizationPage />} />
+                <Route path={appRoutePath("authorization")} element={<AuthorizationPage />} />
 
                 {/* ─── MY SHIFT / PERSONAL ─── */}
-                <Route path="/my-shift" element={<MyShiftPage />} />
+                <Route path={appRoutePath("my-shift")} element={<MyShiftPage />} />
                 <Route
-                  path="/meetings-escalations"
+                  path={appRoutePath("meetings-escalations")}
                   element={<MeetingsEscalationsPage />}
                 />
+                </Route>
 
                 {/* ─── FALLBACK ─── */}
-                <Route path="*" element={<DashboardPage />} />
+                <Route path={APP_SHELL_BOUNDARY_PATHS.login} element={<Navigate to="/" replace />} />
+                <Route path={APP_SHELL_BOUNDARY_PATHS.fallback} element={<NotFoundPage />} />
               </Routes>
             )}
           </ErrorBoundary>

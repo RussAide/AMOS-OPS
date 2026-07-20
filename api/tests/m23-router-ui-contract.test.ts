@@ -14,6 +14,7 @@ describe("M2.3 router and demo experience contract", () => {
       "documentSession",
       "evaluateReviewAlerts",
       "evidence",
+      "operationalSummary",
       "recordNeed",
       "registerCase",
       "requestClaimHandoff",

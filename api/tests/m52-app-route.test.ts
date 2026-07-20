@@ -1,27 +1,25 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { appRoutePath } from "../../src/data/app-route-registry";
 import { getBreadcrumbs, heroConfigs, navItems } from "../../src/data/navData";
 
 const route = "/operations-hub/mobile-offline";
+const routeId = "operations-hub-mobile-offline";
 
 describe("M5.2 mobile and offline application route", () => {
-  it("mounts the experience in the active and retained shell trees", () => {
-    const activeShell = fs.readFileSync(
+  it("mounts the experience in the canonical shell route tree", () => {
+    const routes = fs.readFileSync(
       path.resolve("src/components/shell/app-shell.tsx"),
       "utf8",
     );
-    const retainedRoutes = fs.readFileSync(
-      path.resolve("src/components/shell/app-shell-routes.tsx"),
-      "utf8",
+    expect(appRoutePath(routeId)).toBe(route);
+    const binding = routes.slice(
+      routes.indexOf(`path={appRoutePath("${routeId}")}`),
+      routes.indexOf(`path={appRoutePath("${routeId}")}`) + 200,
     );
-    for (const source of [activeShell, retainedRoutes]) {
-      expect(source).toContain('path="/operations-hub/mobile-offline"');
-      expect(source).toContain("M52MobileOfflinePage");
-      expect(source).toContain(
-        "@/pages/operations-hub/m52-mobile-offline-page",
-      );
-    }
+    expect(binding).toContain("element={<M52MobileOfflinePage />}");
+    expect(routes).toContain("@/pages/operations-hub/m52-mobile-offline-page");
   });
 
   it("publishes exactly one navigation item and governed metadata", () => {

@@ -145,6 +145,23 @@ export function WorkTaskFilters({
   /* Mobile sheet open state */
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  /*
+   * Parent pages may supply an equivalent inline array on each render. Use a
+   * value-stable assignment set so the filtered result does not change merely
+   * because the array identity changed; otherwise the notification effect can
+   * repeatedly update the parent after live data resolves.
+   */
+  const teamMembersKey = teamMembers.join("\u0000");
+  const assignmentTeam = useMemo(
+    () =>
+      new Set(
+        teamMembersKey.length > 0
+          ? teamMembersKey.split("\u0000")
+          : [currentUserName],
+      ),
+    [currentUserName, teamMembersKey],
+  );
+
   /* ─── Filter Logic ─── */
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
@@ -183,15 +200,14 @@ export function WorkTaskFilters({
         if (filters.assignment === "me") {
           if (assignee !== currentUserName) return false;
         } else if (filters.assignment === "my-team") {
-          /* My Team = teamMembers list OR fallback to same-department heuristic */
-          const team = teamMembers.length > 0 ? teamMembers : [currentUserName];
-          if (!team.includes(assignee)) return false;
+          /* My Team = supplied list OR the signed-in user fallback. */
+          if (!assignmentTeam.has(assignee)) return false;
         }
       }
 
       return true;
     });
-  }, [tasks, filters, currentUserName, teamMembers]);
+  }, [assignmentTeam, currentUserName, filters, tasks]);
 
   /* Notify parent when filtered result changes */
   useEffect(() => {

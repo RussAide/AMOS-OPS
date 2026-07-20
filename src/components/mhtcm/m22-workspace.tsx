@@ -18,10 +18,15 @@ import {
 import { runtimeConfig } from "@/config/runtime";
 import { mayUseIsolatedFixtures } from "@/context/onboarding-context";
 import { useAuth } from "@/hooks/use-auth";
+import { trpc } from "@/providers/trpc";
+import type { OperationalProgramSummary } from "../../../api/services/operational-program-summary";
 
 interface M22WorkspaceProps {
   data?: M22SyntheticWorkspace;
   syntheticDataAllowed?: boolean;
+  operationalSummary?: OperationalProgramSummary | null;
+  operationalLoading?: boolean;
+  operationalError?: boolean;
 }
 
 function StatusPill({ children }: { children: React.ReactNode }) {
@@ -72,19 +77,148 @@ function MetricCard({
   );
 }
 
-function M22Unavailable() {
+function M22Unavailable({
+  state = "unavailable",
+}: {
+  state?: "unavailable" | "loading" | "error" | "empty";
+}) {
+  const content = {
+    unavailable: {
+      title: "MHTCM operational data unavailable",
+      detail:
+        "No authoritative case-management records are available. Production does not substitute demonstration cases or completion evidence.",
+    },
+    loading: {
+      title: "Loading MHTCM operational data",
+      detail:
+        "AMOS-OPS is reading the authoritative durable case-management store. No demonstration records are used.",
+    },
+    error: {
+      title: "MHTCM operational data could not be loaded",
+      detail:
+        "The authoritative store did not return a safe response. No cached or demonstration records were substituted.",
+    },
+    empty: {
+      title: "No MHTCM operational records",
+      detail:
+        "The authoritative durable store is connected and currently contains no Production MHTCM work, handoffs, or approved lineage.",
+    },
+  }[state];
   return (
-    <main className="min-h-screen bg-slate-50 p-6 text-slate-950">
+    <main
+      data-testid={`m22-operational-${state}`}
+      className="min-h-screen bg-slate-50 p-6 text-slate-950"
+    >
       <section className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
         <ShieldCheck className="h-8 w-8 text-cyan-700" aria-hidden="true" />
-        <h1 className="mt-4 text-2xl font-bold">
-          MHTCM operational data unavailable
-        </h1>
+        <h1 className="mt-4 text-2xl font-bold">{content.title}</h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">
-          No authoritative case-management records are available. Production
-          does not substitute demonstration cases or completion evidence.
+          {content.detail}
         </p>
       </section>
+    </main>
+  );
+}
+
+function M22OperationalWorkspace({
+  summary,
+  loading,
+  failed,
+}: {
+  summary?: OperationalProgramSummary | null;
+  loading?: boolean;
+  failed?: boolean;
+}) {
+  if (loading) return <M22Unavailable state="loading" />;
+  if (failed) return <M22Unavailable state="error" />;
+  if (!summary) return <M22Unavailable />;
+  if (summary.empty) return <M22Unavailable state="empty" />;
+
+  return (
+    <main
+      data-testid="m22-operational-workspace"
+      className="min-h-screen bg-slate-50 p-5 text-slate-950 sm:p-8"
+    >
+      <div className="mx-auto max-w-7xl space-y-6">
+        <header className="rounded-3xl bg-slate-950 p-6 text-white sm:p-8">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-cyan-300">
+                AMOS-OPS · Authoritative Production view
+              </p>
+              <h1 className="mt-2 text-3xl font-bold">
+                MHTCM Operational Queue
+              </h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+                Read-only work, handoff, and approved CANS lineage from the
+                durable CCMG operational store.
+              </p>
+            </div>
+            <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-200">
+              Authoritative · read only
+            </span>
+          </div>
+          <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <MetricCard
+              label="Active work"
+              value={summary.metrics.activeWorkItems}
+              accent
+            />
+            <MetricCard
+              label="Overdue"
+              value={summary.metrics.overdueWorkItems}
+              accent
+            />
+            <MetricCard
+              label="Active handoffs"
+              value={summary.metrics.activeHandoffs}
+              accent
+            />
+            <MetricCard
+              label="Approved lineage"
+              value={summary.metrics.approvedLineages}
+              accent
+            />
+          </div>
+        </header>
+
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 p-5 sm:p-6">
+            <h2 className="text-lg font-bold">Production work items</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Case identifiers and minimum-necessary coordination fields only.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th className="px-5 py-3">Case</th>
+                  <th className="px-5 py-3">Work</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">Priority</th>
+                  <th className="px-5 py-3">Due</th>
+                  <th className="px-5 py-3">Approval</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.workItems.map((item) => (
+                  <tr key={item.id} className="border-t border-slate-100">
+                    <td className="px-5 py-4 font-mono text-xs">
+                      {item.caseId}
+                    </td>
+                    <td className="px-5 py-4 font-medium">{item.title}</td>
+                    <td className="px-5 py-4">{item.status}</td>
+                    <td className="px-5 py-4">{item.priority}</td>
+                    <td className="px-5 py-4">{item.dueAt}</td>
+                    <td className="px-5 py-4">{item.approvalStatus}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </main>
   );
 }
@@ -103,13 +237,22 @@ export function M22Workspace(props: M22WorkspaceProps) {
 
 function AuthenticatedM22Workspace(props: M22WorkspaceProps) {
   const { workspace } = useAuth();
+  const syntheticDataAllowed = mayUseIsolatedFixtures(
+    runtimeConfig.evaluationMode,
+    workspace,
+  );
+  const [asOf] = useState(() => new Date().toISOString());
+  const summaryQuery = trpc.m22.operationalSummary.useQuery(
+    { asOf },
+    { enabled: !syntheticDataAllowed, retry: false },
+  );
   return (
     <M22WorkspaceContent
       {...props}
-      syntheticDataAllowed={mayUseIsolatedFixtures(
-        runtimeConfig.evaluationMode,
-        workspace,
-      )}
+      syntheticDataAllowed={syntheticDataAllowed}
+      operationalSummary={summaryQuery.data}
+      operationalLoading={summaryQuery.isLoading}
+      operationalError={summaryQuery.isError}
     />
   );
 }
@@ -117,11 +260,23 @@ function AuthenticatedM22Workspace(props: M22WorkspaceProps) {
 function M22WorkspaceContent({
   data,
   syntheticDataAllowed,
+  operationalSummary,
+  operationalLoading,
+  operationalError,
 }: M22WorkspaceProps & { syntheticDataAllowed: boolean }) {
   const model = syntheticDataAllowed ? (data ?? M22_SYNTHETIC_WORKSPACE) : null;
   const [selectedFunction, setSelectedFunction] = useState<
     M22SyntheticWorkspace["functions"][number]["id"] | ""
   >(model?.functions[2]?.id ?? "");
+  if (!syntheticDataAllowed) {
+    return (
+      <M22OperationalWorkspace
+        summary={operationalSummary}
+        loading={operationalLoading}
+        failed={operationalError}
+      />
+    );
+  }
   if (!model) return <M22Unavailable />;
   const activeFunction =
     model.functions.find((item) => item.id === selectedFunction) ??

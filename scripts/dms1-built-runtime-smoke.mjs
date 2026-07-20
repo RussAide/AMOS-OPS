@@ -15,6 +15,26 @@ const REVIEW_BANNER = "AMOS-OPS Operational Workspace";
 const testCredential = (scope) =>
   `not-a-secret-test-fixture-${scope}-${"x".repeat(32)}`;
 const testMfaCode = () => ["48", "27", "31"].join("");
+const productionEncryptionFixture = Object.freeze({
+  AMOS_STORAGE_ENCRYPTION_REQUIRED: "true",
+  AMOS_STORAGE_KEY_PROVIDER: "railway-sealed-variables-v1",
+  AMOS_STORAGE_MIGRATION_MODE: "none",
+  AMOS_DATABASE_ACTIVE_KEY_ID: "database-dms1-test-v1",
+  AMOS_DATABASE_KEY_MANIFEST_JSON: JSON.stringify({
+    "database-dms1-test-v1": "AMOS_DATABASE_KEY_DMS1_TEST_V1",
+  }),
+  AMOS_DATABASE_KEY_DMS1_TEST_V1: Buffer.alloc(32, 61).toString("base64"),
+  AMOS_UPLOAD_ACTIVE_KEY_ID: "upload-dms1-test-v1",
+  AMOS_UPLOAD_KEY_MANIFEST_JSON: JSON.stringify({
+    "upload-dms1-test-v1": "AMOS_UPLOAD_KEY_DMS1_TEST_V1",
+  }),
+  AMOS_UPLOAD_KEY_DMS1_TEST_V1: Buffer.alloc(32, 62).toString("base64"),
+  AMOS_BACKUP_ACTIVE_KEY_ID: "backup-dms1-test-v1",
+  AMOS_BACKUP_KEY_MANIFEST_JSON: JSON.stringify({
+    "backup-dms1-test-v1": "AMOS_BACKUP_KEY_DMS1_TEST_V1",
+  }),
+  AMOS_BACKUP_KEY_DMS1_TEST_V1: Buffer.alloc(32, 63).toString("base64"),
+});
 const FORBIDDEN_DEPLOYMENT_UX = Object.freeze([
   "Final Gate",
   "/admin/final-gate",
@@ -274,17 +294,15 @@ async function verifyUnauthorizedProductionFailsClosed() {
   );
   const environment = {
     ...sharedEnvironment(port, temporaryRoot),
+    ...productionEncryptionFixture,
     APP_ENV: "production",
     AMOS_RUNTIME_MODE: "production",
     AMOS_ENVIRONMENT_ID: "amos-ops-production-denied-smoke",
     CREDENTIAL_NAMESPACE: "amos-ops/production/denied-smoke",
-    DATABASE_PATH: path.join(
-      temporaryRoot,
-      "data",
-      "production",
-      "amos-ops.db",
-    ),
-    UPLOAD_PATH: path.join(temporaryRoot, "uploads", "production"),
+    PERSISTENT_ROOT: "/app/persistent",
+    RAILWAY_VOLUME_MOUNT_PATH: "/app/persistent",
+    DATABASE_PATH: `/app/persistent/dms1-production-denied-${process.pid}.db`,
+    UPLOAD_PATH: `/app/persistent/dms1-production-denied-${process.pid}-uploads`,
   };
   const { child, output } = startServer(environment);
   const exitCode = await Promise.race([

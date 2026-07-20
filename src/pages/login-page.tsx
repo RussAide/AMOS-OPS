@@ -20,6 +20,11 @@ import {
   MailCheck,
 } from "lucide-react";
 import type { MfaPrompt, TotpSetup } from "@/hooks/use-auth";
+import { invitationTokenFromLocation } from "./login-invitation";
+import {
+  recoveryPasswordsMatch,
+  retainAcceptedRecoveryPassword,
+} from "./login-recovery-state";
 
 /* ─── Floating Particles Canvas ─────────────────────────── */
 function ParticleBackground() {
@@ -150,11 +155,16 @@ const FEATURE_CARDS = [
 
 const DEPT_PILLS = ["Executive", "Corporate", "GAD", "BHC", "GRO"];
 
+function invitationTokenFromBrowserLocation(): string | null {
+  return invitationTokenFromLocation(
+    window.location.search,
+    window.location.hash,
+  );
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
-  const invitationToken = new URLSearchParams(window.location.search).get(
-    "invite",
-  );
+  const [invitationToken] = useState(invitationTokenFromBrowserLocation);
   const {
     login,
     completeMfa,
@@ -186,6 +196,7 @@ export function LoginPage() {
   const [mfaCode, setMfaCode] = useState("");
   const [recoveryToken, setRecoveryToken] = useState(invitationToken ?? "");
   const [newPassword, setNewPassword] = useState("");
+  const [newPasswordConfirmation, setNewPasswordConfirmation] = useState("");
 
   if (isAuthenticated) {
     navigate("/", { replace: true });
@@ -282,7 +293,7 @@ export function LoginPage() {
     try {
       const result = await requestPasswordReset(form.email);
       setNotice(
-        "If the account exists, recovery instructions have been prepared.",
+        "If the account exists, ask an AMOS-OPS administrator to issue a one-time account recovery link. The link resets both the password and authenticator enrollment.",
       );
       if (result.evaluationToken) {
         setRecoveryToken(result.evaluationToken);
@@ -300,31 +311,42 @@ export function LoginPage() {
   const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    if (!recoveryPasswordsMatch(newPassword, newPasswordConfirmation)) {
+      setError("The new password and confirmation must match exactly.");
+      return;
+    }
     setLoading(true);
     try {
-      const setup = await resetPassword(recoveryToken, newPassword);
+      const acceptedPassword = newPassword;
+      const setup = await resetPassword(recoveryToken, acceptedPassword);
       if (invitationToken) {
         window.history.replaceState({}, "", window.location.pathname);
       }
       if (setup) {
         setTotpSetup(setup);
-        setForm((current) => ({
-          ...current,
-          email: setup.accountName,
-          password: "",
-        }));
+        setForm((current) =>
+          retainAcceptedRecoveryPassword(
+            current,
+            acceptedPassword,
+            setup.accountName,
+          ),
+        );
         setNotice(
-          "Password updated. Add AMOS-OPS to your authenticator before signing in.",
+          "Password updated. Add AMOS-OPS to your authenticator, then continue—the accepted password is retained only on this page for sign-in.",
         );
         setRecoveryToken("");
         setNewPassword("");
+        setNewPasswordConfirmation("");
         setAuthStep("totp-setup");
         return;
       }
       setNotice("Password updated. Sign in with your new password.");
-      setForm((current) => ({ ...current, password: "" }));
+      setForm((current) =>
+        retainAcceptedRecoveryPassword(current, acceptedPassword),
+      );
       setRecoveryToken("");
       setNewPassword("");
+      setNewPasswordConfirmation("");
       setAuthStep("credentials");
       setMode("login");
     } catch (error: unknown) {
@@ -626,6 +648,7 @@ export function LoginPage() {
                     </label>
                     <input
                       type="email"
+                      autoComplete="username"
                       required
                       className="w-full rounded-lg px-3 py-2.5 text-[12px] outline-none transition-colors"
                       style={{
@@ -649,6 +672,7 @@ export function LoginPage() {
                     </label>
                     <input
                       type="password"
+                      autoComplete={mode === "login" ? "current-password" : "new-password"}
                       required
                       minLength={12}
                       className="w-full rounded-lg px-3 py-2.5 text-[12px] outline-none transition-colors"
@@ -935,6 +959,7 @@ export function LoginPage() {
                   )}
                   <input
                     type="password"
+                    autoComplete="new-password"
                     required
                     minLength={12}
                     className="w-full rounded-lg px-3 py-2.5 text-[12px] outline-none"
@@ -947,9 +972,32 @@ export function LoginPage() {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                   />
+                  <input
+                    type="password"
+                    required
+                    minLength={12}
+                    autoComplete="new-password"
+                    aria-label="Confirm new password"
+                    className="w-full rounded-lg px-3 py-2.5 text-[12px] outline-none"
+                    style={{
+                      backgroundColor: "rgba(255,255,255,0.06)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      color: "#fff",
+                    }}
+                    placeholder="Confirm new password"
+                    value={newPasswordConfirmation}
+                    onChange={(e) => setNewPasswordConfirmation(e.target.value)}
+                  />
                   <button
                     type="submit"
-                    disabled={loading || !recoveryToken}
+                    disabled={
+                      loading ||
+                      !recoveryToken ||
+                      !recoveryPasswordsMatch(
+                        newPassword,
+                        newPasswordConfirmation,
+                      )
+                    }
                     className="w-full py-2.5 rounded-lg text-[13px] font-bold text-white disabled:opacity-50"
                     style={{ backgroundColor: "#245C5A" }}
                   >
@@ -1030,7 +1078,7 @@ export function LoginPage() {
                     onClick={() => {
                       setTotpSetup(null);
                       setNotice(
-                        "Authenticator prepared. Sign in, then enter its current six-digit code.",
+                        "Authenticator prepared. Continue with the password retained only on this page, then enter the current six-digit code.",
                       );
                       setAuthStep("credentials");
                       setMode("login");

@@ -11,6 +11,7 @@ import {
 } from "../services/mhtcm";
 import { createRouter, publicQuery } from "../middleware";
 import { assertSyntheticScenarioRuntime, env } from "../lib/env";
+import { buildOperationalProgramSummary } from "../services/operational-program-summary";
 
 type M22Engine = ReturnType<typeof createM22SeededEngine>;
 let engine: M22Engine | undefined;
@@ -194,6 +195,19 @@ function execute<T>(operation: () => T): T {
 }
 
 export const m22Router = createRouter({
+  operationalSummary: publicQuery
+    .input(z.object({ asOf: isoTimestamp }))
+    .query(({ ctx, input }) => {
+      if (ctx.user.dataScope !== "operational") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            "MHTCM operational records are available only in the Operational workspace.",
+        });
+      }
+      return buildOperationalProgramSummary("MHTCM", input.asOf);
+    }),
+
   representativeScenario: publicQuery.query(() =>
     execute(() => runM22RepresentativeScenario()),
   ),

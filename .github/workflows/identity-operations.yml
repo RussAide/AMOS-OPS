@@ -4,44 +4,72 @@ on:
   workflow_dispatch:
     inputs:
       operation:
+        description: Explicit identity operation to execute
         type: choice
         options: [diagnose, activate-recovery]
         required: true
       recovery_minutes:
+        description: Required only for activate-recovery; integer from 1 through 60
         required: false
-        default: "45"
+        type: string
 
 permissions: { contents: read }
 concurrency: { group: amos-ops-production-identity, cancel-in-progress: false }
 
 jobs:
-  operate:
+  diagnose:
+    if: ${{ inputs.operation == 'diagnose' }}
     environment: amos-production
     runs-on: ubuntu-latest
     steps:
-      - name: Execute signed, privacy-safe operation
+      - name: Execute signed, privacy-safe read-only diagnosis
+        shell: bash
+        env:
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$APP_SECRET"
+          operation_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-diagnose"
+          timestamp="$(date -u +%FT%TZ)"
+          path=/api/operator/identity/diagnosis
+          body=''
+          digest="$(printf %s "$body" | sha256sum | awk '{print $1}')"
+          canonical="$(printf 'v1\n%s\n%s\nGET\n%s\n%s' "$timestamp" "$operation_id" "$path" "$digest")"
+          signature="$(printf %s "$canonical" | openssl dgst -sha256 -hmac "$APP_SECRET" -hex | awk '{print $2}')"
+          curl --fail-with-body --silent --show-error -X GET "https://amos-ops-production.up.railway.app$path" \
+            -H "x-amos-operator-timestamp: $timestamp" \
+            -H "x-amos-operator-operation-id: $operation_id" \
+            -H "x-amos-operator-signature: $signature" | jq 'del(.keyFingerprint, .accountId)'
+
+  activate_recovery:
+    if: ${{ inputs.operation == 'activate-recovery' }}
+    environment: amos-production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Execute explicitly requested signed recovery activation
         shell: bash
         env:
           APP_SECRET: ${{ secrets.APP_SECRET }}
           RECOVERY_TOKEN: ${{ secrets.AMOS_ADMIN_RECOVERY_TOKEN }}
-          OPERATION: ${{ inputs.operation }}
           RECOVERY_MINUTES: ${{ inputs.recovery_minutes }}
         run: |
           set -euo pipefail
           test -n "$APP_SECRET"
-          operation_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${OPERATION}"
-          timestamp="$(date -u +%FT%TZ)"
-          path=/api/operator/identity/diagnosis
-          body='{}'
-          if test "$OPERATION" = activate-recovery; then
-            test -n "$RECOVERY_TOKEN"
-            test "$RECOVERY_MINUTES" -ge 1
-            test "$RECOVERY_MINUTES" -le 60
-            path=/api/operator/identity/recovery
-            expires_at="$(date -u -d "+${RECOVERY_MINUTES} minutes" +%FT%TZ)"
-            token_hash="$(printf %s "$RECOVERY_TOKEN" | openssl dgst -sha256 -hmac "$APP_SECRET" -hex | awk '{print $2}')"
-            body="$(jq -nc --arg operationId "$operation_id" --arg tokenHash "$token_hash" --arg expiresAt "$expires_at" '{operationId:$operationId,tokenHash:$tokenHash,expiresAt:$expiresAt}')"
+          test -n "$RECOVERY_TOKEN"
+          if ! [[ "$RECOVERY_MINUTES" =~ ^[0-9]+$ ]]; then
+            echo "recovery_minutes must be an integer from 1 through 60" >&2
+            exit 2
           fi
+          if (( RECOVERY_MINUTES < 1 || RECOVERY_MINUTES > 60 )); then
+            echo "recovery_minutes must be from 1 through 60" >&2
+            exit 2
+          fi
+          operation_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-activate-recovery"
+          timestamp="$(date -u +%FT%TZ)"
+          path=/api/operator/identity/recovery
+          expires_at="$(date -u -d "+${RECOVERY_MINUTES} minutes" +%FT%TZ)"
+          token_hash="$(printf %s "$RECOVERY_TOKEN" | openssl dgst -sha256 -hmac "$APP_SECRET" -hex | awk '{print $2}')"
+          body="$(jq -nc --arg operationId "$operation_id" --arg tokenHash "$token_hash" --arg expiresAt "$expires_at" '{operationId:$operationId,tokenHash:$tokenHash,expiresAt:$expiresAt}')"
           digest="$(printf %s "$body" | sha256sum | awk '{print $1}')"
           canonical="$(printf 'v1\n%s\n%s\nPOST\n%s\n%s' "$timestamp" "$operation_id" "$path" "$digest")"
           signature="$(printf %s "$canonical" | openssl dgst -sha256 -hmac "$APP_SECRET" -hex | awk '{print $2}')"

@@ -8,6 +8,11 @@ import {
 const testCredential = (scope: string) =>
   `not-a-secret-test-fixture-${scope}-${"x".repeat(32)}`;
 const testMfaCode = () => ["48", "27", "31"].join("");
+const syntheticAdministrator = Object.freeze({
+  email: "original.admin@amos-ops.invalid",
+  firstName: "Original",
+  lastName: "Administrator",
+});
 const productionEncryption = {
   AMOS_STORAGE_ENCRYPTION_REQUIRED: "true",
   AMOS_STORAGE_KEY_PROVIDER: "railway-sealed-variables-v1",
@@ -288,7 +293,7 @@ describe("environment isolation controls", () => {
     ).toThrow(/Production is locked/);
   });
 
-  it("accepts only a complete, expiring production initial-admin invitation", () => {
+  it("validates complete initial-admin configuration without making expiry a restart deadline", () => {
     const base = {
       APP_ENV: "production",
       AMOS_RUNTIME_MODE: "production",
@@ -309,22 +314,45 @@ describe("environment isolation controls", () => {
     expect(() =>
       buildEnvironmentConfig({
         ...base,
-        AMOS_INITIAL_ADMIN_EMAIL: "e.o.aideyan@adobicarebhc.com",
+        AMOS_INITIAL_ADMIN_EMAIL: syntheticAdministrator.email,
       }),
     ).toThrow(/requires email, first name, last name/);
 
     const config = buildEnvironmentConfig({
       ...base,
-      AMOS_INITIAL_ADMIN_EMAIL: "e.o.aideyan@adobicarebhc.com",
-      AMOS_INITIAL_ADMIN_FIRST_NAME: "Eghosa",
-      AMOS_INITIAL_ADMIN_LAST_NAME: "Aideyan",
+      AMOS_INITIAL_ADMIN_EMAIL: syntheticAdministrator.email,
+      AMOS_INITIAL_ADMIN_FIRST_NAME: syntheticAdministrator.firstName,
+      AMOS_INITIAL_ADMIN_LAST_NAME: syntheticAdministrator.lastName,
       AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH: "a".repeat(64),
       AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT: new Date(
         Date.now() + 60 * 60_000,
       ).toISOString(),
     });
-    expect(config.initialAdminEmail).toBe("e.o.aideyan@adobicarebhc.com");
+    expect(config.initialAdminEmail).toBe(syntheticAdministrator.email);
     expect(config.initialAdminInvitationTokenHash).toBe("a".repeat(64));
+
+    const expiredConfig = buildEnvironmentConfig({
+      ...base,
+      AMOS_INITIAL_ADMIN_EMAIL: syntheticAdministrator.email,
+      AMOS_INITIAL_ADMIN_FIRST_NAME: syntheticAdministrator.firstName,
+      AMOS_INITIAL_ADMIN_LAST_NAME: syntheticAdministrator.lastName,
+      AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH: "b".repeat(64),
+      AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT: new Date(
+        Date.now() - 60 * 60_000,
+      ).toISOString(),
+    });
+    expect(expiredConfig.initialAdminInvitationExpiresAt).toBeTruthy();
+
+    expect(() =>
+      buildEnvironmentConfig({
+        ...base,
+        AMOS_INITIAL_ADMIN_EMAIL: syntheticAdministrator.email,
+        AMOS_INITIAL_ADMIN_FIRST_NAME: syntheticAdministrator.firstName,
+        AMOS_INITIAL_ADMIN_LAST_NAME: syntheticAdministrator.lastName,
+        AMOS_INITIAL_ADMIN_INVITATION_TOKEN_HASH: "c".repeat(64),
+        AMOS_INITIAL_ADMIN_INVITATION_EXPIRES_AT: "not-an-iso-timestamp",
+      }),
+    ).toThrow(/must be a valid ISO timestamp/);
   });
 
   it("accepts only a fully owner-bound staging review posture", () => {

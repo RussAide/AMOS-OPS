@@ -94,6 +94,8 @@ export const authRouter = createRouter({
     sessionAbsoluteMinutes: identityService.policy.sessionAbsoluteMinutes,
     mfaPolicy: identityService.policy.mfaPolicy,
     accessReviewDays: identityService.policy.accessReviewDays,
+    administratorRecoveryMinutes:
+      identityService.policy.administratorRecoveryMinutes,
   })),
 
   evaluationSession: evaluationSessionAttempt
@@ -261,6 +263,42 @@ export const authRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       try {
         return await identityService.createTrainingAccount({
+          ...input,
+          actorId: ctx.user.id,
+        });
+      } catch (error) {
+        authError(error);
+      }
+    }),
+
+  issueAccountRecovery: adminQuery
+    .input(
+      z.object({
+        userId: z.string().min(1),
+        rationale: z.string().trim().min(5).max(1_000),
+      }),
+    )
+    .mutation(({ input, ctx }) => {
+      try {
+        return identityService.issueAccountRecovery({
+          ...input,
+          actorId: ctx.user.id,
+        });
+      } catch (error) {
+        authError(error);
+      }
+    }),
+
+  unlockAccount: adminQuery
+    .input(
+      z.object({
+        userId: z.string().min(1),
+        rationale: z.string().trim().min(5).max(1_000),
+      }),
+    )
+    .mutation(({ input, ctx }) => {
+      try {
+        return identityService.unlockAccount({
           ...input,
           actorId: ctx.user.id,
         });

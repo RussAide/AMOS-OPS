@@ -1,20 +1,22 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { APP_ROUTE_REGISTRY } from "@/data/app-route-registry";
 import {
   flattenSidebarLinks,
   getSidebarNavigation,
 } from "@/data/sidebar-navigation";
 
 function registeredApplicationRoutes(): ReadonlySet<string> {
-  const source = readFileSync(
-    resolve(process.cwd(), "src/components/shell/app-shell.tsx"),
-    "utf8",
-  );
-  return new Set(
-    [...source.matchAll(/<Route\s+path="([^"]+)"/gs)].map(
-      (match) => match[1],
-    ),
+  return new Set(APP_ROUTE_REGISTRY.map((route) => route.path));
+}
+
+function matchesRegisteredRoute(target: string, route: string): boolean {
+  const targetParts = target.split("/").filter(Boolean);
+  const routeParts = route.split("/").filter(Boolean);
+  return (
+    targetParts.length === routeParts.length &&
+    routeParts.every(
+      (part, index) => part.startsWith(":") || part === targetParts[index],
+    )
   );
 }
 
@@ -25,7 +27,12 @@ describe("sidebar route integrity", () => {
       getSidebarNavigation("super-admin", "demo"),
     );
     const missing = links
-      .filter((link) => !routes.has(link.href))
+      .filter(
+        (link) =>
+          ![...routes].some((route) =>
+            matchesRegisteredRoute(link.href, route),
+          ),
+      )
       .map((link) => `${link.label}: ${link.href}`);
 
     expect(missing).toEqual([]);
