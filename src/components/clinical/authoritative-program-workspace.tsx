@@ -160,7 +160,7 @@ export function AuthoritativeProgramWorkspace(props: Props) {
               <article key={plan.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div><h2 className="text-lg font-bold">{plan.youthName}</h2><p className="mt-1 text-sm text-slate-500">{plan.mrn} · Case {plan.youthId}</p><p className="mt-2 text-xs text-slate-600">Assigned: {plan.caseManagerName ?? plan.therapistName ?? "Pending"} · Plan due {new Date(plan.planDueDate).toLocaleDateString()}</p></div>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase text-slate-700">{plan.planStatus.replaceAll('_',' ')}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase text-slate-700">{plan.planStatus.split('_').join(' ')}</span>
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   {plan.planStatus !== "approved" ? <><input aria-label={`Approver for ${plan.youthName}`} value={actorName} onChange={(e) => setActorName(e.target.value)} placeholder="LPHA/supervisor name" className="rounded-lg border border-slate-300 px-3 py-2 text-sm"/><button disabled={props.busy || !actorName.trim()} onClick={() => props.onApprovePlan(plan.id, actorName)} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Approve plan</button></> : null}
