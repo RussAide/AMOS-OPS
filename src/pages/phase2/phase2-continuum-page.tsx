@@ -11,6 +11,7 @@ import {
   Phase2WorkQueuePanel,
 } from "@/components/phase2";
 import { trpc } from "@/providers/trpc";
+import { useAuth } from "@/hooks/use-auth";
 import type { Phase2Alert, Phase2AuditEvent, Phase2CareLink, Phase2ClaimHandoff, Phase2WorkItem } from "@contracts/phase2";
 
 type UnknownRow = Record<string, unknown>;
@@ -87,8 +88,11 @@ const MODULES = [
 ] as const;
 
 export function Phase2ContinuumPage() {
+  const { workspace } = useAuth();
   const overview = trpc.phase2.overview.useQuery(undefined);
-  const seed = trpc.phase2.seedDemo.useMutation({ onSuccess: () => void overview.refetch() });
+  const seed = trpc.phase2.seedDemo.useMutation({
+    onSuccess: () => void overview.refetch(),
+  });
   const data = overview.data;
 
   return (
@@ -102,7 +106,7 @@ export function Phase2ContinuumPage() {
         {MODULES.map((module) => <Card key={module.id} className="border-violet-100"><CardHeader><div className="flex items-center justify-between"><module.icon className="h-6 w-6 text-violet-700" /><Badge variant="outline">{module.id}</Badge></div><CardTitle>{module.title}</CardTitle><CardDescription>{module.description}</CardDescription></CardHeader><CardContent><Button asChild className="w-full"><Link to={module.href}>Open workspace <ArrowRight className="ml-2 h-4 w-4" /></Link></Button></CardContent></Card>)}
       </div>
 
-      {!data?.initialized ? <Card><CardHeader><CardTitle>Initialize the controlled demo</CardTitle><CardDescription>Create the shared synthetic care episode and cross-program lineage. No real data is used.</CardDescription></CardHeader><CardContent><Button onClick={() => seed.mutate()} disabled={seed.isPending}><ShieldCheck className="mr-2 h-4 w-4" />Initialize demo episode</Button></CardContent></Card> : (
+      {!data?.initialized ? <Card><CardHeader><CardTitle>{workspace === "training" ? "Initialize the controlled demo" : "Controlled demo available in Training"}</CardTitle><CardDescription>{workspace === "training" ? "Create the shared synthetic care episode and cross-program lineage. No real data is used." : "Switch the workspace selector to Training · No PHI before initializing synthetic evaluation data. Operational Production remains free of demonstration records."}</CardDescription></CardHeader><CardContent>{workspace === "training" ? <div className="space-y-3"><Button onClick={() => seed.mutate()} disabled={seed.isPending}><ShieldCheck className="mr-2 h-4 w-4" />{seed.isPending ? "Initializing…" : "Initialize demo episode"}</Button>{seed.isError ? <p role="alert" className="text-sm font-medium text-destructive">{seed.error.message || "The controlled demo could not be initialized."}</p> : null}</div> : <Badge variant="outline">Operational data boundary active</Badge>}</CardContent></Card> : (
         <>
           <div className="grid gap-4 xl:grid-cols-2"><Phase2WorkQueuePanel items={(data.workItems as UnknownRow[]).map(normalizeWork)} /><Phase2AlertPanel alerts={(data.alerts as UnknownRow[]).map(normalizeAlert)} /></div>
           <div className="grid gap-4 xl:grid-cols-2"><Phase2CareLineagePanel links={(data.links as UnknownRow[]).map(normalizeLink)} /><Phase2BillingReadinessPanel handoffs={(data.claimHandoffs as UnknownRow[]).map(normalizeClaim)} /></div>
