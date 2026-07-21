@@ -142,6 +142,14 @@ function productionDatabaseScope(
   );
 }
 
+function storageEncryptionRequired(
+  source: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return ["1", "true", "yes", "on"].includes(
+    source.AMOS_STORAGE_ENCRYPTION_REQUIRED?.trim().toLowerCase() ?? "",
+  );
+}
+
 function assertProductionBackupPath(
   backupPath: string,
   allowMissing: boolean,
@@ -520,6 +528,9 @@ export async function createDatabaseBackup(
   const sourcePath = path.resolve(databasePath);
   const destinationPath = path.resolve(backupPath);
   const productionScope = productionDatabaseScope(sourcePath);
+  const encryptionScope = storageEncryptionRequired()
+    ? productionScope
+    : null;
   if (productionScope) assertProductionBackupPath(destinationPath, true);
   if (sourcePath === destinationPath) {
     throw new Error("Backup destination must differ from the source database");
@@ -537,8 +548,8 @@ export async function createDatabaseBackup(
   fs.rmSync(temporaryPath, { force: true });
   fs.rmSync(encryptedDatabasePath, { force: true });
 
-  const sourceInspection = productionScope
-    ? inspectEncryptedDatabase(sourcePath, productionScope)
+  const sourceInspection = encryptionScope
+    ? inspectEncryptedDatabase(sourcePath, encryptionScope)
     : null;
   if (
     sourceInspection &&
@@ -550,7 +561,7 @@ export async function createDatabaseBackup(
       "PRODUCTION_BACKUP_DATABASE_KEY_INVALID: source must use the active database key.",
     );
   }
-  const backupObjectId = productionScope
+  const backupObjectId = encryptionScope
     ? deriveStorageObjectId(
         process.env.BACKUP_PATH || "",
         destinationPath,
@@ -558,18 +569,18 @@ export async function createDatabaseBackup(
       )
     : null;
 
-  const source = productionScope
-    ? openEncryptedDatabase(sourcePath, productionScope, {
+  const source = encryptionScope
+    ? openEncryptedDatabase(sourcePath, encryptionScope, {
         fileMustExist: true,
       })
     : new Database(sourcePath, { readonly: true, fileMustExist: true });
   try {
-    if (productionScope) {
+    if (encryptionScope) {
       source.prepare("VACUUM INTO ?").run(encryptedDatabasePath);
       const encryptedDatabase = fs.readFileSync(encryptedDatabasePath);
       const container = encodeDatabaseBackupContainer({
         backupId: randomUUID(),
-        scope: productionScope,
+        scope: encryptionScope,
         databaseKeyId: sourceInspection?.keyId ?? "",
         database: encryptedDatabase,
       });
@@ -602,7 +613,7 @@ export async function createDatabaseBackup(
 
   try {
     let verificationPath = temporaryPath;
-    if (productionScope) {
+    if (encryptionScope) {
       const payload = fs.readFileSync(temporaryPath);
       if (!isEncryptedStoragePayload(payload)) {
         throw new Error("PRODUCTION_BACKUP_ENCRYPTION_FAILED.");
@@ -616,7 +627,7 @@ export async function createDatabaseBackup(
         const decoded = decodeDatabaseBackupContainer(decrypted.plaintext);
         try {
           if (
-            decoded.manifest.scope !== productionScope ||
+            decoded.manifest.scope !== encryptionScope ||
             decoded.manifest.databaseKeyId !== sourceInspection?.keyId ||
             decrypted.keyId !== process.env.AMOS_BACKUP_ACTIVE_KEY_ID
           ) {
@@ -633,10 +644,10 @@ export async function createDatabaseBackup(
       }
       verificationPath = encryptedDatabasePath;
     }
-    const verification = productionScope
+    const verification = encryptionScope
       ? openEncryptedDatabase(
           verificationPath,
-          productionScope,
+          encryptionScope,
           { readonly: true, fileMustExist: true },
         )
       : new Database(verificationPath, {
@@ -676,6 +687,9 @@ export function restoreDatabaseBackup(
   const productionScope = productionDatabaseScope(destinationPath, {
     allowMissing: true,
   });
+  const encryptionScope = storageEncryptionRequired()
+    ? productionScope
+    : null;
   if (productionScope) assertProductionBackupPath(sourcePath, false);
   if (!fs.existsSync(sourcePath)) throw new Error(`Backup does not exist: ${sourcePath}`);
   if (sourcePath === destinationPath) throw new Error("Backup and restore target must differ");
@@ -703,7 +717,7 @@ export function restoreDatabaseBackup(
   const temporaryPath = `${destinationPath}.amos-restore-partial`;
   fs.rmSync(temporaryPath, { force: true });
   removeDatabaseSidecars(temporaryPath);
-  if (productionScope) {
+  if (encryptionScope) {
     const payload = fs.readFileSync(sourcePath);
     if (!isEncryptedStoragePayload(payload)) {
       throw new Error("PLAINTEXT_PRODUCTION_BACKUP_REJECTED.");
@@ -722,7 +736,7 @@ export function restoreDatabaseBackup(
     try {
       const decoded = decodeDatabaseBackupContainer(decrypted);
       try {
-        if (decoded.manifest.scope !== productionScope) {
+        if (decoded.manifest.scope !== encryptionScope) {
           throw new Error("DATABASE_BACKUP_SCOPE_MISMATCH.");
         }
         declaredDatabaseKeyId = decoded.manifest.databaseKeyId;
@@ -739,7 +753,7 @@ export function restoreDatabaseBackup(
     }
     const inspection = inspectEncryptedDatabase(
       temporaryPath,
-      productionScope,
+      encryptionScope,
     );
     if (
       !inspection.encrypted ||
@@ -749,7 +763,7 @@ export function restoreDatabaseBackup(
       throw new Error("DATABASE_BACKUP_DECLARED_KEY_MISMATCH.");
     }
     if (!inspection.activeKey) {
-      migrateDatabaseEncryption(temporaryPath, productionScope, {
+      migrateDatabaseEncryption(temporaryPath, encryptionScope, {
         ...process.env,
         AMOS_STORAGE_MIGRATION_MODE: "rotate",
       });
@@ -760,10 +774,10 @@ export function restoreDatabaseBackup(
   }
 
   try {
-    const backup = productionScope
+    const backup = encryptionScope
       ? openEncryptedDatabase(
           temporaryPath,
-          productionScope,
+          encryptionScope,
           { readonly: true, fileMustExist: true },
         )
       : new Database(temporaryPath, {
@@ -1007,8 +1021,11 @@ export function openLifecycleDatabase(
   const readonly = options.readonly ?? false;
   const productionScope =
     databasePath === ":memory:" ? null : productionDatabaseScope(databasePath);
-  const db = productionScope
-    ? openEncryptedDatabase(databasePath, productionScope, {
+  const encryptionScope = storageEncryptionRequired()
+    ? productionScope
+    : null;
+  const db = encryptionScope
+    ? openEncryptedDatabase(databasePath, encryptionScope, {
         readonly,
         fileMustExist: readonly,
       })

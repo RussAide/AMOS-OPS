@@ -1,7 +1,8 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { afterEach, describe, expect, it } from "vitest";
+import Database from "better-sqlite3";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   adoptExistingMigrationBaseline,
   applyPendingMigrations,
@@ -24,12 +25,62 @@ function temporaryDirectory(): string {
 }
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const directory of temporaryDirectories.splice(0)) {
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
 
 describe("M1.1 database lifecycle controls", () => {
+  it("keeps confined Production backup and restore operational while RM.2 is paused", async () => {
+    const root = temporaryDirectory();
+    const databasePath = path.join(root, "data/production/amos-ops.db");
+    const trainingDatabasePath = path.join(
+      root,
+      "data/production/training/amos-ops-training.db",
+    );
+    const backupRoot = path.join(root, "backups/production");
+    const backupPath = path.join(backupRoot, "operational.db");
+    vi.stubEnv("APP_ENV", "production");
+    vi.stubEnv("AMOS_RM2_STATUS", "paused");
+    vi.stubEnv("AMOS_STORAGE_ENCRYPTION_REQUIRED", "false");
+    vi.stubEnv("PERSISTENT_ROOT", root);
+    vi.stubEnv("DATABASE_PATH", databasePath);
+    vi.stubEnv("TRAINING_DATABASE_PATH", trainingDatabasePath);
+    vi.stubEnv("BACKUP_PATH", backupRoot);
+
+    fs.mkdirSync(path.dirname(databasePath), { recursive: true });
+    fs.mkdirSync(backupRoot, { recursive: true });
+    let db = new Database(databasePath);
+    db.exec("CREATE TABLE users (id TEXT PRIMARY KEY, marker TEXT NOT NULL)");
+    db.prepare("INSERT INTO users (id, marker) VALUES (?, ?)").run(
+      "admin",
+      "preserved",
+    );
+    db.close();
+
+    await createDatabaseBackup(databasePath, backupPath);
+    db = openLifecycleDatabase(databasePath);
+    db.prepare("UPDATE users SET marker = ? WHERE id = ?").run(
+      "changed",
+      "admin",
+    );
+    db.close();
+    restoreDatabaseBackup(backupPath, databasePath, {
+      allowOverwrite: true,
+      maintenanceConfirmed: true,
+    });
+
+    db = openLifecycleDatabase(databasePath, { readonly: true });
+    try {
+      expect(
+        db.prepare("SELECT marker FROM users WHERE id = ?").get("admin"),
+      ).toEqual({ marker: "preserved" });
+    } finally {
+      db.close();
+    }
+  });
+
   it("plans and applies repository migrations exactly once with checksums", () => {
     const directory = temporaryDirectory();
     const databasePath = path.join(directory, "amos-evaluation.db");

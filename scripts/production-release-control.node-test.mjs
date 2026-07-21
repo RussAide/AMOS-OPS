@@ -234,6 +234,27 @@ test("requires all persistent paths and identity controls on Railway", () => {
       env,
     ),
   );
+  for (const contradictory of [
+    { AMOS_STORAGE_MIGRATION_MODE: "encrypt" },
+    {
+      AMOS_STORAGE_MIGRATION_MODE: "none",
+      AMOS_STORAGE_MIGRATION_CONFIRMATION: "RM2_ENCRYPT_PRODUCTION_STORAGE",
+    },
+  ]) {
+    assert.throws(
+      () =>
+        validateRailwayVariables(
+          {
+            ...variables,
+            AMOS_RM2_STATUS: "paused",
+            ...contradictory,
+          },
+          configuration,
+          env,
+        ),
+      /AMOS_STORAGE_MIGRATION/,
+    );
+  }
 });
 
 test("parses explicit control commands without accepting flags without values", () => {

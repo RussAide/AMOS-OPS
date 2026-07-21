@@ -64,7 +64,10 @@ export function verifyExistingSqliteDatabase(
   }
 
   const isProduction = source.APP_ENV?.trim().toLowerCase() === "production";
-  if (isProduction) {
+  const encryptionRequired = ["1", "true", "yes", "on"].includes(
+    source.AMOS_STORAGE_ENCRYPTION_REQUIRED?.trim().toLowerCase() ?? "",
+  );
+  if (isProduction && encryptionRequired) {
     const inspection = inspectEncryptedDatabase(resolvedPath, scope, source);
     if (!inspection.encrypted || !inspection.activeKey) {
       throw new Error(
@@ -72,7 +75,7 @@ export function verifyExistingSqliteDatabase(
       );
     }
   }
-  const verification = isProduction
+  const verification = isProduction && encryptionRequired
     ? openEncryptedDatabase(
         resolvedPath,
         scope,
@@ -159,7 +162,7 @@ function openDatabase(
   if (!options.requireExisting) {
     fs.mkdirSync(path.dirname(path.resolve(databasePath)), { recursive: true });
   }
-  const database = env.isProduction
+  const database = env.isProduction && env.storageEncryptionEnabled
     ? openEncryptedDatabase(databasePath, scope, {
         fileMustExist: options.requireExisting ?? false,
       })
