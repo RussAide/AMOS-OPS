@@ -46,6 +46,33 @@ describe("RM.1 Production synthetic-only API boundary", () => {
     ).toEqual([]);
   });
 
+  it("permits only the governed M4.1C read surface in Production", () => {
+    const governedReadBatch =
+      "/api/trpc/m41c.getExperienceSnapshot,m41c.getMyClinicalWorkplan?batch=1";
+    expect(
+      blockedProductionSyntheticProcedures(governedReadBatch, true),
+    ).toEqual([]);
+
+    expect(
+      blockedProductionSyntheticProcedures(
+        "/api/trpc/m41c.askClinicalGuidance,m41c.runSyntheticScenario?batch=1",
+        true,
+      ),
+    ).toEqual([
+      "m41c.askClinicalGuidance",
+      "m41c.runSyntheticScenario",
+    ]);
+  });
+
+  it("blocks a mixed M4.1C batch when it includes a prohibited action", () => {
+    expect(
+      blockedProductionSyntheticProcedures(
+        "/api/trpc/m41c.getExperienceSnapshot,m41c.runSyntheticScenario?batch=1",
+        true,
+      ),
+    ).toEqual(["m41c.runSyntheticScenario"]);
+  });
+
   it("preserves all isolated Demo and Training evaluation routes", () => {
     expect(
       blockedProductionSyntheticProcedures(
