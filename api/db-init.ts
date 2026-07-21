@@ -14,6 +14,7 @@ import {
   ensurePhase3ControlSchema,
   seedPhase3ControlScenario,
 } from "./services/phase3/runtime-schema";
+import { ensureM41cRuntimeSchema } from "./services/m41c/runtime-schema";
 import { ensureReviewOwnerAccount } from "./security/review-access";
 import { bootstrapFreshDatabaseSchema } from "./fresh-schema";
 
@@ -403,6 +404,11 @@ export function initDatabase(options: DatabaseInitializationOptions = {}) {
   ensureM21CcmgSchema(sqlite);
   ensurePhase2ControlSchema(sqlite);
   ensurePhase3ControlSchema(sqlite);
+  // M4.1C is reached from multiple governed sidebar entry points. Existing
+  // Production databases predate this schema, so reconcile its idempotent,
+  // schema-only migration during normal startup just like the other runtime
+  // control surfaces. The migration contains no fixture inserts.
+  ensureM41cRuntimeSchema(sqlite);
   initializeSyntheticOperationalFixtures(sqlite, options, env);
 
   // HR
