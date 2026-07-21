@@ -20,6 +20,7 @@ import { mayUseIsolatedFixtures } from "@/context/onboarding-context";
 import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/providers/trpc";
 import type { OperationalProgramSummary } from "../../../api/services/operational-program-summary";
+import { AuthoritativeProgramWorkspace } from "../clinical/authoritative-program-workspace";
 
 interface M22WorkspaceProps {
   data?: M22SyntheticWorkspace;
@@ -241,18 +242,78 @@ function AuthenticatedM22Workspace(props: M22WorkspaceProps) {
     runtimeConfig.evaluationMode,
     workspace,
   );
-  const [asOf] = useState(() => new Date().toISOString());
-  const summaryQuery = trpc.m22.operationalSummary.useQuery(
-    { asOf },
-    { enabled: !syntheticDataAllowed, retry: false },
-  );
+  if (!syntheticDataAllowed) return <MhtcmAuthoritativeRecord />;
   return (
     <M22WorkspaceContent
       {...props}
-      syntheticDataAllowed={syntheticDataAllowed}
-      operationalSummary={summaryQuery.data}
-      operationalLoading={summaryQuery.isLoading}
-      operationalError={summaryQuery.isError}
+      syntheticDataAllowed
+    />
+  );
+}
+
+function MhtcmAuthoritativeRecord() {
+  const utils = trpc.useUtils();
+  const plans = trpc.mhtcm.listServicePlans.useQuery(undefined, { retry: false });
+  const encounters = trpc.mhtcm.listEncounters.useQuery(undefined, { retry: false });
+  const createPlan = trpc.mhtcm.createServicePlan.useMutation({
+    onSuccess: () => utils.mhtcm.listServicePlans.invalidate(),
+  });
+  const createEncounter = trpc.mhtcm.createEncounter.useMutation({
+    onSuccess: async () => {
+      await utils.mhtcm.listEncounters.invalidate();
+      await utils.bhc.getServiceDeliverySummary.invalidate();
+    },
+  });
+  const updatePlan = trpc.mhtcm.updateServicePlan.useMutation({
+    onSuccess: () => utils.mhtcm.listServicePlans.invalidate(),
+  });
+  const signEncounter = trpc.mhtcm.signEncounter.useMutation({
+    onSuccess: async () => {
+      await utils.mhtcm.listEncounters.invalidate();
+      await utils.bhc.getServiceDeliverySummary.invalidate();
+    },
+  });
+  return (
+    <AuthoritativeProgramWorkspace
+      program="MHTCM"
+      billingCode="T1017"
+      plans={plans.data ?? []}
+      encounters={encounters.data ?? []}
+      loading={plans.isLoading || encounters.isLoading}
+      failed={plans.isError || encounters.isError}
+      busy={createPlan.isPending || createEncounter.isPending || updatePlan.isPending || signEncounter.isPending}
+      onCreatePlan={async (input) => {
+        await createPlan.mutateAsync({
+          youthId: input.youthId,
+          youthName: input.youthName,
+          mrn: input.mrn,
+          caseManagerId: input.staffId,
+          caseManagerName: input.staffName,
+          intakeDate: new Date(input.intakeDate).toISOString(),
+        });
+      }}
+      onCreateEncounter={async (input) => {
+        await createEncounter.mutateAsync({
+          youthId: input.plan.youthId,
+          youthName: input.plan.youthName,
+          mrn: input.plan.mrn,
+          servicePlanId: input.plan.id,
+          caseManagerId: input.staffId,
+          caseManagerName: input.staffName,
+          encounterDate: new Date(input.encounterDate).toISOString(),
+          encounterType: "care_coordination",
+          mhtcmFunction: "coordination",
+          unitsBilled: Math.max(1, Math.ceil(input.minutesDelivered / 15)),
+          minutesDelivered: input.minutesDelivered,
+          serviceDescription: input.serviceDescription,
+        });
+      }}
+      onApprovePlan={async (id, approvedBy) => {
+        await updatePlan.mutateAsync({ id, planStatus: "approved", approvedBy });
+      }}
+      onSignEncounter={async (id, signedBy) => {
+        await signEncounter.mutateAsync({ id, signedBy });
+      }}
     />
   );
 }

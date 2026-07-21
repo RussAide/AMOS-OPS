@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, authedQuery, adminQuery } from "../middleware";
+import { createRouter, authedQuery, adminQuery, roleQuery } from "../middleware";
 import { getDb } from "../queries/connection";
 import {
   mhtcmServicePlans,
@@ -9,6 +9,12 @@ import {
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { assertSyntheticScenarioRuntime, env } from "../lib/env";
+
+const mhtcmWrite = roleQuery([
+  "super-admin", "managing-director", "administrator", "bhc-director",
+  "treatment-director", "clinical-director", "mhtcm-supervisor",
+  "clinical-supervisor", "qmhp-cs", "case-manager", "intake-coordinator",
+]);
 
 // ══════════════════════════════════════════════════════════════
 // MHTCM: Mental Health Targeted Case Management Router (T-004)
@@ -172,7 +178,7 @@ export const mhtcmRouter = createRouter({
       return { ...plan, encounters, functionsCompleted, functionsTotal: 6 };
     }),
 
-  createServicePlan: adminQuery
+  createServicePlan: mhtcmWrite
     .input(
       z.object({
         youthId: z.string(),
@@ -225,7 +231,7 @@ export const mhtcmRouter = createRouter({
       return { success: true, id, planDueDate: planDue };
     }),
 
-  updateServicePlan: adminQuery
+  updateServicePlan: mhtcmWrite
     .input(
       z.object({
         id: z.string(),
@@ -440,7 +446,7 @@ export const mhtcmRouter = createRouter({
       return row ?? null;
     }),
 
-  createEncounter: adminQuery
+  createEncounter: mhtcmWrite
     .input(
       z.object({
         youthId: z.string(),
@@ -534,7 +540,7 @@ export const mhtcmRouter = createRouter({
       };
     }),
 
-  signEncounter: adminQuery
+  signEncounter: mhtcmWrite
     .input(
       z.object({
         id: z.string(),
@@ -556,7 +562,7 @@ export const mhtcmRouter = createRouter({
       return { success: true };
     }),
 
-  submitEncounter: adminQuery
+  submitEncounter: mhtcmWrite
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input }) => {
       const db = getDb();
@@ -633,7 +639,7 @@ export const mhtcmRouter = createRouter({
       return row ?? null;
     }),
 
-  createEligibility: adminQuery
+  createEligibility: mhtcmWrite
     .input(
       z.object({
         youthId: z.string(),
@@ -691,7 +697,7 @@ export const mhtcmRouter = createRouter({
       return { success: true, id, eligibilityStatus: status };
     }),
 
-  updateEligibility: adminQuery
+  updateEligibility: mhtcmWrite
     .input(
       z.object({
         id: z.string(),
