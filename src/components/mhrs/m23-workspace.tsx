@@ -20,6 +20,7 @@ import { mayUseIsolatedFixtures } from "@/context/onboarding-context";
 import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/providers/trpc";
 import type { OperationalProgramSummary } from "../../../api/services/operational-program-summary";
+import { AuthoritativeProgramWorkspace } from "../clinical/authoritative-program-workspace";
 
 const COLORS = {
   teal: "#245C5A",
@@ -420,18 +421,40 @@ function AuthenticatedM23Workspace(props: M23WorkspaceProps) {
     runtimeConfig.evaluationMode,
     workspace,
   );
-  const [asOf] = useState(() => new Date().toISOString());
-  const summaryQuery = trpc.m23.operationalSummary.useQuery(
-    { asOf },
-    { enabled: !syntheticDataAllowed, retry: false },
-  );
+  if (!syntheticDataAllowed) return <MhrsAuthoritativeRecord />;
   return (
     <M23WorkspaceContent
       {...props}
-      syntheticDataAllowed={syntheticDataAllowed}
-      operationalSummary={summaryQuery.data}
-      operationalLoading={summaryQuery.isLoading}
-      operationalError={summaryQuery.isError}
+      syntheticDataAllowed
+    />
+  );
+}
+
+function MhrsAuthoritativeRecord() {
+  const utils = trpc.useUtils();
+  const plans = trpc.mhrs.listServicePlans.useQuery(undefined, { retry: false });
+  const encounters = trpc.mhrs.listEncounters.useQuery(undefined, { retry: false });
+  const createPlan = trpc.mhrs.createServicePlan.useMutation({ onSuccess: () => utils.mhrs.listServicePlans.invalidate() });
+  const createEncounter = trpc.mhrs.createEncounter.useMutation({ onSuccess: async () => { await utils.mhrs.listEncounters.invalidate(); await utils.bhc.getServiceDeliverySummary.invalidate(); } });
+  const updatePlan = trpc.mhrs.updateServicePlan.useMutation({ onSuccess: () => utils.mhrs.listServicePlans.invalidate() });
+  const signEncounter = trpc.mhrs.signEncounter.useMutation({ onSuccess: async () => { await utils.mhrs.listEncounters.invalidate(); await utils.bhc.getServiceDeliverySummary.invalidate(); } });
+  return (
+    <AuthoritativeProgramWorkspace
+      program="MHRS"
+      billingCode="H2017"
+      plans={plans.data ?? []}
+      encounters={encounters.data ?? []}
+      loading={plans.isLoading || encounters.isLoading}
+      failed={plans.isError || encounters.isError}
+      busy={createPlan.isPending || createEncounter.isPending || updatePlan.isPending || signEncounter.isPending}
+      onCreatePlan={async (input) => {
+        await createPlan.mutateAsync({ youthId: input.youthId, youthName: input.youthName, mrn: input.mrn, therapistId: input.staffId, therapistName: input.staffName, intakeDate: new Date(input.intakeDate).toISOString() });
+      }}
+      onCreateEncounter={async (input) => {
+        await createEncounter.mutateAsync({ youthId: input.plan.youthId, youthName: input.plan.youthName, mrn: input.plan.mrn, servicePlanId: input.plan.id, therapistId: input.staffId, therapistName: input.staffName, encounterDate: new Date(input.encounterDate).toISOString(), encounterType: "individual_skills", mhrsCategory: "skills_training", unitsBilled: Math.max(1, Math.ceil(input.minutesDelivered / 15)), minutesDelivered: input.minutesDelivered, serviceDescription: input.serviceDescription });
+      }}
+      onApprovePlan={async (id, approvedBy) => { await updatePlan.mutateAsync({ id, planStatus: "approved", approvedBy }); }}
+      onSignEncounter={async (id, signedBy) => { await signEncounter.mutateAsync({ id, signedBy }); }}
     />
   );
 }

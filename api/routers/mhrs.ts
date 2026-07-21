@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, authedQuery, adminQuery } from "../middleware";
+import { createRouter, authedQuery, adminQuery, roleQuery } from "../middleware";
 import { getDb } from "../queries/connection";
 import {
   mhrsServicePlans,
@@ -9,6 +9,12 @@ import {
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { assertSyntheticScenarioRuntime, env } from "../lib/env";
+
+const mhrsWrite = roleQuery([
+  "super-admin", "managing-director", "administrator", "bhc-director",
+  "treatment-director", "clinical-director", "mhrs-supervisor",
+  "clinical-supervisor", "qmhp-cs", "therapist", "intake-coordinator",
+]);
 
 // ══════════════════════════════════════════════════════════════
 // MHRS: Mental Health Rehabilitative Services Router (T-005)
@@ -113,7 +119,7 @@ export const mhrsRouter = createRouter({
       return { ...plan, encounters, assessments, categoriesCompleted, categoriesTotal: 4 };
     }),
 
-  createServicePlan: adminQuery
+  createServicePlan: mhrsWrite
     .input(z.object({
       youthId: z.string(),
       youthName: z.string(),
@@ -157,7 +163,7 @@ export const mhrsRouter = createRouter({
       return { success: true, id, planDueDate: planDue };
     }),
 
-  updateServicePlan: adminQuery
+  updateServicePlan: mhrsWrite
     .input(z.object({
       id: z.string(),
       planStatus: z.enum(["draft", "active", "under_review", "approved", "superseded", "closed"]).optional(),
@@ -240,7 +246,7 @@ export const mhrsRouter = createRouter({
       return results;
     }),
 
-  createEncounter: adminQuery
+  createEncounter: mhrsWrite
     .input(z.object({
       youthId: z.string(),
       youthName: z.string(),
@@ -298,7 +304,7 @@ export const mhrsRouter = createRouter({
       return { success: true, id, billingCode: "H2017", unitsBilled: input.unitsBilled };
     }),
 
-  signEncounter: adminQuery
+  signEncounter: mhrsWrite
     .input(z.object({ id: z.string(), signedBy: z.string() }))
     .mutation(async ({ input }) => {
       const db = getDb();
@@ -330,7 +336,7 @@ export const mhrsRouter = createRouter({
       return results;
     }),
 
-  createSkillsAssessment: adminQuery
+  createSkillsAssessment: mhrsWrite
     .input(z.object({
       youthId: z.string(),
       youthName: z.string(),
