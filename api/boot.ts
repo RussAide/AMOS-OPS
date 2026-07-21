@@ -99,7 +99,7 @@ if (env.isProduction) {
     });
   }
 }
-const storageEncryptionReports = env.isProduction
+const storageEncryptionReports = env.isProduction && env.storageEncryptionEnabled
   ? [
       enforceEncryptedDirectory(
         UPLOAD_DIR,
@@ -113,11 +113,11 @@ const storageEncryptionReports = env.isProduction
       ),
     ]
   : [];
-const databaseBackupEncryptionReport = env.isProduction
+const databaseBackupEncryptionReport = env.isProduction && env.storageEncryptionEnabled
   ? enforceDatabaseBackupDirectory(BACKUP_DIR)
   : null;
 const storageEncryptionReady = isStorageEncryptionInventoryReady({
-  production: env.isProduction,
+  production: env.isProduction && env.storageEncryptionEnabled,
   uploadReportCount: storageEncryptionReports.length,
   databaseBackupInventoryCompleted:
     databaseBackupEncryptionReport !== null,
@@ -475,7 +475,7 @@ app.post("/api/upload", async (c) => {
     const filePath = path.join(uploadDir, safeName);
     const buffer = Buffer.from(await file.arrayBuffer());
     try {
-      if (env.isProduction) {
+      if (env.isProduction && env.storageEncryptionEnabled) {
         writeEncryptedFileAtomic(
           filePath,
           buffer,
@@ -488,7 +488,7 @@ app.post("/api/upload", async (c) => {
         fs.writeFileSync(filePath, buffer);
       }
     } finally {
-      if (env.isProduction) buffer.fill(0);
+      if (env.isProduction && env.storageEncryptionEnabled) buffer.fill(0);
     }
 
     return c.json(
@@ -537,7 +537,7 @@ app.get("/uploads/:filename", async (c) => {
     return c.json({ error: "File not found" }, 404);
   }
 
-  const fileBuffer = env.isProduction
+  const fileBuffer = env.isProduction && env.storageEncryptionEnabled
     ? readEncryptedFile(
         filePath,
         authorization.user.dataScope === "training"

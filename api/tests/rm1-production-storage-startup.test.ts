@@ -167,6 +167,28 @@ describe("RM.1 Production storage startup gate", () => {
     expect(() => verifyExistingSqliteDatabase(invalidPath)).toThrow();
   });
 
+  it("keeps the RM.1 Production database gate active while RM.2 is paused", () => {
+    const root = temporaryRoot();
+    const validPath = path.join(root, "paused-production.db");
+    const valid = new Database(validPath);
+    valid.exec("CREATE TABLE users (id TEXT PRIMARY KEY)");
+    valid.close();
+
+    expect(() =>
+      verifyExistingSqliteDatabase(validPath, "operational", {
+        APP_ENV: "production",
+        AMOS_RM2_STATUS: "paused",
+      }),
+    ).not.toThrow();
+    expect(() =>
+      verifyExistingSqliteDatabase(validPath, "operational", {
+        APP_ENV: "production",
+        AMOS_RM2_STATUS: "active",
+        AMOS_STORAGE_ENCRYPTION_REQUIRED: "true",
+      }),
+    ).toThrow(/AMOS_DATABASE_ACTIVE_KEY_ID|PRODUCTION_STORAGE_ENCRYPTION_REQUIRED/);
+  });
+
   it("does not apply the Production mount or database gate outside Production", () => {
     const verifyDatabase = vi.fn();
     expect(() =>

@@ -362,6 +362,26 @@ export function validateRailwayVariables(
       "Railway Production variable AMOS_STORAGE_ENCRYPTION_REQUIRED must be enabled when RM.2 is active.",
     );
   }
+  if (expectedRm2Status === "paused") {
+    const migrationMode = variables?.AMOS_STORAGE_MIGRATION_MODE;
+    if (
+      typeof migrationMode === "string" &&
+      migrationMode.trim() &&
+      migrationMode.trim().toLowerCase() !== "none"
+    ) {
+      fail(
+        "Railway Production variable AMOS_STORAGE_MIGRATION_MODE contradicts paused RM.2.",
+      );
+    }
+    if (
+      typeof variables?.AMOS_STORAGE_MIGRATION_CONFIRMATION === "string" &&
+      variables.AMOS_STORAGE_MIGRATION_CONFIRMATION.trim()
+    ) {
+      fail(
+        "Railway Production variable AMOS_STORAGE_MIGRATION_CONFIRMATION must be absent while RM.2 is paused.",
+      );
+    }
+  }
   for (const name of ["APP_SECRET", "JWT_SECRET"]) {
     const value = variables?.[name];
     if (
