@@ -22,3 +22,113 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run ${{ matrix.check }}
+
+  production:
+    name: Publish the matching Production pair
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: amos-production
+    permissions:
+      contents: read
+      statuses: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    concurrency:
+      group: amos-ops-production-main-pair
+      cancel-in-progress: false
+    env:
+      RELEASE_SHA: ${{ github.sha }}
+      RELEASE_ID: RAILWAY-GITHUB-${{ github.sha }}
+      RAILWAY_PUBLIC_ORIGIN: https://amos-ops-production.up.railway.app
+      NETLIFY_PUBLIC_ORIGIN: https://amos-ops.com
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_SITE_ID: 53a02d95-9cd5-4d22-8c17-8ed2378b91e8
+
+    steps:
+      - name: Check out the exact CI-approved main commit
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Use the pinned Node toolchain
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.14.0"
+          cache: npm
+
+      - name: Install the locked dependency graph
+        run: npm ci
+
+      - name: Build the matching frontend and backend
+        env:
+          VITE_AMOS_API_ORIGIN: https://amos-ops-production.up.railway.app
+        run: npm run build
+
+      - name: Verify the built runtime and all sidebar deep links
+        run: |
+          npm run test:dms1:built-runtime
+          npm run test:sidebar:built-runtime
+
+      - name: Seal the CI-approved GitHub identity into both artifacts
+        run: >-
+          node scripts/production-release-manifest.mjs
+          --release-id "$RELEASE_ID"
+          --release-sha "$RELEASE_SHA"
+
+      - name: Wait for Railway's connected-main deployment to match
+        run: >-
+          node scripts/main-paired-release.mjs wait-railway
+          --origin "$RAILWAY_PUBLIC_ORIGIN"
+          --manifest dist/release-manifest.json
+          --attempts 90
+          --delay-ms 10000
+
+      - name: Record Railway identity readiness
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh api --method POST
+          "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
+          -f state=success
+          -f context=amos-production-pair/railway-ready
+          -f description="Railway is healthy on the exact approved release identity"
+
+      - name: Publish the byte-matched frontend to the existing Netlify site
+        run: >-
+          npx --yes netlify-cli@23.11.1 deploy
+          --prod
+          --dir dist/public
+          --site "$NETLIFY_SITE_ID"
+          --message "AMOS-OPS $RELEASE_ID $RELEASE_SHA"
+          --json
+
+      - name: Verify the public Netlify identity matches Railway
+        run: >-
+          node scripts/main-paired-release.mjs verify-static
+          --origin "$NETLIFY_PUBLIC_ORIGIN"
+          --manifest dist/release-manifest.json
+          --attempts 24
+          --delay-ms 5000
+
+      - name: Record paired Production completion
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh api --method POST
+          "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
+          -f state=success
+          -f context=amos-production-pair/complete
+          -f description="Railway and Netlify expose the exact approved release"
+
+      - name: Record paired Production failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh api --method POST
+          "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
+          -f state=failure
+          -f context=amos-production-pair/failed
+          -f description="The automatic paired Production release failed closed"
