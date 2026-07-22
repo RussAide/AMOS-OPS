@@ -205,6 +205,59 @@ async function railwayGraphql(query, variables = {}, env = process.env) {
   return payload.data;
 }
 
+function sanitizeGraphqlErrors(errors) {
+  return (Array.isArray(errors) ? errors : []).slice(0, 10).map((error) => ({
+    message:
+      typeof error?.message === "string"
+        ? error.message.slice(0, 1_000)
+        : "Railway returned an unspecified GraphQL error.",
+    path: Array.isArray(error?.path)
+      ? error.path.filter((item) => ["string", "number"].includes(typeof item))
+      : [],
+    code:
+      typeof error?.extensions?.code === "string"
+        ? error.extensions.code
+        : null,
+  }));
+}
+
+async function railwayGraphqlAudit(query, variables = {}, env = process.env) {
+  let response;
+  try {
+    response = await fetch(RAILWAY_API, {
+      method: "POST",
+      headers: railwayHeaders(env),
+      body: JSON.stringify({ query, variables }),
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      httpStatus: null,
+      errors: [
+        {
+          message: `Railway request failed: ${error instanceof Error ? error.message : "unknown network error"}`,
+          path: [],
+          code: null,
+        },
+      ],
+      data: null,
+    };
+  }
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  return {
+    ok: response.ok && Boolean(payload?.data) && !payload?.errors?.length,
+    httpStatus: response.status,
+    errors: sanitizeGraphqlErrors(payload?.errors),
+    data: payload?.data ?? null,
+  };
+}
+
 async function netlify(pathname, options = {}, env = process.env) {
   return request(`${NETLIFY_API}${pathname}`, {
     ...options,
@@ -265,7 +318,28 @@ export function sanitizeRailwayDeploymentResponse(data, env = process.env) {
 }
 
 async function auditRailwayResponse(env = process.env) {
-  await proveRailwayScope(env);
+  const capturedAt = new Date().toISOString();
+  try {
+    await proveRailwayScope(env);
+  } catch (error) {
+    return {
+      schemaVersion: 2,
+      capturedAt,
+      operation: "read-only-railway-deployment-response-audit",
+      ok: false,
+      stage: "scope-proof",
+      errors: [
+        {
+          message:
+            error instanceof Error
+              ? error.message.slice(0, 1_000)
+              : "Railway scope proof failed.",
+          path: [],
+          code: null,
+        },
+      ],
+    };
+  }
   const input = {
     projectId: requiredEnv("RAILWAY_PROJECT_ID", env),
     serviceId: requiredEnv("RAILWAY_SERVICE_ID", env),
@@ -275,28 +349,38 @@ async function auditRailwayResponse(env = process.env) {
     pageInfo { hasNextPage endCursor }
     edges { node { id status createdAt updatedAt projectId serviceId environmentId canRollback } }
   `;
-  const [all, successful] = await Promise.all([
-    railwayGraphql(
-      `query AuditProductionDeployments($input: DeploymentListInput!) {
-        deployments(input: $input, first: 100) { ${fields} }
-      }`,
-      { input },
-      env,
-    ),
-    railwayGraphql(
-      `query AuditSuccessfulProductionDeployments($input: DeploymentListInput!) {
-        deployments(input: $input, first: 20) { ${fields} }
-      }`,
-      { input: { ...input, status: { successfulOnly: true } } },
-      env,
-    ),
-  ]);
+  const response = await railwayGraphqlAudit(
+    `query AuditProductionDeployments($input: DeploymentListInput!) {
+      deployments(input: $input, first: 100) { ${fields} }
+    }`,
+    { input },
+    env,
+  );
+  if (!response.ok) {
+    return {
+      schemaVersion: 2,
+      capturedAt,
+      operation: "read-only-railway-deployment-response-audit",
+      ok: false,
+      stage: "deployment-list",
+      httpStatus: response.httpStatus,
+      errors: response.errors,
+    };
+  }
+  const all = sanitizeRailwayDeploymentResponse(response.data, env);
   return {
-    schemaVersion: 1,
-    capturedAt: new Date().toISOString(),
+    schemaVersion: 2,
+    capturedAt,
     operation: "read-only-railway-deployment-response-audit",
-    all: sanitizeRailwayDeploymentResponse(all, env),
-    successfulOnly: sanitizeRailwayDeploymentResponse(successful, env),
+    ok: true,
+    httpStatus: response.httpStatus,
+    all,
+    successful: {
+      deploymentCount: all.deployments.filter(
+        ({ status }) => status === "SUCCESS",
+      ).length,
+      deployments: all.deployments.filter(({ status }) => status === "SUCCESS"),
+    },
   };
 }
 
@@ -1035,6 +1119,11 @@ async function main() {
   if (command === "audit-railway-response") {
     const result = await auditRailwayResponse();
     writeJson(requireValue(values, "output"), result);
+    if (!result.ok) {
+      fail(
+        "Railway read-only audit failed; sanitized diagnostic evidence was preserved.",
+      );
+    }
     process.stdout.write(
       "Sanitized read-only Railway deployment response captured.\n",
     );

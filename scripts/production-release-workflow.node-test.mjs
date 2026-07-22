@@ -71,7 +71,10 @@ test("the canonical test command excludes packaged source copies", () => {
     readFileSync(new URL("../package.json", import.meta.url), "utf8"),
   );
   assert.match(packageJson.scripts.test, /^vitest run api src\b/);
-  assert.doesNotMatch(packageJson.scripts.test, /stabilization_package|deliverables/);
+  assert.doesNotMatch(
+    packageJson.scripts.test,
+    /stabilization_package|deliverables/,
+  );
 });
 
 test("verification precedes the single build and every mutation", () => {
@@ -172,6 +175,9 @@ test("the Railway response audit is read-only and preserves only sanitized evide
   assert.match(audit, /permissions:\s+contents: read/);
   assert.match(audit, /audit-railway-response/);
   assert.match(audit, /railway-production-response-audit\.json/);
+  assert.match(audit, /continue-on-error: true/);
+  assert.match(audit, /if: always\(\)/);
+  assert.doesNotMatch(audit, /successfulOnly/);
   assert.doesNotMatch(
     audit,
     /railway\/cli|\brailway up\b|netlify-cli|deploy(?:ment)?Rollback|deploymentRedeploy|serviceInstanceDeploy/i,
