@@ -26,7 +26,7 @@
     "check": "npm run typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run --exclude 'dist/**' --exclude 'dist-server/**' --exclude 'node_modules/**'",
+    "test": "vitest run api src --exclude 'dist/**' --exclude 'dist-server/**' --exclude 'node_modules/**'",
     "test:dms1:review": "node --import tsx scripts/dms1-review-smoke.mjs",
     "test:dms1:built-runtime": "node scripts/dms1-built-runtime-smoke.mjs",
     "test:sidebar:built-runtime": "node --import tsx scripts/sidebar-built-deep-link-smoke.mjs",

@@ -5,6 +5,7 @@ import {
   chooseNetlifyPublishedDeploy,
   assertRailwayBaselineReadiness,
   parseCommandArgs,
+  sanitizeRailwayDeploymentResponse,
   validateConfiguration,
   validateNetlifyReleasePath,
   validateRailwayVariables,
@@ -140,6 +141,39 @@ test("selects a successful active deployment and proven rollback target", () => 
       }),
     /no successful Production deployment|no successful deployment with canRollback/,
   );
+});
+
+test("sanitizes the Railway connection shape without losing target identity", () => {
+  const data = {
+    deployments: {
+      pageInfo: { hasNextPage: true, endCursor: "opaque-cursor" },
+      edges: [
+        {
+          node: {
+            id: "deployment-success",
+            status: "SUCCESS",
+            createdAt: "2026-07-21T23:00:00Z",
+            updatedAt: "2026-07-21T23:01:00Z",
+            projectId: env.RAILWAY_PROJECT_ID,
+            serviceId: env.RAILWAY_SERVICE_ID,
+            environmentId: env.RAILWAY_ENVIRONMENT_ID,
+            canRollback: true,
+            meta: { privateValueThatMustNotBeCaptured: "redacted" },
+          },
+        },
+      ],
+    },
+  };
+  const result = sanitizeRailwayDeploymentResponse(data, env);
+  assert.equal(result.deploymentCount, 1);
+  assert.deepEqual(result.statusCounts, { SUCCESS: 1 });
+  assert.equal(result.deployments[0].matchesApprovedTarget, true);
+  assert.equal(result.deployments[0].canRollback, true);
+  assert.equal("meta" in result.deployments[0], false);
+  assert.deepEqual(result.pageInfo, {
+    hasNextPage: true,
+    endCursorPresent: true,
+  });
 });
 
 test("resolves the active Netlify Production deploy from published_deploy", () => {

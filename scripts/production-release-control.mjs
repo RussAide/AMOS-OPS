@@ -222,6 +222,84 @@ function sortDeployments(deployments) {
   );
 }
 
+export function sanitizeRailwayDeploymentResponse(data, env = process.env) {
+  const target = {
+    projectId: requiredEnv("RAILWAY_PROJECT_ID", env),
+    serviceId: requiredEnv("RAILWAY_SERVICE_ID", env),
+    environmentId: requiredEnv("RAILWAY_ENVIRONMENT_ID", env),
+  };
+  const connection = data?.deployments ?? {};
+  const deployments = (connection.edges ?? []).map(({ node }) => ({
+    id: node?.id ?? null,
+    status: node?.status ?? null,
+    createdAt: node?.createdAt ?? null,
+    updatedAt: node?.updatedAt ?? null,
+    projectId: node?.projectId ?? null,
+    serviceId: node?.serviceId ?? null,
+    environmentId: node?.environmentId ?? null,
+    canRollback: node?.canRollback === true,
+    matchesApprovedTarget:
+      node?.projectId === target.projectId &&
+      node?.serviceId === target.serviceId &&
+      node?.environmentId === target.environmentId,
+  }));
+  return {
+    schemaVersion: 1,
+    target,
+    pageInfo: {
+      hasNextPage: connection.pageInfo?.hasNextPage === true,
+      endCursorPresent: typeof connection.pageInfo?.endCursor === "string",
+    },
+    deploymentCount: deployments.length,
+    statusCounts: Object.fromEntries(
+      [...new Set(deployments.map(({ status }) => status))]
+        .sort()
+        .map((status) => [
+          status,
+          deployments.filter((deployment) => deployment.status === status)
+            .length,
+        ]),
+    ),
+    deployments,
+  };
+}
+
+async function auditRailwayResponse(env = process.env) {
+  await proveRailwayScope(env);
+  const input = {
+    projectId: requiredEnv("RAILWAY_PROJECT_ID", env),
+    serviceId: requiredEnv("RAILWAY_SERVICE_ID", env),
+    environmentId: requiredEnv("RAILWAY_ENVIRONMENT_ID", env),
+  };
+  const fields = `
+    pageInfo { hasNextPage endCursor }
+    edges { node { id status createdAt updatedAt projectId serviceId environmentId canRollback } }
+  `;
+  const [all, successful] = await Promise.all([
+    railwayGraphql(
+      `query AuditProductionDeployments($input: DeploymentListInput!) {
+        deployments(input: $input, first: 100) { ${fields} }
+      }`,
+      { input },
+      env,
+    ),
+    railwayGraphql(
+      `query AuditSuccessfulProductionDeployments($input: DeploymentListInput!) {
+        deployments(input: $input, first: 20) { ${fields} }
+      }`,
+      { input: { ...input, status: { successfulOnly: true } } },
+      env,
+    ),
+  ]);
+  return {
+    schemaVersion: 1,
+    capturedAt: new Date().toISOString(),
+    operation: "read-only-railway-deployment-response-audit",
+    all: sanitizeRailwayDeploymentResponse(all, env),
+    successfulOnly: sanitizeRailwayDeploymentResponse(successful, env),
+  };
+}
+
 export function chooseRailwayBaseline(
   deployments,
   recoveryRelease = false,
@@ -259,6 +337,7 @@ async function readRailwayDeployments(env = process.env) {
       input: {
         projectId: requiredEnv("RAILWAY_PROJECT_ID", env),
         serviceId: requiredEnv("RAILWAY_SERVICE_ID", env),
+        environmentId: requiredEnv("RAILWAY_ENVIRONMENT_ID", env),
       },
     },
     env,
@@ -953,6 +1032,14 @@ async function rollbackBoth(snapshot, configuration, env = process.env) {
 
 async function main() {
   const { command, values } = parseCommandArgs(process.argv.slice(2));
+  if (command === "audit-railway-response") {
+    const result = await auditRailwayResponse();
+    writeJson(requireValue(values, "output"), result);
+    process.stdout.write(
+      "Sanitized read-only Railway deployment response captured.\n",
+    );
+    return;
+  }
   const configuration = validateConfiguration();
   if (command === "enforce-netlify-release-path") {
     const result = await enforceNetlifyReleasePath();

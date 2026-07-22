@@ -1,0 +1,48 @@
+name: Read-only Railway API Response Audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: amos-ops-read-only-railway-api-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Capture sanitized Production deployment response
+    environment: amos-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RAILWAY_CREDENTIAL: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_TOKEN_TYPE: ${{ vars.RAILWAY_TOKEN_TYPE || 'project' }}
+      RAILWAY_PROJECT_ID: f9357da4-00c4-4f25-a52d-5c53f6ce07dc
+      RAILWAY_SERVICE_ID: 8fdf6d7e-c7ba-412d-95f0-8b980ba612ba
+      RAILWAY_ENVIRONMENT_ID: 7c22d214-abac-478f-983b-1418a7cbac77
+
+    steps:
+      - name: Check out the audited controller
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+
+      - name: Use the pinned Node toolchain
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.14.0"
+
+      - name: Capture sanitized read-only Railway responses
+        run: >-
+          node scripts/production-release-control.mjs audit-railway-response
+          --output "$RUNNER_TEMP/railway-production-response-audit.json"
+
+      - name: Preserve the sanitized response fixture
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: railway-production-response-audit
+          path: ${{ runner.temp }}/railway-production-response-audit.json
+          if-no-files-found: error
+          retention-days: 7
