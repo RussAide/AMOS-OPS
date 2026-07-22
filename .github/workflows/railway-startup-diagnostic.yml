@@ -1,0 +1,173 @@
+name: Railway Startup Diagnostic (Read Only)
+
+on:
+  push:
+    branches:
+      - agent/production-startup-recovery-20260722
+
+permissions:
+  contents: read
+
+jobs:
+  classify:
+    name: Classify Railway startup without publishing logs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RAILWAY_CREDENTIAL: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_TOKEN_TYPE: ${{ vars.RAILWAY_TOKEN_TYPE || 'project' }}
+      RAILWAY_PROJECT_ID: f9357da4-00c4-4f25-a52d-5c53f6ce07dc
+      RAILWAY_SERVICE_ID: 8fdf6d7e-c7ba-412d-95f0-8b980ba612ba
+      RAILWAY_ENVIRONMENT_ID: 7c22d214-abac-478f-983b-1418a7cbac77
+
+    steps:
+      - name: Classify current deployment and startup logs in memory
+        id: diagnose
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const endpoint = "https://backboard.railway.com/graphql/v2";
+          const credential = process.env.RAILWAY_CREDENTIAL ?? "";
+          const headers = process.env.RAILWAY_TOKEN_TYPE === "project"
+            ? { "Project-Access-Token": credential, "Content-Type": "application/json" }
+            : { Authorization: `Bearer ${credential}`, "Content-Type": "application/json" };
+          const output = {
+            query_failed: false,
+            no_deployment: false,
+            latest_success: false,
+            latest_active: false,
+            latest_failure: false,
+            release_identity: false,
+            volume_mount: false,
+            environment: false,
+            database: false,
+            module: false,
+            healthcheck: false,
+            unknown: false,
+          };
+
+          async function graphql(query, variables) {
+            const response = await fetch(endpoint, {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ query, variables }),
+              signal: AbortSignal.timeout(30_000),
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok || payload?.errors?.length || !payload?.data) {
+              throw new Error("Railway read-only query failed.");
+            }
+            return payload.data;
+          }
+
+          try {
+            const data = await graphql(
+              `query StartupDeployment($input: DeploymentListInput!) {
+                deployments(input: $input, first: 1) {
+                  edges { node { id status } }
+                }
+              }`,
+              {
+                input: {
+                  projectId: process.env.RAILWAY_PROJECT_ID,
+                  serviceId: process.env.RAILWAY_SERVICE_ID,
+                  environmentId: process.env.RAILWAY_ENVIRONMENT_ID,
+                },
+              },
+            );
+            const deployment = data.deployments?.edges?.[0]?.node;
+            if (!deployment) {
+              output.no_deployment = true;
+            } else {
+              output.latest_success = deployment.status === "SUCCESS";
+              output.latest_active = new Set(["BUILDING", "DEPLOYING", "QUEUED", "WAITING"]).has(deployment.status);
+              output.latest_failure = new Set(["FAILED", "CRASHED", "REMOVED", "SKIPPED"]).has(deployment.status);
+
+              const logMessages = [];
+              for (const query of [
+                `query BuildLogs($deploymentId: String!, $limit: Int) {
+                  buildLogs(deploymentId: $deploymentId, limit: $limit) { message }
+                }`,
+                `query RuntimeLogs($deploymentId: String!, $limit: Int) {
+                  deploymentLogs(deploymentId: $deploymentId, limit: $limit) { message }
+                }`,
+              ]) {
+                const logs = await graphql(query, { deploymentId: deployment.id, limit: 500 });
+                const entries = logs.buildLogs ?? logs.deploymentLogs ?? [];
+                logMessages.push(...entries.map(({ message }) => String(message ?? "")));
+              }
+              const joined = logMessages.join("\n");
+              output.release_identity = /RELEASE_IDENTITY_UNVERIFIED|release-manifest\.json|Release manifest (?:is )?(?:missing|unavailable)/i.test(joined);
+              output.volume_mount = /RM2_PERSISTENT_VOLUME_NOT_MOUNTED|PERSISTENT_ROOT must match RAILWAY_VOLUME_MOUNT_PATH/i.test(joined);
+              output.environment = /Production is locked until|requires AMOS_ALLOWED_ORIGINS|requires APP_SECRET|requires JWT_SECRET|APP_ENV=production requires/i.test(joined);
+              output.database = /database\.initialization_failed|Controlled environment startup stopped: database initialization failed/i.test(joined);
+              output.module = /ERR_MODULE_NOT_FOUND|Cannot find module/i.test(joined);
+              output.healthcheck = /healthcheck (?:failed|timeout)|service failed to respond/i.test(joined);
+              output.unknown = output.latest_failure && ![
+                output.release_identity,
+                output.volume_mount,
+                output.environment,
+                output.database,
+                output.module,
+                output.healthcheck,
+              ].some(Boolean);
+            }
+          } catch {
+            output.query_failed = true;
+          }
+
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `${Object.entries(output).map(([key, value]) => `${key}=${value}`).join("\n")}\n`,
+          );
+          NODE
+
+      - name: Railway status — successful
+        if: steps.diagnose.outputs.latest_success == 'true'
+        run: echo 'The newest exact-target Railway deployment is successful.'
+
+      - name: Railway status — still active
+        if: steps.diagnose.outputs.latest_active == 'true'
+        run: echo 'The newest exact-target Railway deployment is still active.'
+
+      - name: Railway status — terminal failure
+        if: steps.diagnose.outputs.latest_failure == 'true'
+        run: echo 'The newest exact-target Railway deployment reached a terminal failure.'
+
+      - name: Cause — missing immutable release manifest
+        if: steps.diagnose.outputs.release_identity == 'true'
+        run: echo 'The backend stopped because its immutable release manifest was unavailable.'
+
+      - name: Cause — Production volume mount contract
+        if: steps.diagnose.outputs.volume_mount == 'true'
+        run: echo 'The backend stopped on the Production volume mount contract.'
+
+      - name: Cause — Production environment contract
+        if: steps.diagnose.outputs.environment == 'true'
+        run: echo 'The backend stopped on the Production environment contract.'
+
+      - name: Cause — Production database initialization
+        if: steps.diagnose.outputs.database == 'true'
+        run: echo 'The backend stopped during Production database initialization.'
+
+      - name: Cause — missing runtime module
+        if: steps.diagnose.outputs.module == 'true'
+        run: echo 'The backend stopped because a runtime module was unavailable.'
+
+      - name: Cause — healthcheck failure
+        if: steps.diagnose.outputs.healthcheck == 'true'
+        run: echo 'The deployment reached a healthcheck failure.'
+
+      - name: Cause — unclassified startup failure
+        if: steps.diagnose.outputs.unknown == 'true'
+        run: echo 'The deployment failed outside the fixed startup classifications.'
+
+      - name: Railway diagnostic query unavailable
+        if: steps.diagnose.outputs.query_failed == 'true'
+        run: echo 'The read-only Railway diagnostic query was unavailable.'
+
+      - name: Railway deployment record unavailable
+        if: steps.diagnose.outputs.no_deployment == 'true'
+        run: echo 'No exact-target Railway deployment record was returned.'
