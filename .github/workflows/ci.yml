@@ -96,18 +96,28 @@ jobs:
           -f description="Railway is healthy on the exact approved release identity"
 
       - name: Publish the byte-matched frontend to the existing Netlify site
-        run: >-
-          npx --yes netlify-cli@23.11.1 deploy
-          --prod
-          --dir dist/public
-          --site "$NETLIFY_SITE_ID"
-          --message "AMOS-OPS $RELEASE_ID $RELEASE_SHA"
-          --json
+        id: netlify
+        run: |
+          npx --yes netlify-cli@23.11.1 deploy \
+            --prod \
+            --dir dist/public \
+            --site "$NETLIFY_SITE_ID" \
+            --message "AMOS-OPS $RELEASE_ID $RELEASE_SHA" \
+            --json > "$RUNNER_TEMP/netlify-deploy.json"
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const deploy = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/netlify-deploy.json`, "utf8"));
+          const parsed = new URL(deploy.deploy_ssl_url ?? deploy.deploy_url ?? "");
+          if (parsed.protocol !== "https:" || !parsed.hostname.endsWith(".netlify.app")) {
+            throw new Error("Netlify did not return an immutable HTTPS deploy origin.");
+          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `deploy_origin=${parsed.origin}\n`);
+          NODE
 
-      - name: Verify the public Netlify identity matches Railway
+      - name: Verify the immutable Netlify deploy identity matches Railway
         run: >-
           node scripts/main-paired-release.mjs verify-static
-          --origin "$NETLIFY_PUBLIC_ORIGIN"
+          --origin "${{ steps.netlify.outputs.deploy_origin }}"
           --manifest dist/release-manifest.json
           --attempts 24
           --delay-ms 5000
@@ -120,7 +130,7 @@ jobs:
           "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
           -f state=success
           -f context=amos-production-pair/complete
-          -f description="Railway and Netlify expose the exact approved release"
+          -f description="Railway and the current Netlify Production deploy match exactly"
 
       - name: Record paired Production failure
         if: failure()
