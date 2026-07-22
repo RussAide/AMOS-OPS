@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -55,6 +61,26 @@ test("seals one numeric-schema, lowercase-digest manifest into both artifacts", 
     readFileSync(path.join(root, "dist/release-manifest.json"), "utf8"),
     readFileSync(path.join(root, "dist/public/release-manifest.json"), "utf8"),
   );
+});
+
+test("reconstructs the exact Git tree when Railway omits Git metadata", () => {
+  const root = releaseFixture();
+  const releaseSha = git(root, "rev-parse", "HEAD");
+  const expected = createReleaseManifest({
+    root,
+    releaseId: "AMOS-OPS-PRODUCTION-TEST",
+    releaseSha,
+  });
+  const detachedGit = `${root}-git-metadata`;
+  renameSync(path.join(root, ".git"), detachedGit);
+  const reconstructed = createReleaseManifest({
+    root,
+    releaseId: "AMOS-OPS-PRODUCTION-TEST",
+    releaseSha,
+    sourceMode: "filesystem",
+  });
+  assert.equal(reconstructed.treeSha, expected.treeSha);
+  assert.equal(reconstructed.sourceDigest, expected.sourceDigest);
 });
 
 test("refuses to seal a build from a dirty or different source tree", () => {

@@ -69,7 +69,7 @@ test("fails closed when a host never exposes the expected identity", async () =>
   );
 });
 
-test("the Railway Docker build seals the GitHub SHA and retains Git metadata only in the builder", () => {
+test("the Railway Docker build reconstructs the exact Git tree without Git metadata", () => {
   const dockerfile = readFileSync(
     new URL("../Dockerfile", import.meta.url),
     "utf8",
@@ -81,8 +81,10 @@ test("the Railway Docker build seals the GitHub SHA and retains Git metadata onl
   assert.match(dockerfile, /ARG RAILWAY_GIT_COMMIT_SHA/);
   assert.match(dockerfile, /production-release-manifest\.mjs/);
   assert.match(dockerfile, /--release-sha "\$RAILWAY_GIT_COMMIT_SHA"/);
-  assert.doesNotMatch(dockerignore, /^\.git\/?$/m);
+  assert.match(dockerfile, /--source-mode filesystem/);
+  assert.match(dockerignore, /^\.git\/?$/m);
   assert.doesNotMatch(dockerignore, /^\.github\/?$/m);
+  assert.match(dockerignore, /^!\.env\.production\.example$/m);
   assert.match(dockerfile, /COPY --from=builder \/app\/dist \.\/dist/);
   assert.doesNotMatch(
     dockerfile.slice(dockerfile.indexOf(" AS production")),
