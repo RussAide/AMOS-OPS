@@ -49,6 +49,7 @@ export async function waitForRelease({
   origin,
   expectedManifest,
   healthPaths = [],
+  manifestPath = "/release-manifest.json",
   attempts = 60,
   delayMs = 10_000,
   fetcher = fetch,
@@ -63,7 +64,7 @@ export async function waitForRelease({
         ),
       );
       const manifestResponse = await request(
-        `${target}/release-manifest.json`,
+        `${target}${manifestPath}`,
         fetcher,
       );
       const manifest = manifestResponse.ok
@@ -102,6 +103,7 @@ async function main() {
       origin: args.origin,
       expectedManifest,
       healthPaths: ["/api/health/live", "/api/health/ready"],
+      manifestPath: "/api/release-identity",
       attempts,
       delayMs,
     });
