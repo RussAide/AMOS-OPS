@@ -143,7 +143,7 @@ test("main CI waits for the exact Railway identity before publishing Netlify", (
     "Publish the byte-matched frontend to the existing Netlify site",
   );
   const verify = workflow.indexOf(
-    "Verify the public Netlify identity matches Railway",
+    "Verify the immutable Netlify deploy identity matches Railway",
   );
   assert.ok(
     builtRuntime > -1 &&
@@ -155,6 +155,12 @@ test("main CI waits for the exact Railway identity before publishing Netlify", (
   assert.match(workflow, /amos-production-pair\/railway-ready/);
   assert.match(workflow, /amos-production-pair\/complete/);
   assert.match(workflow, /amos-production-pair\/failed/);
+  assert.match(workflow, /id: netlify/);
+  assert.match(workflow, /deploy_ssl_url \?\? deploy\.deploy_url/);
+  assert.match(
+    workflow,
+    /--origin "\$\{\{ steps\.netlify\.outputs\.deploy_origin \}\}"/,
+  );
   const helper = readFileSync(
     new URL("./main-paired-release.mjs", import.meta.url),
     "utf8",
