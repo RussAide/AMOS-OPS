@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import {
+  collectRailwayDeploymentPages,
   chooseRailwayBaseline,
   chooseNetlifyPublishedDeploy,
   assertRailwayBaselineReadiness,
@@ -10,6 +12,10 @@ import {
   validateNetlifyReleasePath,
   validateRailwayVariables,
 } from "./production-release-control.mjs";
+
+const railwayPaginationFixture = JSON.parse(
+  readFileSync(new URL("./fixtures/railway-deployments-multipage.sanitized.json", import.meta.url), "utf8"),
+);
 
 const env = {
   RELEASE_SHA: "a".repeat(40),
@@ -209,6 +215,36 @@ test("the audit derives successful deployments locally from the canonical respon
       .map(({ id }) => id),
     ["success"],
   );
+});
+
+test("follows Railway cursors until an older successful Production deployment is found", async () => {
+  const seen = [];
+  const result = await collectRailwayDeploymentPages(async (cursor) => {
+    seen.push(cursor);
+    return railwayPaginationFixture.pages[seen.length - 1];
+  });
+  assert.deepEqual(seen, [null, "page-1-end"]);
+  assert.equal(result.truncated, false);
+  assert.equal(result.pages.length, 2);
+  assert.equal(result.deployments.find(({ status }) => status === "SUCCESS")?.id, "older-successful-production");
+  assert.equal(result.deployments.filter(({ status }) => status !== "SUCCESS").every(({ canRollback }) => canRollback === true), true);
+});
+
+test("fails closed on repeated cursors and reports a bounded history", async () => {
+  await assert.rejects(
+    collectRailwayDeploymentPages(async () => ({
+      deployments: { edges: [], pageInfo: { hasNextPage: true, endCursor: "same" } },
+    }), { maxPages: 3 }),
+    /invalid or repeated cursor/,
+  );
+  const bounded = await collectRailwayDeploymentPages(async (_cursor, page) => ({
+    deployments: {
+      edges: [{ node: { id: `failed-${page}`, status: "FAILED" } }],
+      pageInfo: { hasNextPage: true, endCursor: `cursor-${page}` },
+    },
+  }), { maxPages: 2 });
+  assert.equal(bounded.truncated, true);
+  assert.equal(bounded.deployments.length, 2);
 });
 
 test("resolves the active Netlify Production deploy from published_deploy", () => {

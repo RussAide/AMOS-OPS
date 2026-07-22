@@ -13,6 +13,8 @@ const NETLIFY_API = "https://api.netlify.com/api/v1";
 const TERMINAL_FAILURES = new Set(["FAILED", "CRASHED", "REMOVED", "SKIPPED"]);
 const TRANSIENT_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const REQUEST_ATTEMPTS = 5;
+const RAILWAY_DEPLOYMENT_PAGE_SIZE = 100;
+const RAILWAY_DEPLOYMENT_MAX_PAGES = 10;
 const MANIFEST_FIELDS = [
   "schemaVersion",
   "releaseId",
@@ -317,6 +319,47 @@ export function sanitizeRailwayDeploymentResponse(data, env = process.env) {
   };
 }
 
+export async function collectRailwayDeploymentPages(fetchPage, options = {}) {
+  const maxPages = options.maxPages ?? RAILWAY_DEPLOYMENT_MAX_PAGES;
+  const deployments = [];
+  const pages = [];
+  let cursor = null;
+  for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
+    const page = await fetchPage(cursor, pageNumber);
+    const connection = page?.deployments ?? {};
+    const nodes = (connection.edges ?? []).map((edge) => edge.node);
+    deployments.push(...nodes);
+    pages.push({
+      pageNumber,
+      deploymentCount: nodes.length,
+      hasNextPage: connection.pageInfo?.hasNextPage === true,
+      endCursorPresent: typeof connection.pageInfo?.endCursor === "string",
+    });
+    if (connection.pageInfo?.hasNextPage !== true) {
+      return { deployments, pages, truncated: false };
+    }
+    const nextCursor = connection.pageInfo?.endCursor;
+    if (typeof nextCursor !== "string" || nextCursor.length === 0 || nextCursor === cursor) {
+      fail("Railway deployment pagination returned an invalid or repeated cursor.");
+    }
+    cursor = nextCursor;
+  }
+  return { deployments, pages, truncated: true };
+}
+
+const railwayDeploymentFields = `
+  pageInfo { hasNextPage endCursor }
+  edges { node { id status createdAt updatedAt projectId serviceId environmentId canRollback } }
+`;
+
+function railwayDeploymentInput(env = process.env) {
+  return {
+    projectId: requiredEnv("RAILWAY_PROJECT_ID", env),
+    serviceId: requiredEnv("RAILWAY_SERVICE_ID", env),
+    environmentId: requiredEnv("RAILWAY_ENVIRONMENT_ID", env),
+  };
+}
+
 async function auditRailwayResponse(env = process.env) {
   const capturedAt = new Date().toISOString();
   try {
@@ -340,40 +383,47 @@ async function auditRailwayResponse(env = process.env) {
       ],
     };
   }
-  const input = {
-    projectId: requiredEnv("RAILWAY_PROJECT_ID", env),
-    serviceId: requiredEnv("RAILWAY_SERVICE_ID", env),
-    environmentId: requiredEnv("RAILWAY_ENVIRONMENT_ID", env),
-  };
-  const fields = `
-    pageInfo { hasNextPage endCursor }
-    edges { node { id status createdAt updatedAt projectId serviceId environmentId canRollback } }
-  `;
-  const response = await railwayGraphqlAudit(
-    `query AuditProductionDeployments($input: DeploymentListInput!) {
-      deployments(input: $input, first: 100) { ${fields} }
-    }`,
-    { input },
-    env,
-  );
-  if (!response.ok) {
+  let httpStatus = null;
+  let auditFailure = null;
+  let paged;
+  try {
+    paged = await collectRailwayDeploymentPages(async (after) => {
+      const response = await railwayGraphqlAudit(
+        `query AuditProductionDeployments($input: DeploymentListInput!, $after: String) {
+          deployments(input: $input, first: ${RAILWAY_DEPLOYMENT_PAGE_SIZE}, after: $after) { ${railwayDeploymentFields} }
+        }`,
+        { input: railwayDeploymentInput(env), after },
+        env,
+      );
+      httpStatus = response.httpStatus;
+      if (!response.ok) {
+        auditFailure = response;
+        fail("Railway deployment page capture failed.");
+      }
+      return response.data;
+    });
+  } catch (error) {
     return {
       schemaVersion: 2,
       capturedAt,
       operation: "read-only-railway-deployment-response-audit",
       ok: false,
       stage: "deployment-list",
-      httpStatus: response.httpStatus,
-      errors: response.errors,
+      httpStatus: auditFailure?.httpStatus ?? httpStatus,
+      errors: auditFailure?.errors ?? [{ message: error.message, path: [], code: null }],
     };
   }
-  const all = sanitizeRailwayDeploymentResponse(response.data, env);
+  const all = sanitizeRailwayDeploymentResponse(
+    { deployments: { edges: paged.deployments.map((node) => ({ node })) } },
+    env,
+  );
   return {
     schemaVersion: 2,
     capturedAt,
     operation: "read-only-railway-deployment-response-audit",
     ok: true,
-    httpStatus: response.httpStatus,
+    httpStatus,
+    pagination: { pages: paged.pages, truncated: paged.truncated },
     all,
     successful: {
       deploymentCount: all.deployments.filter(
@@ -411,24 +461,19 @@ export function chooseRailwayBaseline(
 }
 
 async function readRailwayDeployments(env = process.env) {
-  const data = await railwayGraphql(
-    `query ProductionDeployments($input: DeploymentListInput!) {
-      deployments(input: $input, first: 100) {
-        edges { node { id status createdAt updatedAt projectId serviceId environmentId canRollback } }
-      }
-    }`,
-    {
-      input: {
-        projectId: requiredEnv("RAILWAY_PROJECT_ID", env),
-        serviceId: requiredEnv("RAILWAY_SERVICE_ID", env),
-        environmentId: requiredEnv("RAILWAY_ENVIRONMENT_ID", env),
-      },
-    },
-    env,
+  const paged = await collectRailwayDeploymentPages((after) =>
+    railwayGraphql(
+      `query ProductionDeployments($input: DeploymentListInput!, $after: String) {
+        deployments(input: $input, first: ${RAILWAY_DEPLOYMENT_PAGE_SIZE}, after: $after) { ${railwayDeploymentFields} }
+      }`,
+      { input: railwayDeploymentInput(env), after },
+      env,
+    ),
   );
-  const deployments = (
-    data.deployments?.edges?.map((edge) => edge.node) ?? []
-  ).filter(
+  if (paged.truncated) {
+    fail(`Railway deployment history exceeded the ${RAILWAY_DEPLOYMENT_MAX_PAGES}-page safety limit.`);
+  }
+  const deployments = paged.deployments.filter(
     (deployment) =>
       deployment.environmentId === requiredEnv("RAILWAY_ENVIRONMENT_ID", env),
   );
