@@ -66,6 +66,14 @@ test("verification and built-runtime checks are isolated from deployment paths",
   assert.doesNotMatch(workflow, /^      VITE_AMOS_API_ORIGIN:/m);
 });
 
+test("the canonical test command excludes packaged source copies", () => {
+  const packageJson = JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  assert.match(packageJson.scripts.test, /^vitest run api src\b/);
+  assert.doesNotMatch(packageJson.scripts.test, /stabilization_package|deliverables/);
+});
+
 test("verification precedes the single build and every mutation", () => {
   const boundary = workflow.indexOf("npm run verify:release-identity-boundary");
   const build = workflow.indexOf("run: npm run build");
@@ -146,6 +154,28 @@ test("the release controller searches sufficient Railway history and retries liv
   assert.match(control, /deployments\(input: \$input, first: 100\)/);
   assert.match(control, /REQUEST_ATTEMPTS = 5/);
   assert.match(control, /baselineIdentityVerified/);
+  assert.match(
+    control,
+    /serviceId: requiredEnv\("RAILWAY_SERVICE_ID", env\),\s+environmentId: requiredEnv\("RAILWAY_ENVIRONMENT_ID", env\)/,
+  );
+});
+
+test("the Railway response audit is read-only and preserves only sanitized evidence", () => {
+  const audit = readFileSync(
+    new URL(
+      "../.github/workflows/railway-api-response-audit.yml",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(audit, /workflow_dispatch:/);
+  assert.match(audit, /permissions:\s+contents: read/);
+  assert.match(audit, /audit-railway-response/);
+  assert.match(audit, /railway-production-response-audit\.json/);
+  assert.doesNotMatch(
+    audit,
+    /railway\/cli|\brailway up\b|netlify-cli|deploy(?:ment)?Rollback|deploymentRedeploy|serviceInstanceDeploy/i,
+  );
 });
 
 test("Production target identifiers and origins are explicit", () => {
