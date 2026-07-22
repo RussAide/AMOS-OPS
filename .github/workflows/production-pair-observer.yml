@@ -1,0 +1,54 @@
+name: Production Pair Observer (Read Only)
+
+on:
+  push:
+    branches:
+      - agent/production-pair-observer-20260722
+
+permissions:
+  actions: read
+  contents: read
+  statuses: write
+
+jobs:
+  observe:
+    name: Observe the final main pair job
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_SHA: 55e7178dad594aa01b6cc31cf451be77b579398d
+
+    steps:
+      - name: Classify the final main pair job
+        id: observe
+        shell: bash
+        run: |
+          run_id="$(
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${TARGET_SHA}&event=push&per_page=10" \
+              --jq '.workflow_runs | map(select(.name == "AMOS-OPS Evaluation Build CI")) | sort_by(.created_at) | last | .id // empty'
+          )"
+          classification="run-unavailable"
+          if [[ -n "$run_id" ]]; then
+            pair_job="$(
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" \
+                --jq '.jobs | map(select(.name == "Publish the matching Production pair")) | last | if . == null then "" else (.status + ":" + (.conclusion // "active")) end'
+            )"
+            if [[ -z "$pair_job" ]]; then
+              classification="job-unavailable"
+            else
+              classification="${pair_job/:/-}"
+            fi
+          fi
+          echo "classification=${classification}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the non-sensitive job classification
+        if: always()
+        env:
+          CLASSIFICATION: ${{ steps.observe.outputs.classification || 'observer-unavailable' }}
+        run: >-
+          gh api --method POST
+          "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
+          -f state=success
+          -f context="production-pair-observer/${CLASSIFICATION}"
+          -f description="Read-only final Production pair job state"
