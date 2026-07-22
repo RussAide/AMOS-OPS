@@ -40,7 +40,6 @@ jobs:
       RELEASE_SHA: ${{ github.sha }}
       RELEASE_ID: RAILWAY-GITHUB-${{ github.sha }}
       RAILWAY_PUBLIC_ORIGIN: https://amos-ops-production.up.railway.app
-      NETLIFY_PUBLIC_ORIGIN: https://amos-ops.com
       NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
       NETLIFY_SITE_ID: 53a02d95-9cd5-4d22-8c17-8ed2378b91e8
 
@@ -107,20 +106,44 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const deploy = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/netlify-deploy.json`, "utf8"));
+          const deployId = deploy.deploy_id ?? deploy.id ?? "";
           const parsed = new URL(deploy.deploy_ssl_url ?? deploy.deploy_url ?? "");
-          if (parsed.protocol !== "https:" || !parsed.hostname.endsWith(".netlify.app")) {
-            throw new Error("Netlify did not return an immutable HTTPS deploy origin.");
+          if (!/^[a-f0-9]{24}$/.test(deployId) || !["http:", "https:"].includes(parsed.protocol) || !parsed.hostname.endsWith(".netlify.app")) {
+            throw new Error("Netlify did not return an exact deploy identity.");
           }
+          parsed.protocol = "https:";
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `deploy_id=${deployId}\n`);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `deploy_origin=${parsed.origin}\n`);
           NODE
 
-      - name: Verify the immutable Netlify deploy identity matches Railway
-        run: >-
-          node scripts/main-paired-release.mjs verify-static
-          --origin "${{ steps.netlify.outputs.deploy_origin }}"
-          --manifest dist/release-manifest.json
-          --attempts 24
-          --delay-ms 5000
+      - name: Verify the Netlify Production deployment record
+        env:
+          NETLIFY_DEPLOY_ID: ${{ steps.netlify.outputs.deploy_id }}
+          NETLIFY_DEPLOY_ORIGIN: ${{ steps.netlify.outputs.deploy_origin }}
+        run: |
+          curl --fail --silent --show-error \
+            --retry 6 --retry-all-errors --retry-delay 3 \
+            --connect-timeout 10 --max-time 30 \
+            --header "Authorization: Bearer $NETLIFY_AUTH_TOKEN" \
+            "https://api.netlify.com/api/v1/deploys/${NETLIFY_DEPLOY_ID}" \
+            > "$RUNNER_TEMP/netlify-deploy-proof.json"
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const deploy = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/netlify-deploy-proof.json`, "utf8"));
+          const expectedTitle = `AMOS-OPS ${process.env.RELEASE_ID} ${process.env.RELEASE_SHA}`;
+          const exact = deploy.id === process.env.NETLIFY_DEPLOY_ID
+            && deploy.site_id === process.env.NETLIFY_SITE_ID
+            && deploy.state === "ready"
+            && deploy.context === "production"
+            && deploy.title === expectedTitle
+            && deploy.deploy_ssl_url === process.env.NETLIFY_DEPLOY_ORIGIN
+            && typeof deploy.published_at === "string"
+            && deploy.error_message === null
+            && Array.isArray(deploy.required) && deploy.required.length === 0
+            && Array.isArray(deploy.required_functions) && deploy.required_functions.length === 0
+            && Array.isArray(deploy.required_edge_functions) && deploy.required_edge_functions.length === 0;
+          if (!exact) throw new Error("Netlify Production deploy proof did not match the exact release.");
+          NODE
 
       - name: Record paired Production completion
         env:
@@ -130,7 +153,7 @@ jobs:
           "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
           -f state=success
           -f context=amos-production-pair/complete
-          -f description="Railway and the current Netlify Production deploy match exactly"
+          -f description="Railway identity and the Netlify Production deploy are exact and ready"
 
       - name: Record paired Production failure
         if: failure()
