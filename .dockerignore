@@ -1,3 +1,4 @@
+.git
 node_modules
 dist
 dist-server
@@ -6,6 +7,11 @@ coverage
 
 .env
 .env.*
+!.env.example
+!.env.demo.example
+!.env.development.example
+!.env.production.example
+!.env.staging.example
 
 *.db
 *.db-shm

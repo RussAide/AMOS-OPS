@@ -7,6 +7,7 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
+  readlinkSync,
   readdirSync,
   writeFileSync,
 } from "node:fs";
@@ -15,6 +16,14 @@ import { fileURLToPath } from "node:url";
 
 const SHA1 = /^[a-f0-9]{40}$/;
 const RELEASE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/;
+const FILESYSTEM_SOURCE_EXCLUSIONS = new Set([
+  ".git",
+  ".vite",
+  "coverage",
+  "dist",
+  "dist-server",
+  "node_modules",
+]);
 
 export function parseArgs(argv) {
   const values = {};
@@ -31,6 +40,59 @@ export function parseArgs(argv) {
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function gitObjectHash(type, body) {
+  return createHash("sha1")
+    .update(`${type} ${body.length}\0`)
+    .update(body)
+    .digest();
+}
+
+function filesystemTreeHash(root, relative = "") {
+  const directory = path.join(root, relative);
+  const entries = readdirSync(directory, { withFileTypes: true })
+    .filter(
+      (entry) =>
+        relative !== "" || !FILESYSTEM_SOURCE_EXCLUSIONS.has(entry.name),
+    )
+    .map((entry) => ({
+      entry,
+      sortKey: Buffer.from(`${entry.name}${entry.isDirectory() ? "/" : ""}`),
+    }))
+    .sort(({ sortKey: left }, { sortKey: right }) =>
+      Buffer.compare(left, right),
+    );
+  const tree = [];
+  for (const { entry } of entries) {
+    const childRelative = path.join(relative, entry.name);
+    const child = path.join(root, childRelative);
+    let mode;
+    let objectHash;
+    if (entry.isDirectory()) {
+      mode = "40000";
+      objectHash = filesystemTreeHash(root, childRelative);
+    } else if (entry.isFile()) {
+      mode = lstatSync(child).mode & 0o111 ? "100755" : "100644";
+      objectHash = gitObjectHash("blob", readFileSync(child));
+    } else if (entry.isSymbolicLink()) {
+      mode = "120000";
+      objectHash = gitObjectHash("blob", Buffer.from(readlinkSync(child)));
+    } else {
+      throw new Error(`Source contains unsupported entry: ${childRelative}`);
+    }
+    tree.push(Buffer.from(`${mode} ${entry.name}\0`), objectHash);
+  }
+  return gitObjectHash("tree", Buffer.concat(tree));
+}
+
+export function filesystemSourceIdentity(root) {
+  const treeSha = filesystemTreeHash(root).toString("hex");
+  if (!SHA1.test(treeSha)) throw new Error("Git tree identity is invalid.");
+  return Object.freeze({
+    treeSha,
+    sourceDigest: sha256(`git-tree:${treeSha}`),
+  });
 }
 
 export function digestFile(filePath) {
@@ -75,7 +137,12 @@ function git(root, ...args) {
   });
 }
 
-export function createReleaseManifest({ root, releaseId, releaseSha }) {
+export function createReleaseManifest({
+  root,
+  releaseId,
+  releaseSha,
+  sourceMode = "git",
+}) {
   if (!RELEASE_ID.test(releaseId ?? "")) {
     throw new Error(
       "release-id must contain 2-128 safe identifier characters.",
@@ -86,22 +153,33 @@ export function createReleaseManifest({ root, releaseId, releaseSha }) {
       "release-sha must be an exact lowercase 40-character Git SHA.",
     );
   }
-  const head = String(git(root, "rev-parse", "HEAD")).trim();
-  if (head !== releaseSha) {
-    throw new Error(
-      `Checked-out HEAD ${head} does not equal release SHA ${releaseSha}.`,
-    );
+  let sourceIdentity;
+  if (sourceMode === "git") {
+    const head = String(git(root, "rev-parse", "HEAD")).trim();
+    if (head !== releaseSha) {
+      throw new Error(
+        `Checked-out HEAD ${head} does not equal release SHA ${releaseSha}.`,
+      );
+    }
+    const worktreeStatus = String(
+      git(root, "status", "--porcelain=v1", "--untracked-files=all"),
+    ).trim();
+    if (worktreeStatus) {
+      throw new Error(
+        "The release worktree changed after checkout; refusing to seal an artifact that is not the exact release SHA.",
+      );
+    }
+    const treeSha = String(git(root, "rev-parse", "HEAD^{tree}")).trim();
+    if (!SHA1.test(treeSha)) throw new Error("Git tree identity is invalid.");
+    sourceIdentity = Object.freeze({
+      treeSha,
+      sourceDigest: sha256(`git-tree:${treeSha}`),
+    });
+  } else if (sourceMode === "filesystem") {
+    sourceIdentity = filesystemSourceIdentity(root);
+  } else {
+    throw new Error("source-mode must be either git or filesystem.");
   }
-  const worktreeStatus = String(
-    git(root, "status", "--porcelain=v1", "--untracked-files=all"),
-  ).trim();
-  if (worktreeStatus) {
-    throw new Error(
-      "The release worktree changed after checkout; refusing to seal an artifact that is not the exact release SHA.",
-    );
-  }
-  const treeSha = String(git(root, "rev-parse", "HEAD^{tree}")).trim();
-  if (!SHA1.test(treeSha)) throw new Error("Git tree identity is invalid.");
 
   const dist = path.join(root, "dist");
   const frontend = path.join(dist, "public");
@@ -120,8 +198,8 @@ export function createReleaseManifest({ root, releaseId, releaseSha }) {
     schemaVersion: 1,
     releaseId,
     commitSha: releaseSha,
-    treeSha,
-    sourceDigest: sha256(git(root, "archive", "--format=tar", "HEAD")),
+    treeSha: sourceIdentity.treeSha,
+    sourceDigest: sourceIdentity.sourceDigest,
     frontendArtifactDigest: digestDirectory(
       frontend,
       new Set(["release-manifest.json"]),
@@ -149,6 +227,7 @@ function main() {
     root,
     releaseId: args["release-id"] ?? process.env.RELEASE_ID,
     releaseSha: args["release-sha"] ?? process.env.RELEASE_SHA,
+    sourceMode: args["source-mode"] ?? "git",
   });
   process.stdout.write(`${JSON.stringify(manifest)}\n`);
 }
