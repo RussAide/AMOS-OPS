@@ -96,6 +96,14 @@ test("the Railway Docker build reconstructs the exact Git tree without Git metad
     "utf8",
   );
   assert.match(dockerfile, /ARG RAILWAY_GIT_COMMIT_SHA/);
+  assert.match(
+    dockerfile,
+    /ARG VITE_AMOS_API_ORIGIN=https:\/\/amos-ops-production\.up\.railway\.app/,
+  );
+  assert.match(
+    dockerfile,
+    /test "\$VITE_AMOS_API_ORIGIN" = "https:\/\/amos-ops-production\.up\.railway\.app"/,
+  );
   assert.match(dockerfile, /production-release-manifest\.mjs/);
   assert.match(dockerfile, /--release-sha "\$RAILWAY_GIT_COMMIT_SHA"/);
   assert.match(dockerfile, /--source-mode filesystem/);
@@ -117,6 +125,10 @@ test("main CI waits for the exact Railway identity before publishing Netlify", (
   assert.match(workflow, /production:\n[\s\S]*needs: verify/);
   assert.match(workflow, /environment: amos-production/);
   assert.match(workflow, /statuses: write/);
+  assert.match(
+    workflow,
+    /group: amos-ops-production-main-pair\n\s+cancel-in-progress: true/,
+  );
   assert.match(workflow, /github\.event_name == 'push'/);
   const wait = workflow.indexOf(
     "Wait for Railway's connected-main deployment to match",
