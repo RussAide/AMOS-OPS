@@ -29,8 +29,14 @@ test("checkout and host tools are pinned", () => {
   assert.match(workflow, /netlify-cli@23\.11\.1/);
   assert.match(workflow, /ref: \$\{\{ inputs\.release_sha \}\}/);
   assert.match(workflow, /persist-credentials: false/);
-  assert.match(workflow, /RAILWAY_CREDENTIAL: \$\{\{ secrets\.RAILWAY_TOKEN \}\}/);
-  assert.match(workflow, /RAILWAY_API_TOKEN: \$\{\{ env\.RAILWAY_TOKEN_TYPE == 'account'/);
+  assert.match(
+    workflow,
+    /RAILWAY_CREDENTIAL: \$\{\{ secrets\.RAILWAY_TOKEN \}\}/,
+  );
+  assert.match(
+    workflow,
+    /RAILWAY_API_TOKEN: \$\{\{ env\.RAILWAY_TOKEN_TYPE == 'account'/,
+  );
 });
 
 test("verification and built-runtime checks are isolated from deployment paths", () => {
@@ -77,7 +83,9 @@ test("verification precedes the single build and every mutation", () => {
 test("isolated built-runtime checks precede immutable Production sealing", () => {
   const build = workflow.indexOf("run: npm run build");
   const builtRuntime = workflow.indexOf("Verify built runtime and deep links");
-  const seal = workflow.indexOf("Seal one immutable manifest into both artifacts");
+  const seal = workflow.indexOf(
+    "Seal one immutable manifest into both artifacts",
+  );
   const stage = workflow.indexOf("Assemble the prebuilt Railway release stage");
   const mutation = workflow.indexOf(
     "Mark the start of the controlled mutation window",
@@ -128,6 +136,16 @@ test("the mutation window always has a paired rollback and proof gate", () => {
   );
   assert.match(workflow, /production-release-control\.mjs rollback/);
   assert.match(workflow, /production-release-control\.mjs verify-live/);
+});
+
+test("the release controller searches sufficient Railway history and retries live proof", () => {
+  const control = readFileSync(
+    new URL("./production-release-control.mjs", import.meta.url),
+    "utf8",
+  );
+  assert.match(control, /deployments\(input: \$input, first: 100\)/);
+  assert.match(control, /REQUEST_ATTEMPTS = 5/);
+  assert.match(control, /baselineIdentityVerified/);
 });
 
 test("Production target identifiers and origins are explicit", () => {

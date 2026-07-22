@@ -11,6 +11,8 @@ const RELEASE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/;
 const RAILWAY_API = "https://backboard.railway.com/graphql/v2";
 const NETLIFY_API = "https://api.netlify.com/api/v1";
 const TERMINAL_FAILURES = new Set(["FAILED", "CRASHED", "REMOVED", "SKIPPED"]);
+const TRANSIENT_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const REQUEST_ATTEMPTS = 5;
 const MANIFEST_FIELDS = [
   "schemaVersion",
   "releaseId",
@@ -163,16 +165,28 @@ function railwayHeaders(env = process.env) {
 }
 
 async function request(url, options = {}, expectedStatuses = [200]) {
-  const response = await fetch(url, {
-    ...options,
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!expectedStatuses.includes(response.status)) {
-    fail(
-      `Request to ${new URL(url).origin} failed with status ${response.status}.`,
-    );
+  let lastFailure;
+  for (let attempt = 1; attempt <= REQUEST_ATTEMPTS; attempt += 1) {
+    let retryable = true;
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (expectedStatuses.includes(response.status)) return response;
+      lastFailure = new Error(
+        `Request to ${new URL(url).origin} failed with status ${response.status}.`,
+      );
+      retryable = TRANSIENT_HTTP_STATUSES.has(response.status);
+    } catch (error) {
+      lastFailure = error;
+    }
+    if (!retryable || attempt === REQUEST_ATTEMPTS) break;
+    await new Promise((resolve) => setTimeout(resolve, attempt * 1_500));
   }
-  return response;
+  fail(
+    `Request to ${new URL(url).origin} failed after ${REQUEST_ATTEMPTS} attempts: ${lastFailure?.message ?? "unknown network error"}`,
+  );
 }
 
 async function railwayGraphql(query, variables = {}, env = process.env) {
@@ -208,13 +222,17 @@ function sortDeployments(deployments) {
   );
 }
 
-export function chooseRailwayBaseline(deployments, recoveryRelease = false) {
+export function chooseRailwayBaseline(
+  deployments,
+  recoveryRelease = false,
+  liveBaseline = null,
+) {
   const ordered = sortDeployments(deployments);
   if (ordered.length === 0) fail("Railway returned no Production deployments.");
   const successful = ordered.find(
     (deployment) => deployment.status === "SUCCESS",
   );
-  if (!successful && !recoveryRelease) {
+  if (!successful && !recoveryRelease && liveBaseline?.ready !== true) {
     fail("Railway has no successful Production deployment.");
   }
   const current = successful ?? ordered[0];
@@ -222,7 +240,7 @@ export function chooseRailwayBaseline(deployments, recoveryRelease = false) {
     (deployment) =>
       deployment.status === "SUCCESS" && deployment.canRollback === true,
   );
-  if (!rollbackTarget && !recoveryRelease) {
+  if (!rollbackTarget && !recoveryRelease && liveBaseline?.verified !== true) {
     fail(
       "Railway exposes no successful deployment with canRollback=true; Production mutation is blocked.",
     );
@@ -233,7 +251,7 @@ export function chooseRailwayBaseline(deployments, recoveryRelease = false) {
 async function readRailwayDeployments(env = process.env) {
   const data = await railwayGraphql(
     `query ProductionDeployments($input: DeploymentListInput!) {
-      deployments(input: $input, first: 20) {
+      deployments(input: $input, first: 100) {
         edges { node { id status createdAt updatedAt projectId serviceId environmentId canRollback } }
       }
     }`,
@@ -487,8 +505,7 @@ export function chooseNetlifyPublishedDeploy(site, deploys) {
   const publishedId = site?.published_deploy?.id;
   if (typeof publishedId !== "string" || !publishedId) return null;
   return (
-    deploys.find((deploy) => deploy.id === publishedId) ??
-    site.published_deploy
+    deploys.find((deploy) => deploy.id === publishedId) ?? site.published_deploy
   );
 }
 
@@ -535,11 +552,6 @@ async function createSnapshot(configuration, env = process.env) {
     readNetlifyState(env),
     readRailwayReadiness(configuration.railwayOrigin),
   ]);
-  const { current, rollbackTarget } = chooseRailwayBaseline(
-    railwayDeployments,
-    configuration.recoveryRelease,
-  );
-  assertRailwayBaselineReadiness(readiness, configuration.recoveryRelease);
   const [railwayManifest, netlifyManifest] = await Promise.all([
     optionalPublicManifest(
       configuration.railwayOrigin,
@@ -547,6 +559,29 @@ async function createSnapshot(configuration, env = process.env) {
     ),
     optionalPublicManifest(configuration.netlifyOrigin),
   ]);
+  const liveBaseline = {
+    ready: readiness?.ready === true,
+    verified:
+      readiness?.ready === true &&
+      railwayManifest !== null &&
+      netlifyManifest !== null &&
+      manifestsEqual(railwayManifest, netlifyManifest),
+  };
+  const { current, rollbackTarget } = chooseRailwayBaseline(
+    railwayDeployments,
+    configuration.recoveryRelease,
+    liveBaseline,
+  );
+  assertRailwayBaselineReadiness(readiness, configuration.recoveryRelease);
+  if (
+    !rollbackTarget &&
+    !configuration.recoveryRelease &&
+    !liveBaseline.verified
+  ) {
+    fail(
+      "Railway rollback history is unavailable and the live matching baseline could not be verified.",
+    );
+  }
   return {
     schemaVersion: 1,
     capturedAt: new Date().toISOString(),
@@ -554,6 +589,7 @@ async function createSnapshot(configuration, env = process.env) {
     releaseSha: configuration.releaseSha,
     recoveryRelease: configuration.recoveryRelease,
     baselineReady: readiness?.ready === true,
+    baselineIdentityVerified: liveBaseline.verified,
     targets: {
       railway: {
         projectId: requiredEnv("RAILWAY_PROJECT_ID", env),
@@ -614,6 +650,10 @@ async function assertSnapshot(snapshot, env = process.env) {
   const { current } = chooseRailwayBaseline(
     deployments,
     snapshot.recoveryRelease === true,
+    {
+      ready: snapshot.baselineReady === true,
+      verified: snapshot.baselineIdentityVerified === true,
+    },
   );
   if (current.id !== snapshot.targets.railway.currentDeploymentId) {
     fail("Railway Production changed after preflight; release is stopped.");

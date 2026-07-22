@@ -60,15 +60,16 @@ test("rejects branch names and wildcard origins", () => {
 test("requires an explicit recovery posture and limits unhealthy baselines to recovery", () => {
   assert.equal(validateConfiguration(env).recoveryRelease, false);
   assert.equal(
-    validateConfiguration({ ...env, RECOVERY_RELEASE: "true" })
-      .recoveryRelease,
+    validateConfiguration({ ...env, RECOVERY_RELEASE: "true" }).recoveryRelease,
     true,
   );
   assert.throws(
     () => validateConfiguration({ ...env, RECOVERY_RELEASE: "yes" }),
     /RECOVERY_RELEASE/,
   );
-  assert.doesNotThrow(() => assertRailwayBaselineReadiness({ ready: true }, false));
+  assert.doesNotThrow(() =>
+    assertRailwayBaselineReadiness({ ready: true }, false),
+  );
   assert.throws(
     () => assertRailwayBaselineReadiness(null, false),
     /readiness is not true/,
@@ -115,12 +116,30 @@ test("selects a successful active deployment and proven rollback target", () => 
   ];
   assert.throws(
     () => chooseRailwayBaseline(failedOnly),
-    /no successful Production deployment/,
+    /no successful Production deployment|no successful deployment with canRollback/,
   );
   assert.deepEqual(chooseRailwayBaseline(failedOnly, true), {
     current: failedOnly[0],
     rollbackTarget: undefined,
   });
+  assert.deepEqual(
+    chooseRailwayBaseline(failedOnly, false, {
+      ready: true,
+      verified: true,
+    }),
+    {
+      current: failedOnly[0],
+      rollbackTarget: undefined,
+    },
+  );
+  assert.throws(
+    () =>
+      chooseRailwayBaseline(failedOnly, false, {
+        ready: true,
+        verified: false,
+      }),
+    /no successful Production deployment|no successful deployment with canRollback/,
+  );
 });
 
 test("resolves the active Netlify Production deploy from published_deploy", () => {
@@ -135,10 +154,10 @@ test("resolves the active Netlify Production deploy from published_deploy", () =
     published_at: "2026-07-19T14:00:00Z",
   };
   assert.equal(
-    chooseNetlifyPublishedDeploy(
-      { published_deploy: published },
-      [older, published],
-    ),
+    chooseNetlifyPublishedDeploy({ published_deploy: published }, [
+      older,
+      published,
+    ]),
     published,
   );
   assert.equal(
