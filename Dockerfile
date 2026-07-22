@@ -3,10 +3,12 @@
 
 FROM node:24-slim AS builder
 
+ARG RAILWAY_GIT_COMMIT_SHA
+
 WORKDIR /app
 
-# Install build tools for native modules
-RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+# Install build tools for native modules and Git for immutable source identity.
+RUN apt-get update && apt-get install -y python3 make g++ git && rm -rf /var/lib/apt/lists/*
 
 # Install the exact dependency graph recorded in package-lock.json.
 COPY package.json package-lock.json ./
@@ -15,8 +17,13 @@ RUN npm ci
 # Copy source
 COPY . .
 
-# Build frontend and backend.
-RUN npm run build
+# Build frontend and backend, then seal the exact GitHub-triggered source and
+# both artifacts into the manifest required by the Production boot boundary.
+RUN test -n "$RAILWAY_GIT_COMMIT_SHA" \
+  && npm run build \
+  && node scripts/production-release-manifest.mjs \
+    --release-id "RAILWAY-GITHUB-${RAILWAY_GIT_COMMIT_SHA}" \
+    --release-sha "$RAILWAY_GIT_COMMIT_SHA"
 
 FROM node:24-slim AS production
 

@@ -1,8 +1,8 @@
 [build]
   command = "npm run build:client"
   publish = "dist/public"
-  # Production publishes only through the protected matching-pair workflow.
-  # This prevents the linked Git repository from racing that controlled path.
+  # Production publishes only after the CI-approved Railway identity is live.
+  # This prevents the linked Git repository from racing the paired release job.
   ignore = "node ./scripts/netlify-git-build-policy.mjs"
 
 [build.environment]
