@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 jobs:
   classify:
@@ -37,6 +38,7 @@ jobs:
             ? { "Project-Access-Token": credential, "Content-Type": "application/json" }
             : { Authorization: `Bearer ${credential}`, "Content-Type": "application/json" };
           const output = {
+            classification: "query-unavailable",
             query_failed: false,
             no_deployment: false,
             latest_success: false,
@@ -121,11 +123,45 @@ jobs:
             output.query_failed = true;
           }
 
+          output.classification = output.query_failed
+            ? "query-unavailable"
+            : output.no_deployment
+              ? "no-deployment"
+              : output.latest_success
+                ? "status-success"
+                : output.latest_active
+                  ? "status-active"
+                  : output.release_identity
+                    ? "cause-release-identity"
+                    : output.volume_mount
+                      ? "cause-volume-mount"
+                      : output.environment
+                        ? "cause-environment"
+                        : output.database
+                          ? "cause-database"
+                          : output.module
+                            ? "cause-module"
+                            : output.healthcheck
+                              ? "cause-healthcheck"
+                              : "cause-unclassified";
+
           fs.appendFileSync(
             process.env.GITHUB_OUTPUT,
             `${Object.entries(output).map(([key, value]) => `${key}=${value}`).join("\n")}\n`,
           );
           NODE
+
+      - name: Publish non-sensitive diagnostic classification
+        if: always() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLASSIFICATION: ${{ steps.diagnose.outputs.classification || 'query-unavailable' }}
+        run: >-
+          gh api --method POST
+          "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
+          -f state=success
+          -f context="railway-diagnostic/${CLASSIFICATION}"
+          -f description="Read-only Railway startup classification"
 
       - name: Railway status — successful
         if: steps.diagnose.outputs.latest_success == 'true'
