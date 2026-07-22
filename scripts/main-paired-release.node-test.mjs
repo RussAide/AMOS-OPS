@@ -69,6 +69,23 @@ test("fails closed when a host never exposes the expected identity", async () =>
   );
 });
 
+test("uses the backend identity contract for Railway verification", async () => {
+  const requests = [];
+  await waitForRelease({
+    origin: "https://amos-ops-production.up.railway.app",
+    expectedManifest: expected,
+    manifestPath: "/api/release-identity",
+    attempts: 1,
+    fetcher: async (url) => {
+      requests.push(url);
+      return response(expected);
+    },
+  });
+  assert.deepEqual(requests, [
+    "https://amos-ops-production.up.railway.app/api/release-identity",
+  ]);
+});
+
 test("the Railway Docker build reconstructs the exact Git tree without Git metadata", () => {
   const dockerfile = readFileSync(
     new URL("../Dockerfile", import.meta.url),
@@ -126,5 +143,10 @@ test("main CI waits for the exact Railway identity before publishing Netlify", (
   assert.match(workflow, /amos-production-pair\/railway-ready/);
   assert.match(workflow, /amos-production-pair\/complete/);
   assert.match(workflow, /amos-production-pair\/failed/);
+  const helper = readFileSync(
+    new URL("./main-paired-release.mjs", import.meta.url),
+    "utf8",
+  );
+  assert.match(helper, /manifestPath: "\/api\/release-identity"/);
   assert.doesNotMatch(workflow, /railway (?:up|redeploy|rollback|restart)/i);
 });
