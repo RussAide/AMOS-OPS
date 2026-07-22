@@ -154,7 +154,9 @@ test("the release controller searches sufficient Railway history and retries liv
     new URL("./production-release-control.mjs", import.meta.url),
     "utf8",
   );
-  assert.match(control, /deployments\(input: \$input, first: 100\)/);
+  assert.match(control, /collectRailwayDeploymentPages/);
+  assert.match(control, /after: \$after/);
+  assert.match(control, /RAILWAY_DEPLOYMENT_MAX_PAGES = 10/);
   assert.match(control, /REQUEST_ATTEMPTS = 5/);
   assert.match(control, /baselineIdentityVerified/);
   assert.match(

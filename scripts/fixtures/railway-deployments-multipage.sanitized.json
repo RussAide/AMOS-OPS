@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "source": "sanitized-shape-from-read-only-audit-29899524977",
+  "pages": [
+    {
+      "deployments": {
+        "edges": [
+          { "node": { "id": "recent-failed", "status": "FAILED", "canRollback": true, "createdAt": "2026-07-22T01:00:00Z" } },
+          { "node": { "id": "recent-removed", "status": "REMOVED", "canRollback": true, "createdAt": "2026-07-22T00:59:00Z" } }
+        ],
+        "pageInfo": { "hasNextPage": true, "endCursor": "page-1-end" }
+      }
+    },
+    {
+      "deployments": {
+        "edges": [
+          { "node": { "id": "older-successful-production", "status": "SUCCESS", "canRollback": true, "createdAt": "2026-07-18T12:00:00Z" } }
+        ],
+        "pageInfo": { "hasNextPage": false, "endCursor": null }
+      }
+    }
+  ]
+}
