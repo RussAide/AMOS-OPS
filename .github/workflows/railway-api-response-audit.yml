@@ -35,14 +35,21 @@ jobs:
           node-version: "24.14.0"
 
       - name: Capture sanitized read-only Railway responses
+        id: capture
+        continue-on-error: true
         run: >-
           node scripts/production-release-control.mjs audit-railway-response
           --output "$RUNNER_TEMP/railway-production-response-audit.json"
 
       - name: Preserve the sanitized response fixture
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: railway-production-response-audit
           path: ${{ runner.temp }}/railway-production-response-audit.json
           if-no-files-found: error
           retention-days: 7
+
+      - name: Enforce successful audit capture
+        if: always()
+        run: test "${{ steps.capture.outcome }}" = "success"

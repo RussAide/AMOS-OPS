@@ -176,6 +176,41 @@ test("sanitizes the Railway connection shape without losing target identity", ()
   });
 });
 
+test("the audit derives successful deployments locally from the canonical response", () => {
+  const canonical = {
+    deployments: {
+      pageInfo: { hasNextPage: false, endCursor: null },
+      edges: [
+        {
+          node: {
+            id: "success",
+            status: "SUCCESS",
+            projectId: env.RAILWAY_PROJECT_ID,
+            serviceId: env.RAILWAY_SERVICE_ID,
+            environmentId: env.RAILWAY_ENVIRONMENT_ID,
+          },
+        },
+        {
+          node: {
+            id: "failed",
+            status: "FAILED",
+            projectId: env.RAILWAY_PROJECT_ID,
+            serviceId: env.RAILWAY_SERVICE_ID,
+            environmentId: env.RAILWAY_ENVIRONMENT_ID,
+          },
+        },
+      ],
+    },
+  };
+  const sanitized = sanitizeRailwayDeploymentResponse(canonical, env);
+  assert.deepEqual(
+    sanitized.deployments
+      .filter(({ status }) => status === "SUCCESS")
+      .map(({ id }) => id),
+    ["success"],
+  );
+});
+
 test("resolves the active Netlify Production deploy from published_deploy", () => {
   const published = {
     id: "published-production-deploy",
