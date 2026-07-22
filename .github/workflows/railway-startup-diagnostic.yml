@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/production-startup-recovery-20260722
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
