@@ -1,0 +1,28 @@
+--- a/.github/workflows/rm7-zone-a-verify.yml
++++ b/.github/workflows/rm7-zone-a-verify.yml
+@@ -49,6 +49,10 @@
+   full-static-gate:
+     name: Full static gate
+     runs-on: ubuntu-latest
++    permissions:
++      contents: read
++      id-token: write
++      attestations: write
+     steps:
+       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+@@ -63,3 +67,14 @@
+       - run: npm run test:dms1:built-runtime
+       - run: npm run test:sidebar:built-runtime
+       - run: npm run verify:rm7:d015
++      - name: Attest build provenance
++        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f
++        with:
++          subject-path: "dist/**"
++      - name: Verify build attestation
++        env:
++          GH_TOKEN: ${{ github.token }}
++        run: |
++          while IFS= read -r -d '' subject; do
++            gh attestation verify "$subject" --repo "$GITHUB_REPOSITORY"
++          done < <(find dist -type f -print0)
