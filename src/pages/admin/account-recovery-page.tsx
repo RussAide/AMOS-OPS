@@ -9,12 +9,14 @@ import {
   XCircle,
 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
+import { useAuth } from "@/hooks/use-auth";
 
 function formatTimestamp(value: string | null): string {
   return value ? new Date(value).toLocaleString() : "Never";
 }
 
 export default function AccountRecoveryPage() {
+  const { user: currentUser } = useAuth();
   const trpcUtils = trpc.useUtils();
   const usersQuery = trpc.auth.listUsers.useQuery(undefined, {
     retry: false,
@@ -73,6 +75,10 @@ export default function AccountRecoveryPage() {
         rationale,
       });
       const url = `${window.location.origin}/login?invite=${encodeURIComponent(result.recoveryToken)}`;
+      if (result.userId === currentUser?.id) {
+        window.location.assign(url);
+        return;
+      }
       setRecoveryLink({
         email: result.email,
         url,
