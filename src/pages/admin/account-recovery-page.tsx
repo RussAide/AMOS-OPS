@@ -27,9 +27,7 @@ export default function AccountRecoveryPage() {
     url: string;
     expiresAt: string;
   } | null>(null);
-  const issueRecovery = trpc.auth.issueAccountRecovery.useMutation({
-    onSuccess: async () => trpcUtils.auth.listUsers.invalidate(),
-  });
+  const issueRecovery = trpc.auth.issueAccountRecovery.useMutation();
   const unlockAccount = trpc.auth.unlockAccount.useMutation({
     onSuccess: async () => trpcUtils.auth.listUsers.invalidate(),
   });
@@ -69,14 +67,15 @@ export default function AccountRecoveryPage() {
       ?.trim();
     if (!rationale || rationale.length < 5) return;
     setError("");
+    const isSelfRecovery = user.id === currentUser?.id;
     try {
       const result = await issueRecovery.mutateAsync({
         userId: user.id,
         rationale,
       });
       const url = `${window.location.origin}/login?invite=${encodeURIComponent(result.recoveryToken)}`;
-      if (result.userId === currentUser?.id) {
-        window.location.assign(url);
+      if (isSelfRecovery) {
+        window.location.replace(url);
         return;
       }
       setRecoveryLink({
@@ -84,6 +83,7 @@ export default function AccountRecoveryPage() {
         url,
         expiresAt: result.expiresAt,
       });
+      void trpcUtils.auth.listUsers.invalidate();
     } catch (caught) {
       setError(
         caught instanceof Error
