@@ -6,49 +6,65 @@ on:
       - agent/production-pair-observer-20260722
 
 permissions:
-  actions: read
   contents: read
-  statuses: write
 
 jobs:
   observe:
-    name: Observe the final main pair job
+    name: Observe current Production release pair
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      GH_TOKEN: ${{ github.token }}
-      TARGET_SHA: 55e7178dad594aa01b6cc31cf451be77b579398d
-
     steps:
-      - name: Classify the final main pair job
-        id: observe
+      - name: Fetch public release identities without mutation
         shell: bash
         run: |
-          run_id="$(
-            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${TARGET_SHA}&event=push&per_page=10" \
-              --jq '.workflow_runs | map(select(.name == "AMOS-OPS Evaluation Build CI")) | sort_by(.created_at) | last | .id // empty'
-          )"
-          classification="run-unavailable"
-          if [[ -n "$run_id" ]]; then
-            pair_job="$(
-              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" \
-                --jq '.jobs | map(select(.name == "Publish the matching Production pair")) | last | if . == null then "" else (.status + ":" + (.conclusion // "active")) end'
-            )"
-            if [[ -z "$pair_job" ]]; then
-              classification="job-unavailable"
-            else
-              classification="${pair_job/:/-}"
-            fi
-          fi
-          echo "classification=${classification}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          expected_id='AMOS-PROD-20260831-ACCESS-01'
+          expected_sha='1a927b0e9b9111862524382fff5313006d68730e'
+          netlify_origin='https://amos-ops.com'
+          railway_origin='https://amos-ops-production.up.railway.app'
+          deploy_origin='https://6a94b36f-e57b-4731-b222-68e256619c03--amos-ops.netlify.app'
 
-      - name: Publish the non-sensitive job classification
-        if: always()
-        env:
-          CLASSIFICATION: ${{ steps.observe.outputs.classification || 'observer-unavailable' }}
-        run: >-
-          gh api --method POST
-          "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
-          -f state=success
-          -f context="production-pair-observer/${CLASSIFICATION}"
-          -f description="Read-only final Production pair job state"
+          curl -fsSL "$netlify_origin/release-manifest.json" -o /tmp/netlify.json
+          curl -fsSL "$deploy_origin/release-manifest.json" -o /tmp/deploy.json
+          curl -fsSL "$railway_origin/api/release-identity" -o /tmp/railway.json
+          curl -fsSL "$railway_origin/api/health/live" -o /tmp/live.json
+          curl -sS -D /tmp/railway-static.headers -o /tmp/railway-static.body "$railway_origin/release-manifest.json"
+          curl -fsSL "$railway_origin/release-manifest.json" -o /tmp/railway-static-followed.json
+
+          node <<'NODE'
+          const fs = require('fs');
+          const crypto = require('crypto');
+          const expectedId = 'AMOS-PROD-20260831-ACCESS-01';
+          const expectedSha = '1a927b0e9b9111862524382fff5313006d68730e';
+          const read = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
+          const digest = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+          const netlify = read('/tmp/netlify.json');
+          const deploy = read('/tmp/deploy.json');
+          const railway = read('/tmp/railway.json');
+          const live = read('/tmp/live.json');
+          const followed = read('/tmp/railway-static-followed.json');
+          const headers = fs.readFileSync('/tmp/railway-static.headers', 'utf8');
+          const status = headers.split(/\r?\n/)[0] || '';
+          const location = (headers.match(/^location:\s*(.+)$/im) || [])[1]?.trim() || null;
+          const fields = ['schemaVersion','releaseId','commitSha','treeSha','sourceDigest','frontendArtifactDigest','backendArtifactDigest'];
+          const sameFields = (a,b) => fields.every((k) => a?.[k] === b?.[k]);
+          const summary = {
+            expected: { releaseId: expectedId, commitSha: expectedSha },
+            netlify: { releaseId: netlify.releaseId, commitSha: netlify.commitSha, sha256: digest('/tmp/netlify.json') },
+            deploySpecificNetlify: { releaseId: deploy.releaseId, commitSha: deploy.commitSha, sha256: digest('/tmp/deploy.json') },
+            railwayApi: { verified: railway.verified === true, releaseId: railway.releaseId, commitSha: railway.commitSha },
+            railwayLive: { status: live.status, buildId: live.buildId },
+            railwayStatic: { initialStatus: status, location, followedReleaseId: followed.releaseId, followedSha256: digest('/tmp/railway-static-followed.json') },
+            checks: {
+              netlifyExpected: netlify.releaseId === expectedId && netlify.commitSha === expectedSha,
+              deployExpected: deploy.releaseId === expectedId && deploy.commitSha === expectedSha,
+              railwayExpected: railway.verified === true && railway.releaseId === expectedId && railway.commitSha === expectedSha,
+              railwayLiveExpected: live.status === 'alive' && live.buildId === expectedId,
+              netlifyEqualsDeploy: sameFields(netlify, deploy),
+              netlifyEqualsRailwayApi: sameFields(netlify, railway),
+              railwayStaticFollowsNetlify: sameFields(followed, netlify),
+            }
+          };
+          console.log(JSON.stringify(summary, null, 2));
+          if (!Object.values(summary.checks).every(Boolean)) process.exitCode = 1;
+          NODE
