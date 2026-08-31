@@ -4,7 +4,6 @@
 FROM node:24-slim AS builder
 
 ARG RAILWAY_GIT_COMMIT_SHA
-ARG VITE_AMOS_API_ORIGIN=https://amos-ops-production.up.railway.app
 
 WORKDIR /app
 
@@ -21,7 +20,6 @@ COPY . .
 # Build frontend and backend, then seal the exact GitHub-triggered source and
 # both artifacts into the manifest required by the Production boot boundary.
 RUN test -n "$RAILWAY_GIT_COMMIT_SHA" \
-  && test "$VITE_AMOS_API_ORIGIN" = "https://amos-ops-production.up.railway.app" \
   && npm run build \
   && node scripts/production-release-manifest.mjs \
     --release-id "RAILWAY-GITHUB-${RAILWAY_GIT_COMMIT_SHA}" \

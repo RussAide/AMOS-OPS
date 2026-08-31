@@ -9,12 +9,14 @@ import {
   XCircle,
 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
+import { useAuth } from "@/hooks/use-auth";
 
 function formatTimestamp(value: string | null): string {
   return value ? new Date(value).toLocaleString() : "Never";
 }
 
 export default function AccountRecoveryPage() {
+  const { user: currentUser } = useAuth();
   const trpcUtils = trpc.useUtils();
   const usersQuery = trpc.auth.listUsers.useQuery(undefined, {
     retry: false,
@@ -25,9 +27,7 @@ export default function AccountRecoveryPage() {
     url: string;
     expiresAt: string;
   } | null>(null);
-  const issueRecovery = trpc.auth.issueAccountRecovery.useMutation({
-    onSuccess: async () => trpcUtils.auth.listUsers.invalidate(),
-  });
+  const issueRecovery = trpc.auth.issueAccountRecovery.useMutation();
   const unlockAccount = trpc.auth.unlockAccount.useMutation({
     onSuccess: async () => trpcUtils.auth.listUsers.invalidate(),
   });
@@ -67,17 +67,23 @@ export default function AccountRecoveryPage() {
       ?.trim();
     if (!rationale || rationale.length < 5) return;
     setError("");
+    const isSelfRecovery = user.id === currentUser?.id;
     try {
       const result = await issueRecovery.mutateAsync({
         userId: user.id,
         rationale,
       });
       const url = `${window.location.origin}/login?invite=${encodeURIComponent(result.recoveryToken)}`;
+      if (isSelfRecovery) {
+        window.location.replace(url);
+        return;
+      }
       setRecoveryLink({
         email: result.email,
         url,
         expiresAt: result.expiresAt,
       });
+      void trpcUtils.auth.listUsers.invalidate();
     } catch (caught) {
       setError(
         caught instanceof Error
