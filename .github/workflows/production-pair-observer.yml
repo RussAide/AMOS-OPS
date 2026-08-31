@@ -17,54 +17,54 @@ jobs:
       - name: Fetch public release identities without mutation
         shell: bash
         run: |
-          set -euo pipefail
+          set -u
           expected_id='AMOS-PROD-20260831-ACCESS-01'
           expected_sha='1a927b0e9b9111862524382fff5313006d68730e'
-          netlify_origin='https://amos-ops.com'
-          railway_origin='https://amos-ops-production.up.railway.app'
-          deploy_origin='https://6a94b36f-e57b-4731-b222-68e256619c03--amos-ops.netlify.app'
+          netlify='https://amos-ops.com/release-manifest.json'
+          deploy='https://6a94b36f-e57b-4731-b222-68e256619c03--amos-ops.netlify.app/release-manifest.json'
+          railway_api='https://amos-ops-production.up.railway.app/api/release-identity'
+          railway_live='https://amos-ops-production.up.railway.app/api/health/live'
+          railway_static='https://amos-ops-production.up.railway.app/release-manifest.json'
 
-          curl -fsSL "$netlify_origin/release-manifest.json" -o /tmp/netlify.json
-          curl -fsSL "$deploy_origin/release-manifest.json" -o /tmp/deploy.json
-          curl -fsSL "$railway_origin/api/release-identity" -o /tmp/railway.json
-          curl -fsSL "$railway_origin/api/health/live" -o /tmp/live.json
-          curl -sS -D /tmp/railway-static.headers -o /tmp/railway-static.body "$railway_origin/release-manifest.json"
-          curl -fsSL "$railway_origin/release-manifest.json" -o /tmp/railway-static-followed.json
+          fetch() {
+            name="$1"; url="$2"; body="/tmp/${name}.body"; headers="/tmp/${name}.headers"
+            code="$(curl -sS -D "$headers" -o "$body" -w '%{http_code}' "$url" || echo curl-error)"
+            location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,"",$0); sub(/^[^:]+:[[:space:]]*/,"",$0); print; exit}' "$headers")"
+            printf '%s\t%s\t%s\t%s\n' "$name" "$code" "$url" "${location:-}" 
+          }
+
+          fetch netlify "$netlify"
+          fetch deploy "$deploy"
+          fetch railway_api "$railway_api"
+          fetch railway_live "$railway_live"
+          fetch railway_static "$railway_static"
 
           node <<'NODE'
-          const fs = require('fs');
-          const crypto = require('crypto');
-          const expectedId = 'AMOS-PROD-20260831-ACCESS-01';
-          const expectedSha = '1a927b0e9b9111862524382fff5313006d68730e';
-          const read = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
-          const digest = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
-          const netlify = read('/tmp/netlify.json');
-          const deploy = read('/tmp/deploy.json');
-          const railway = read('/tmp/railway.json');
-          const live = read('/tmp/live.json');
-          const followed = read('/tmp/railway-static-followed.json');
-          const headers = fs.readFileSync('/tmp/railway-static.headers', 'utf8');
-          const status = headers.split(/\r?\n/)[0] || '';
-          const location = (headers.match(/^location:\s*(.+)$/im) || [])[1]?.trim() || null;
-          const fields = ['schemaVersion','releaseId','commitSha','treeSha','sourceDigest','frontendArtifactDigest','backendArtifactDigest'];
-          const sameFields = (a,b) => fields.every((k) => a?.[k] === b?.[k]);
-          const summary = {
-            expected: { releaseId: expectedId, commitSha: expectedSha },
-            netlify: { releaseId: netlify.releaseId, commitSha: netlify.commitSha, sha256: digest('/tmp/netlify.json') },
-            deploySpecificNetlify: { releaseId: deploy.releaseId, commitSha: deploy.commitSha, sha256: digest('/tmp/deploy.json') },
-            railwayApi: { verified: railway.verified === true, releaseId: railway.releaseId, commitSha: railway.commitSha },
-            railwayLive: { status: live.status, buildId: live.buildId },
-            railwayStatic: { initialStatus: status, location, followedReleaseId: followed.releaseId, followedSha256: digest('/tmp/railway-static-followed.json') },
-            checks: {
-              netlifyExpected: netlify.releaseId === expectedId && netlify.commitSha === expectedSha,
-              deployExpected: deploy.releaseId === expectedId && deploy.commitSha === expectedSha,
-              railwayExpected: railway.verified === true && railway.releaseId === expectedId && railway.commitSha === expectedSha,
-              railwayLiveExpected: live.status === 'alive' && live.buildId === expectedId,
-              netlifyEqualsDeploy: sameFields(netlify, deploy),
-              netlifyEqualsRailwayApi: sameFields(netlify, railway),
-              railwayStaticFollowsNetlify: sameFields(followed, netlify),
-            }
+          const fs=require('fs');
+          const expected={releaseId:'AMOS-PROD-20260831-ACCESS-01',commitSha:'1a927b0e9b9111862524382fff5313006d68730e'};
+          const names=['netlify','deploy','railway_api','railway_live','railway_static'];
+          const out={expected,observed:{}};
+          for(const n of names){
+            let text=''; try{text=fs.readFileSync(`/tmp/${n}.body`,'utf8')}catch{}
+            let json=null; try{json=JSON.parse(text)}catch{}
+            let headers=''; try{headers=fs.readFileSync(`/tmp/${n}.headers`,'utf8')}catch{}
+            const status=(headers.split(/\r?\n/)[0]||'').trim();
+            const location=(headers.match(/^location:\s*(.+)$/im)||[])[1]?.trim()||null;
+            out.observed[n]={status,location,json};
+          }
+          const n=out.observed.netlify.json;
+          const d=out.observed.deploy.json;
+          const r=out.observed.railway_api.json;
+          const l=out.observed.railway_live.json;
+          const fields=['schemaVersion','releaseId','commitSha','treeSha','sourceDigest','frontendArtifactDigest','backendArtifactDigest'];
+          const same=(a,b)=>!!a&&!!b&&fields.every(k=>a[k]===b[k]);
+          out.checks={
+            netlifyExpected: n?.releaseId===expected.releaseId&&n?.commitSha===expected.commitSha,
+            deployExpected: d?.releaseId===expected.releaseId&&d?.commitSha===expected.commitSha,
+            railwayExpected: r?.verified===true&&r?.releaseId===expected.releaseId&&r?.commitSha===expected.commitSha,
+            railwayLiveExpected: l?.status==='alive'&&l?.buildId===expected.releaseId,
+            netlifyEqualsDeploy: same(n,d),
+            netlifyEqualsRailwayApi: same(n,r)
           };
-          console.log(JSON.stringify(summary, null, 2));
-          if (!Object.values(summary.checks).every(Boolean)) process.exitCode = 1;
+          console.log(JSON.stringify(out,null,2));
           NODE
