@@ -198,12 +198,66 @@ export function appendRecordAuthorityAudit(
   return id;
 }
 
+function assertStableLineageContext(
+  existing: readonly RecordAuthorityCandidate[],
+  input: EstablishRecordAuthorityInput,
+): void {
+  if (existing.length === 0) return;
+
+  if (existing.some((candidate) => candidate.recordClass !== input.recordClass)) {
+    throw new Error("AUTHORITY_LINEAGE_RECORD_CLASS_MISMATCH");
+  }
+  if (existing.some((candidate) => candidate.dataScope !== input.dataScope)) {
+    throw new Error("AUTHORITY_LINEAGE_DATA_SCOPE_MISMATCH");
+  }
+
+  const stableFields = [
+    ["caseId", input.caseId ?? null],
+    ["youthId", input.youthId ?? null],
+    ["operationId", input.operationId ?? null],
+    ["division", input.division ?? null],
+  ] as const;
+
+  for (const [field, nextValue] of stableFields) {
+    const governedValues = new Set(
+      existing
+        .map((candidate) => candidate[field])
+        .filter((value): value is string => Boolean(value)),
+    );
+    if (governedValues.size > 1) {
+      throw new Error(`AUTHORITY_LINEAGE_${field.toUpperCase()}_CONFLICT`);
+    }
+    const [governedValue] = [...governedValues];
+    if (governedValue && governedValue !== nextValue) {
+      throw new Error(`AUTHORITY_LINEAGE_${field.toUpperCase()}_MISMATCH`);
+    }
+  }
+
+  if (input.supersedesAuthorityId) {
+    const target = existing.find(
+      (candidate) => candidate.id === input.supersedesAuthorityId,
+    );
+    if (!target) throw new Error("AUTHORITY_SUPERSESSION_TARGET_NOT_IN_LINEAGE");
+    if (
+      existing.some(
+        (candidate) =>
+          candidate.supersedesAuthorityId === input.supersedesAuthorityId,
+      )
+    ) {
+      throw new Error("AUTHORITY_SUPERSESSION_TARGET_ALREADY_RETIRED");
+    }
+  }
+}
+
 /** Authority records are append-only; changes are represented by a new row. */
 export function establishRecordAuthority(
   db: Database.Database,
   input: EstablishRecordAuthorityInput,
 ): RecordAuthorityCandidate {
   ensureRecordAuthoritySchema(db);
+  const existing = listRecordAuthorityCandidates(db, input.recordKey);
+  assertStableLineageContext(existing, input);
+
   const id = randomUUID();
   const establishedAt = input.establishedAt ?? new Date().toISOString();
   const effectiveAt = input.effectiveAt ?? establishedAt;
