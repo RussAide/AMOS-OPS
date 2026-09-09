@@ -15,6 +15,7 @@ const NOW = "2026-09-09T09:00:00.000Z";
 function candidate(
   id: string,
   authorityState: RecordAuthorityCandidate["authorityState"],
+  supersedesAuthorityId: string | null = null,
 ): RecordAuthorityCandidate {
   return {
     id,
@@ -27,7 +28,7 @@ function candidate(
     backendObjectId: id,
     governingDocumentId: null,
     governingVersion: null,
-    supersedesAuthorityId: null,
+    supersedesAuthorityId,
     youthId: "SYNTH-YOUTH-1",
     caseId: "SYNTH-CASE-1",
     operationId: "CYPRESS-GRO",
@@ -51,7 +52,7 @@ describe("S1 governed record authority", () => {
     expect(resolved.record?.id).toBe("CURRENT");
   });
 
-  it("fails closed when two records both claim CURRENT_CONTROLLING authority", () => {
+  it("fails closed when two effective records both claim CURRENT_CONTROLLING authority", () => {
     const resolution = resolveControllingRecord("CYPRESS:SYNTH-CASE-1:PLACEMENT-PACKET", [
       candidate("CURRENT-A", "CURRENT_CONTROLLING"),
       candidate("CURRENT-B", "CURRENT_CONTROLLING"),
@@ -61,6 +62,32 @@ describe("S1 governed record authority", () => {
       code: "AUTHORITY_CONFLICT",
       record: null,
       candidateIds: ["CURRENT-A", "CURRENT-B"],
+    });
+  });
+
+  it("retires an immutable prior authority row when a later row explicitly supersedes it", () => {
+    const resolution = resolveControllingRecord("CYPRESS:SYNTH-CASE-1:PLACEMENT-PACKET", [
+      candidate("CURRENT-A", "CURRENT_CONTROLLING"),
+      candidate("CURRENT-B", "CURRENT_CONTROLLING", "CURRENT-A"),
+    ]);
+    expect(resolution).toMatchObject({
+      outcome: "RESOLVED",
+      code: "CONTROLLING_RECORD_RESOLVED",
+      record: { id: "CURRENT-B" },
+      candidateIds: ["CURRENT-B"],
+    });
+  });
+
+  it("can retire a controlling record into a non-controlling state without mutating history", () => {
+    const resolution = resolveControllingRecord("CYPRESS:SYNTH-CASE-1:PLACEMENT-PACKET", [
+      candidate("CURRENT-A", "CURRENT_CONTROLLING"),
+      candidate("SUPERSEDE-A", "SUPERSEDED", "CURRENT-A"),
+    ]);
+    expect(resolution).toMatchObject({
+      outcome: "UNAVAILABLE",
+      code: "NO_CONTROLLING_RECORD",
+      record: null,
+      candidateIds: ["SUPERSEDE-A"],
     });
   });
 
