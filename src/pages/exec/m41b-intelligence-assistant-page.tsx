@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { M41bIntelligenceAssistantView } from "@/components/m41b/m41b-intelligence-assistant-view";
 import { M41bMedicalRecordPreview } from "@/components/m41b/m41b-medical-record-preview";
+import { M41bLaunchCommandPreview } from "@/components/m41b/m41b-launch-command-preview";
 import type {
   M41bDispositionSubmission,
   M41bGuidanceSubmission,
@@ -222,8 +223,9 @@ export function M41bIntelligenceAssistantPage() {
         state={isLoading ? "loading" : isError ? "error" : "ready"}
         workplan={workplanQuery.data ?? null}
       />
-      <div className="bg-slate-50/40 px-4 pb-8 md:px-6">
+      <div className="space-y-6 bg-slate-50/40 px-4 pb-8 md:px-6">
         <M41bMedicalRecordPreview />
+        <M41bLaunchCommandPreview />
       </div>
     </>
   );
