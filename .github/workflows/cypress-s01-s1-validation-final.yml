@@ -1,0 +1,51 @@
+name: Cypress Doctrine S01 — S1 Final Validation
+
+on:
+  push:
+    branches:
+      - sprint/cypress-doctrine-s01
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: S1 final lint, typecheck, tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact sprint commit
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+
+      - name: Use pinned Node toolchain
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.14.0"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Strict lint
+        run: npm run lint:strict
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: S1 focused authority tests
+        run: >-
+          npx vitest run
+          api/tests/s1-record-authority.test.ts
+          api/tests/s1-record-authority-access.test.ts
+          api/tests/s1-record-authority-service.test.ts
+          api/tests/s1-m2-authority-boundary.test.ts
+          api/tests/s1-record-authority-lineage.test.ts
+          --reporter=verbose
+
+      - name: Full repository test suite
+        run: npm run test
+
+      - name: Build
+        run: npm run build
