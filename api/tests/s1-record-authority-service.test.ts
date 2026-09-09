@@ -55,8 +55,10 @@ describe("S1 canonical authority + access retrieval service", () => {
       recordKey: current.recordKey,
       user: USER,
       resource: RESOURCE,
-      requireAssignment: true,
-      requireOperationMatch: true,
+      contextRequirements: {
+        requireAssignment: true,
+        requireOperationMatch: true,
+      },
       assignment: {
         operationIds: ["CYPRESS-GRO"],
         assignedCaseIds: ["SYNTH-CASE-SVC"],
@@ -76,6 +78,32 @@ describe("S1 canonical authority + access retrieval service", () => {
     db.close();
   });
 
+  it("derives resource and context requirements only after authority resolution", () => {
+    const db = new Database(":memory:");
+    const current = registerCurrent(db, "DERIVED");
+    let resolvedId: string | null = null;
+    const result = resolveAuthorizedRecordAuthority(db, {
+      recordKey: current.recordKey,
+      user: USER,
+      resource: (record) => {
+        resolvedId = record.id;
+        return RESOURCE;
+      },
+      contextRequirements: (record) => ({
+        requireAssignment: Boolean(record.caseId || record.youthId),
+        requireOperationMatch: Boolean(record.operationId),
+      }),
+      assignment: {
+        operationIds: ["CYPRESS-GRO"],
+        assignedCaseIds: ["SYNTH-CASE-SVC"],
+        assignedYouthIds: ["SYNTH-YOUTH-SVC"],
+      },
+    });
+    expect(resolvedId).toBe(current.id);
+    expect(result.outcome).toBe("AUTHORIZED");
+    db.close();
+  });
+
   it("returns no record payload when contextual access is denied", () => {
     const db = new Database(":memory:");
     const current = registerCurrent(db, "B");
@@ -83,8 +111,10 @@ describe("S1 canonical authority + access retrieval service", () => {
       recordKey: current.recordKey,
       user: USER,
       resource: RESOURCE,
-      requireAssignment: true,
-      requireOperationMatch: true,
+      contextRequirements: {
+        requireAssignment: true,
+        requireOperationMatch: true,
+      },
       assignment: {
         operationIds: ["CYPRESS-GRO"],
         assignedCaseIds: [],
@@ -99,22 +129,29 @@ describe("S1 canonical authority + access retrieval service", () => {
     db.close();
   });
 
-  it("stops at authority conflict before any access decision can expose a record", () => {
+  it("stops at authority conflict before any policy resolver or access decision can expose a record", () => {
     const db = new Database(":memory:");
     const first = registerCurrent(db, "C1");
     registerCurrent(db, "C2");
+    let policyResolved = false;
     const result = resolveAuthorizedRecordAuthority(db, {
       recordKey: first.recordKey,
       user: USER,
-      resource: RESOURCE,
-      requireAssignment: false,
-      requireOperationMatch: false,
+      resource: () => {
+        policyResolved = true;
+        return RESOURCE;
+      },
+      contextRequirements: () => {
+        policyResolved = true;
+        return { requireAssignment: false, requireOperationMatch: false };
+      },
     });
     expect(result).toEqual({
       outcome: "AUTHORITY_CONFLICT",
       code: "AUTHORITY_CONFLICT",
       record: null,
     });
+    expect(policyResolved).toBe(false);
     const accessAuditCount = db.prepare(
       "SELECT COUNT(*) AS count FROM dms_record_authority_audit WHERE event_type = 'ACCESS_DECISION'",
     ).get() as { count: number };
