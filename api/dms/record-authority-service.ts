@@ -29,10 +29,18 @@ export type AuthorizedRecordAuthorityResult =
       record: null;
     };
 
+export type RecordAccessResourceResolver =
+  | AccessResource
+  | ((record: RecordAuthorityCandidate) => AccessResource);
+
 export interface ResolveAuthorizedRecordAuthorityInput {
   recordKey: string;
   user: IdentityUser | null;
-  resource: AccessResource;
+  /**
+   * Server policy may supply a resolver so the access domain/scope is derived
+   * from the resolved controlling record instead of caller-controlled input.
+   */
+  resource: RecordAccessResourceResolver;
   assignment?: RecordAssignmentContext;
   requireAssignment: boolean;
   requireOperationMatch: boolean;
@@ -40,10 +48,10 @@ export interface ResolveAuthorizedRecordAuthorityInput {
 
 /**
  * Canonical S1 retrieval sequence:
- * 1) resolve record authority; 2) stop on conflict/unavailable; 3) authorize
- * the resolved controlling record against identity/RBAC/workspace/context;
- * 4) append an immutable access-decision audit event; 5) return record only
- * after an explicit allow decision.
+ * 1) resolve record authority; 2) stop on conflict/unavailable; 3) derive the
+ * access resource from the controlling record when a server resolver is used;
+ * 4) authorize identity/RBAC/workspace/context; 5) append immutable audit;
+ * 6) return record only after an explicit allow decision.
  */
 export function resolveAuthorizedRecordAuthority(
   db: Database.Database,
@@ -73,9 +81,14 @@ export function resolveAuthorizedRecordAuthority(
     };
   }
 
+  const resource =
+    typeof input.resource === "function"
+      ? input.resource(authority.record)
+      : input.resource;
+
   const access = authorizeRecordContext({
     user: input.user,
-    resource: input.resource,
+    resource,
     record: authority.record,
     assignment: input.assignment,
     requireAssignment: input.requireAssignment,
@@ -91,10 +104,11 @@ export function resolveAuthorizedRecordAuthority(
     actorRole,
     decisionCode: access.code,
     requestContext: {
-      domain: input.resource.domain,
-      action: input.resource.action,
-      division: input.resource.division ?? null,
-      department: input.resource.department ?? null,
+      domain: resource.domain,
+      action: resource.action,
+      division: resource.division ?? null,
+      department: resource.department ?? null,
+      recordClass: authority.record.recordClass,
       requireAssignment: input.requireAssignment,
       requireOperationMatch: input.requireOperationMatch,
     },
