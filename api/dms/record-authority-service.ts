@@ -33,6 +33,15 @@ export type RecordAccessResourceResolver =
   | AccessResource
   | ((record: RecordAuthorityCandidate) => AccessResource);
 
+export interface RecordContextRequirements {
+  requireAssignment: boolean;
+  requireOperationMatch: boolean;
+}
+
+export type RecordContextRequirementsResolver =
+  | RecordContextRequirements
+  | ((record: RecordAuthorityCandidate) => RecordContextRequirements);
+
 export interface ResolveAuthorizedRecordAuthorityInput {
   recordKey: string;
   user: IdentityUser | null;
@@ -42,14 +51,14 @@ export interface ResolveAuthorizedRecordAuthorityInput {
    */
   resource: RecordAccessResourceResolver;
   assignment?: RecordAssignmentContext;
-  requireAssignment: boolean;
-  requireOperationMatch: boolean;
+  /** Context requirements may also be derived only after authority resolves. */
+  contextRequirements: RecordContextRequirementsResolver;
 }
 
 /**
  * Canonical S1 retrieval sequence:
  * 1) resolve record authority; 2) stop on conflict/unavailable; 3) derive the
- * access resource from the controlling record when a server resolver is used;
+ * access resource and contextual requirements from the controlling record;
  * 4) authorize identity/RBAC/workspace/context; 5) append immutable audit;
  * 6) return record only after an explicit allow decision.
  */
@@ -85,14 +94,18 @@ export function resolveAuthorizedRecordAuthority(
     typeof input.resource === "function"
       ? input.resource(authority.record)
       : input.resource;
+  const requirements =
+    typeof input.contextRequirements === "function"
+      ? input.contextRequirements(authority.record)
+      : input.contextRequirements;
 
   const access = authorizeRecordContext({
     user: input.user,
     resource,
     record: authority.record,
     assignment: input.assignment,
-    requireAssignment: input.requireAssignment,
-    requireOperationMatch: input.requireOperationMatch,
+    requireAssignment: requirements.requireAssignment,
+    requireOperationMatch: requirements.requireOperationMatch,
   });
 
   appendRecordAuthorityAudit(db, {
@@ -109,8 +122,8 @@ export function resolveAuthorizedRecordAuthority(
       division: resource.division ?? null,
       department: resource.department ?? null,
       recordClass: authority.record.recordClass,
-      requireAssignment: input.requireAssignment,
-      requireOperationMatch: input.requireOperationMatch,
+      requireAssignment: requirements.requireAssignment,
+      requireOperationMatch: requirements.requireOperationMatch,
     },
     resultContext: { allowed: access.allowed },
   });
