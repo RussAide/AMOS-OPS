@@ -35,7 +35,7 @@ jobs:
         run: npm run typecheck
 
       - name: S1 focused authority tests
-        run: npx vitest run 'api/tests/s1-*.test.ts' --reporter=verbose
+        run: npx vitest run api/tests/s1-*.test.ts --reporter=verbose
 
       - name: Full repository test suite
         run: npm run test
