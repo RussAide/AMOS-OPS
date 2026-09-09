@@ -24,8 +24,13 @@ export type AuthorizedRecordAuthorityResult =
       reason: string;
     }
   | {
-      outcome: "AUTHORITY_CONFLICT" | "NO_CONTROLLING_RECORD";
-      code: "AUTHORITY_CONFLICT" | "NO_CONTROLLING_RECORD";
+      outcome: "AUTHORITY_CONFLICT";
+      code: "AUTHORITY_CONFLICT";
+      record: null;
+    }
+  | {
+      outcome: "NO_CONTROLLING_RECORD";
+      code: "NO_CONTROLLING_RECORD";
       record: null;
     };
 
