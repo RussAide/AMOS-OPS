@@ -248,7 +248,11 @@ function placementEngineAtHospitalLeave() {
     eventType: "crisis",
     occurredAt: "2026-09-09T10:00:00.000Z",
     summary: "Synthetic crisis requiring hospital evaluation",
-    details: { hospitalization: true },
+    details: {
+      hospitalization: true,
+      responsePlan:
+        "Stabilize in the hospital, maintain placement on leave, reassess acuity and triggers, revise supports, and complete return-capability review before any discharge decision.",
+    },
     reason: "S6 placement-stability scenario",
   });
 
