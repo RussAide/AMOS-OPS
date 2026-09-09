@@ -242,4 +242,24 @@ export class SharePointGraphAdapter {
     };
   }
 
+  async downloadItemContent(
+    driveId: string,
+    itemId: string,
+  ): Promise<Uint8Array> {
+    this.assertAddress(driveId, itemId);
+    const token = await this.accessToken();
+    const endpoint = `https://graph.microsoft.com/v1.0/drives/${encodeURIComponent(
+      driveId,
+    )}/items/${encodeURIComponent(itemId)}/content`;
+    const response = await this.fetchImpl(endpoint, {
+      headers: { authorization: `Bearer ${token}` },
+      redirect: "follow",
+    });
+    if (!response.ok)
+      throw new Error(
+        `SHAREPOINT_GRAPH_CONTENT_RETRIEVAL_FAILED:${response.status}`,
+      );
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
 }

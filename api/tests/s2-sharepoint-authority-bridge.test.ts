@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import type { IdentityUser } from "../security/identity";
 import { establishRecordAuthority } from "../dms/record-authority-store";
 import { establishSharePointBackendBinding } from "../dms/sharepoint-backend-store";
-import { resolveAuthorizedSharePointBackend } from "../dms/sharepoint-authority-bridge";
+import {
+  resolveAuthorizedSharePointBackend,
+  retrieveAuthorizedSharePointBinary,
+} from "../dms/sharepoint-authority-bridge";
 
 const USER: IdentityUser = {
   id: "SYNTH-S2-USER",
@@ -131,4 +134,118 @@ describe("S2 authority to SharePoint backend composition", () => {
     });
     db.close();
   });
+  it("retrieves the exact binary only after authority, assignment, and backend re-verification pass", async () => {
+    const { db, authority, binding } = fixture();
+    const reader = {
+      getItemMetadata: async () => ({
+        tenantHost: binding.address.tenantHost,
+        siteId: binding.address.siteId,
+        driveId: binding.address.driveId,
+        itemId: binding.address.itemId,
+        name: binding.name,
+        webUrl: binding.webUrl,
+        parentItemId: null,
+        relativePath: null,
+        versionId: null,
+        eTag: null,
+        cTag: null,
+        sizeBytes: null,
+        contentHash: null,
+        metadataHash: "synthetic-metadata-hash",
+        lastModifiedAt: null,
+      }),
+      downloadItemContent: async () => new Uint8Array([7, 8, 9]),
+    };
+    const result = await retrieveAuthorizedSharePointBinary(db, {
+      recordKey: authority.recordKey,
+      user: USER,
+      resource: RESOURCE,
+      contextRequirements: { requireAssignment: true, requireOperationMatch: true },
+      assignment: {
+        operationIds: ["CYPRESS-GRO"],
+        assignedCaseIds: ["SYNTH-S2-CASE"],
+        assignedYouthIds: ["SYNTH-S2-YOUTH"],
+      },
+      reader,
+    });
+    expect(result.outcome).toBe("AUTHORIZED_BINARY");
+    if (result.outcome === "AUTHORIZED_BINARY")
+      expect(Array.from(result.content)).toEqual([7, 8, 9]);
+    db.close();
+  });
+
+  it("does not contact SharePoint when S1 contextual access is denied", async () => {
+    const { db, authority } = fixture();
+    let calls = 0;
+    const reader = {
+      getItemMetadata: async () => {
+        calls += 1;
+        throw new Error("must not be called");
+      },
+      downloadItemContent: async () => {
+        calls += 1;
+        throw new Error("must not be called");
+      },
+    };
+    const result = await retrieveAuthorizedSharePointBinary(db, {
+      recordKey: authority.recordKey,
+      user: USER,
+      resource: RESOURCE,
+      contextRequirements: { requireAssignment: true, requireOperationMatch: true },
+      assignment: {
+        operationIds: ["CYPRESS-GRO"],
+        assignedCaseIds: [],
+        assignedYouthIds: [],
+      },
+      reader,
+    });
+    expect(result.outcome).toBe("DENIED");
+    expect(calls).toBe(0);
+    db.close();
+  });
+
+  it("fails closed without binary leakage when the SharePoint object has drifted", async () => {
+    const { db, authority, binding } = fixture();
+    let downloads = 0;
+    const reader = {
+      getItemMetadata: async () => ({
+        tenantHost: binding.address.tenantHost,
+        siteId: binding.address.siteId,
+        driveId: binding.address.driveId,
+        itemId: binding.address.itemId,
+        name: "Drifted Name.pdf",
+        webUrl: binding.webUrl,
+        parentItemId: null,
+        relativePath: null,
+        versionId: null,
+        eTag: null,
+        cTag: null,
+        sizeBytes: null,
+        contentHash: null,
+        metadataHash: "drifted",
+        lastModifiedAt: null,
+      }),
+      downloadItemContent: async () => {
+        downloads += 1;
+        return new Uint8Array([1]);
+      },
+    };
+    const result = await retrieveAuthorizedSharePointBinary(db, {
+      recordKey: authority.recordKey,
+      user: USER,
+      resource: RESOURCE,
+      contextRequirements: { requireAssignment: true, requireOperationMatch: true },
+      assignment: {
+        operationIds: ["CYPRESS-GRO"],
+        assignedCaseIds: ["SYNTH-S2-CASE"],
+        assignedYouthIds: ["SYNTH-S2-YOUTH"],
+      },
+      reader,
+    });
+    expect(result.outcome).toBe("BACKEND_STALE");
+    expect(result.content).toBeNull();
+    expect(downloads).toBe(0);
+    db.close();
+  });
+
 });

@@ -22,7 +22,7 @@ S2 was expressly authorized by Eghosa on 2026-09-09.
 5. A SharePoint object cannot silently serve two different active DMS document identities.
 6. Graph access is default-disabled and fail-closed. Runtime status must not report `connected: true` unless a live probe has actually succeeded.
 7. Tenant, site, and drive scope are allowlisted server-side. Caller-supplied paths or URLs do not establish authority.
-8. S2 may prepare binary retrieval internally, but no frontline binary/content exposure is activated before S3.
+8. S2 implements internal read-only authorized binary retrieval with immediate object re-verification and immutable audit; no frontline binary/content exposure is activated before S3.
 9. No SharePoint permission, classification, retention, deletion, disposition, or repository-structure changes are authorized.
 
 ## Live SharePoint control-object verification

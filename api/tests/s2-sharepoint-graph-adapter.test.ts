@@ -85,6 +85,7 @@ describe("S2 Microsoft Graph SharePoint adapter", () => {
               path: "/drive/root:/Clinical",
             },
             file: { hashes: { sha1Hash: "sha1-content" } },
+            sharepointIds: { listItemUniqueId: "version-object-id" },
           }),
           { status: 200, headers: { "content-type": "application/json" } },
         ),
@@ -126,4 +127,20 @@ describe("S2 Microsoft Graph SharePoint adapter", () => {
       "SHAREPOINT_GRAPH_SITE_ID_MISMATCH",
     );
   });
+  it("retrieves binary content only from the allowlisted exact drive/item", async () => {
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "test-token" }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(new Uint8Array([1, 2, 3]), { status: 200 }),
+      );
+    const adapter = new SharePointGraphAdapter(configured(), fetchImpl);
+    const content = await adapter.downloadItemContent("drive-documents", "item-001");
+    expect(Array.from(content)).toEqual([1, 2, 3]);
+    expect(String(fetchImpl.mock.calls[1]?.[0])).toContain(
+      "/drives/drive-documents/items/item-001/content",
+    );
+  });
+
 });
