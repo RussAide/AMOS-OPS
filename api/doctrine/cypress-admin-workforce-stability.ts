@@ -1,7 +1,8 @@
-import type { M24Actor } from "../../contracts/gro/m24-model";
+import type { M24Actor, M24Shift } from "../../contracts/gro/m24-model";
 import type {
   CypressS6AdministratorBenchmark,
   CypressS6AuditEvent,
+  CypressS6ContinuityStepId,
   CypressS6CorrectiveActionStep,
   CypressS6Exception,
   CypressS6PlacementContinuity,
@@ -24,7 +25,7 @@ const SUPERVISOR: M24Actor = {
   role: "shift-supervisor",
 };
 
-const BENCHMARK_LABELS: ReadonlyArray<
+const BENCHMARKS: ReadonlyArray<
   Pick<CypressS6AdministratorBenchmark, "id" | "label" | "benchmark">
 > = [
   {
@@ -61,20 +62,24 @@ const COMPETENCIES: ReadonlyArray<{
   { id: "RAPPORT", evidence: "SYNTH-S6-COMP-RAPPORT" },
   { id: "DE_ESCALATION", evidence: "SYNTH-S6-COMP-DEESC" },
   { id: "RESILIENCE", evidence: "SYNTH-S6-COMP-RESILIENCE" },
-  {
-    id: "SUPERVISION_DISCIPLINE",
-    evidence: "SYNTH-S6-COMP-SUPERVISION",
-  },
+  { id: "SUPERVISION_DISCIPLINE", evidence: "SYNTH-S6-COMP-SUPERVISION" },
   { id: "DOCUMENTATION", evidence: "SYNTH-S6-COMP-DOCUMENTATION" },
   { id: "CRISIS_JUDGMENT", evidence: "SYNTH-S6-COMP-CRISIS" },
   { id: "RELIABILITY", evidence: "SYNTH-S6-COMP-RELIABILITY" },
   { id: "TEAMWORK", evidence: "SYNTH-S6-COMP-TEAMWORK" },
 ];
 
-function benchmarks(
+const SUPPORT_CHANGES = [
+  "Increase supervision to 2:1 during transition window",
+  "Revise crisis-prevention and elopement-response plan",
+  "Complete clinical/hospital coordination before return",
+  "Confirm qualified staffing and relief coverage",
+] as const;
+
+function administratorBenchmarks(
   scenario: CypressS6PreviewScenario,
 ): readonly CypressS6AdministratorBenchmark[] {
-  return BENCHMARK_LABELS.map((item) => {
+  return BENCHMARKS.map((item) => {
     const missed =
       scenario === "administrator_benchmark_exception" &&
       item.id === "STAFFING_READINESS";
@@ -128,8 +133,9 @@ function workforceControl(
   const clearanceReady = scenario !== "workforce_clearance_gap";
   return {
     foundation: "M3.3_WORKFORCE",
-    recruitmentToReleaseGatesPassed:
-      foundation.snapshot.lifecycleGates.every((gate) => gate.status === "passed"),
+    recruitmentToReleaseGatesPassed: foundation.snapshot.lifecycleGates.every(
+      (gate) => gate.status === "passed",
+    ),
     credentialRequirementTypesCovered: new Set(
       foundation.snapshot.requirements.map((requirement) => requirement.type),
     ).size,
@@ -179,7 +185,7 @@ function staffingControl(
     });
   }
 
-  let shift = engine.createShift(SUPERVISOR, {
+  let shift: M24Shift = engine.createShift(SUPERVISOR, {
     stageId: "M24-STAGE-1",
     shiftDate: "2026-09-09",
     shiftType: "day",
@@ -256,6 +262,17 @@ function placementEngineAtHospitalLeave() {
   return { engine, placement };
 }
 
+function completedSteps(
+  rows: ReadonlyArray<readonly [CypressS6ContinuityStepId, string, string]>,
+): CypressS6PlacementContinuity["steps"] {
+  return rows.map(([id, detail, evidence]) => ({
+    id,
+    state: "COMPLETE" as const,
+    detail,
+    evidenceRefs: [evidence],
+  }));
+}
+
 function continuity(
   scenario: CypressS6PreviewScenario,
 ): CypressS6PlacementContinuity {
@@ -265,8 +282,7 @@ function continuity(
     scenario === "workforce_clearance_gap"
   ) {
     return {
-      doctrine:
-        "CRISIS_STABILIZE_REASSESS_MODIFY_RETURN_REVIEW_RETURN_OR_JUSTIFY",
+      doctrine: "CRISIS_STABILIZE_REASSESS_MODIFY_RETURN_REVIEW_RETURN_OR_JUSTIFY",
       steps: [],
       supportChanges: [],
       safeReturn: null,
@@ -281,8 +297,7 @@ function continuity(
 
   if (scenario === "automatic_discharge_blocked") {
     return {
-      doctrine:
-        "CRISIS_STABILIZE_REASSESS_MODIFY_RETURN_REVIEW_RETURN_OR_JUSTIFY",
+      doctrine: "CRISIS_STABILIZE_REASSESS_MODIFY_RETURN_REVIEW_RETURN_OR_JUSTIFY",
       steps: [
         {
           id: "CRISIS_EVENT",
@@ -331,13 +346,6 @@ function continuity(
     };
   }
 
-  const supportChanges = [
-    "Increase supervision to 2:1 during transition window",
-    "Revise crisis-prevention and elopement-response plan",
-    "Complete clinical/hospital coordination before return",
-    "Confirm qualified staffing and relief coverage",
-  ] as const;
-
   if (scenario === "hospitalization_return") {
     const returned = engine.transitionPlacement(ADMIN, {
       placementId: leavePlacement.id,
@@ -347,27 +355,20 @@ function continuity(
       expectedVersion: leavePlacement.version,
     }).placement;
     return {
-      doctrine:
-        "CRISIS_STABILIZE_REASSESS_MODIFY_RETURN_REVIEW_RETURN_OR_JUSTIFY",
-      steps: [
+      doctrine: "CRISIS_STABILIZE_REASSESS_MODIFY_RETURN_REVIEW_RETURN_OR_JUSTIFY",
+      steps: completedSteps([
         ["CRISIS_EVENT", "Crisis/hospital event recorded.", "SYNTH-S6-CRISIS-001"],
         ["STABILIZE", "Hospital stabilization documented.", "SYNTH-S6-STABILIZE-001"],
         ["REASSESS", "Acuity, triggers, supervision, and return risks reassessed.", "SYNTH-S6-REASSESS-001"],
         ["MODIFY_SUPPORTS", "Supports revised before return.", "SYNTH-S6-SUPPORT-MOD-001"],
         ["RETURN_CAPABILITY_REVIEW", "Safe-return capability confirmed with enhanced supports.", "SYNTH-S6-RETURN-REVIEW-001"],
         ["RETURN_OR_JUSTIFIED_DISCHARGE", "Youth returned to the retained placement.", "SYNTH-S6-RETURN-001"],
-      ].map(([id, detail, evidence]) => ({
-        id: id as CypressS6PlacementContinuity["steps"][number]["id"],
-        state: "COMPLETE" as const,
-        detail,
-        evidenceRefs: [evidence],
-      })),
-      supportChanges,
+      ]),
+      supportChanges: SUPPORT_CHANGES,
       safeReturn: true,
       requestedDisposition: "RETURN",
       automaticDischargeAllowed: false,
-      underlyingPlacementStatus:
-        returned.status === "active" ? "ACTIVE" : "LEAVE",
+      underlyingPlacementStatus: returned.status === "active" ? "ACTIVE" : "LEAVE",
       executiveFlags: [],
     };
   }
@@ -391,28 +392,21 @@ function continuity(
     placementId: leavePlacement.id,
     transitionType: "discharge",
     occurredAt: "2026-09-09T15:45:00.000Z",
-    reason:
-      "Documented return-capability review found a safety requirement outside currently supportable scope after support modifications were attempted",
+    reason: "Documented return-capability review found a safety requirement outside currently supportable scope after support modifications were attempted",
     expectedVersion: leavePlacement.version,
   }).placement;
 
   return {
-    doctrine:
-      "CRISIS_STABILIZE_REASSESS_MODIFY_RETURN_REVIEW_RETURN_OR_JUSTIFY",
-    steps: [
+    doctrine: "CRISIS_STABILIZE_REASSESS_MODIFY_RETURN_REVIEW_RETURN_OR_JUSTIFY",
+    steps: completedSteps([
       ["CRISIS_EVENT", "Crisis/hospital event recorded.", "SYNTH-S6-CRISIS-002"],
       ["STABILIZE", "Hospital stabilization documented.", "SYNTH-S6-STABILIZE-002"],
       ["REASSESS", "Return risks and licensed/supportable scope reassessed.", "SYNTH-S6-REASSESS-002"],
       ["MODIFY_SUPPORTS", "Available support modifications were attempted and documented.", "SYNTH-S6-SUPPORT-MOD-002"],
       ["RETURN_CAPABILITY_REVIEW", "Review found safe return cannot be supported within the current verified capability.", "SYNTH-S6-RETURN-REVIEW-002"],
       ["RETURN_OR_JUSTIFIED_DISCHARGE", "Discharge was coordinated and justified after the full continuity review.", "SYNTH-S6-JUSTIFIED-DISCHARGE-001"],
-    ].map(([id, detail, evidence]) => ({
-      id: id as CypressS6PlacementContinuity["steps"][number]["id"],
-      state: "COMPLETE" as const,
-      detail,
-      evidenceRefs: [evidence],
-    })),
-    supportChanges,
+    ]),
+    supportChanges: SUPPORT_CHANGES,
     safeReturn: false,
     requestedDisposition: "DISCHARGE",
     automaticDischargeAllowed: false,
@@ -422,7 +416,7 @@ function continuity(
   };
 }
 
-function exceptions(
+function exceptionRows(
   scenario: CypressS6PreviewScenario,
   workforce: CypressS6WorkforceControl,
   staffing: CypressS6StaffingControl,
@@ -434,8 +428,7 @@ function exceptions(
       code: "ADMINISTRATOR_BENCHMARK_MISSED",
       severity: "CONTROL",
       disposition: "CORRECT",
-      summary:
-        "A missed Administrator benchmark requires evidence assembly, management review, corrective action/support, follow-up, and close-or-escalate disposition; the system must not silently normalize the miss.",
+      summary: "A missed Administrator benchmark requires evidence assembly, management review, corrective action/support, follow-up, and close-or-escalate disposition; the system must not silently normalize the miss.",
     });
   }
   if (!workforce.clearanceReady) {
@@ -443,8 +436,7 @@ function exceptions(
       code: "WORKFORCE_CLEARANCE_INCOMPLETE",
       severity: "WORKFORCE",
       disposition: "BLOCK",
-      summary:
-        "Required screening/credential/clearance evidence is incomplete, so release to duty is held.",
+      summary: "Required screening/credential/clearance evidence is incomplete, so release to duty is held.",
     });
   }
   if (!staffing.compliant) {
@@ -452,53 +444,48 @@ function exceptions(
       code: "STAFFING_READINESS_INSUFFICIENT",
       severity: "WORKFORCE",
       disposition: "BLOCK",
-      summary:
-        "The existing M2.4 staffing engine identified insufficient qualified present capacity for the evaluated census.",
+      summary: "The existing M2.4 staffing engine identified insufficient qualified present capacity for the evaluated census.",
     });
   }
   if (scenario === "automatic_discharge_blocked") {
-    rows.push({
-      code: "AUTOMATIC_CRISIS_DISCHARGE_PROHIBITED",
-      severity: "STABILITY",
-      disposition: "BLOCK",
-      summary:
-        "Hospitalization is not an automatic discharge trigger; reassessment, support modification, and return-capability review must occur first.",
-    });
-    rows.push({
-      code: "HOSPITALIZATION_TO_DISCHARGE_PATTERN",
-      severity: "EXECUTIVE",
-      disposition: "REVIEW",
-      summary:
-        "Hospitalization followed by an immediate discharge request is a placement-stability flag for executive review.",
-    });
+    rows.push(
+      {
+        code: "AUTOMATIC_CRISIS_DISCHARGE_PROHIBITED",
+        severity: "STABILITY",
+        disposition: "BLOCK",
+        summary: "Hospitalization is not an automatic discharge trigger; reassessment, support modification, and return-capability review must occur first.",
+      },
+      {
+        code: "HOSPITALIZATION_TO_DISCHARGE_PATTERN",
+        severity: "EXECUTIVE",
+        disposition: "REVIEW",
+        summary: "Hospitalization followed by an immediate discharge request is a placement-stability flag for executive review.",
+      },
+    );
   }
-  if (
-    scenario === "justified_discharge_after_review" &&
-    placement.safeReturn === false
-  ) {
+  if (scenario === "justified_discharge_after_review" && placement.safeReturn === false) {
     rows.push({
       code: "JUSTIFIED_DISCHARGE_EVIDENCE_COMPLETE",
       severity: "STABILITY",
       disposition: "CARRY_FORWARD",
-      summary:
-        "The full continuity sequence and discharge coordination are evidenced; discharge is justified rather than automatic.",
+      summary: "The full continuity sequence and discharge coordination are evidenced; discharge is justified rather than automatic.",
     });
   }
   return rows;
 }
 
 function auditEvents(
-  benchmarkRows: readonly CypressS6AdministratorBenchmark[],
+  benchmarks: readonly CypressS6AdministratorBenchmark[],
   workforce: CypressS6WorkforceControl,
   staffing: CypressS6StaffingControl,
   placement: CypressS6PlacementContinuity,
   corrective: readonly CypressS6CorrectiveActionStep[],
 ): readonly CypressS6AuditEvent[] {
-  const benchmarkPass = benchmarkRows.every((row) => row.state === "MEETS");
+  const benchmarkPass = benchmarks.every((row) => row.state === "MEETS");
   const placementComplete =
     placement.steps.length === 0 ||
     placement.steps.every((step) => step.state === "COMPLETE");
-  return [
+  const rows: CypressS6AuditEvent[] = [
     {
       eventId: "SYNTH-S6-AUD-001",
       eventType: "ADMINISTRATOR_BENCHMARK_EVALUATED",
@@ -530,23 +517,19 @@ function auditEvents(
           ? "No crisis/placement continuity episode is active in this scenario."
           : `Continuity disposition ${placement.requestedDisposition}; underlying placement status ${placement.underlyingPlacementStatus}.`,
     },
-    ...(corrective.length > 0
-      ? [
-          {
-            eventId: "SYNTH-S6-AUD-005",
-            eventType: "CORRECTIVE_ACTION_ROUTED" as const,
-            status: "REVIEW_REQUIRED" as const,
-            detail:
-              "Missed Administrator benchmark was converted into an evidence-backed corrective-action workflow with follow-up pending.",
-          },
-        ]
-      : []),
   ];
+  if (corrective.length > 0) {
+    rows.push({
+      eventId: "SYNTH-S6-AUD-005",
+      eventType: "CORRECTIVE_ACTION_ROUTED",
+      status: "REVIEW_REQUIRED",
+      detail: "Missed Administrator benchmark was converted into an evidence-backed corrective-action workflow with follow-up pending.",
+    });
+  }
+  return rows;
 }
 
-function outcomeFor(
-  scenario: CypressS6PreviewScenario,
-): CypressS6PreviewResult["outcome"] {
+function outcomeFor(scenario: CypressS6PreviewScenario): CypressS6PreviewResult["outcome"] {
   switch (scenario) {
     case "administrator_benchmark_exception":
       return "ADMIN_CORRECTIVE_ACTION_REQUIRED";
@@ -576,18 +559,12 @@ function titleFor(scenario: CypressS6PreviewScenario): string {
 
 function nextActionFor(scenario: CypressS6PreviewScenario): string {
   return {
-    administrator_ready:
-      "Continue operating against the five Administrator benchmarks and verified workforce-fit evidence; escalate material variances rather than redefining doctrine.",
-    administrator_benchmark_exception:
-      "Complete the scheduled follow-up, verify corrective-action effectiveness, then close or escalate the Administrator benchmark exception with evidence.",
-    workforce_clearance_gap:
-      "Resolve missing clearance evidence and restore compliant qualified staffing before releasing the affected workforce member to duty.",
-    hospitalization_return:
-      "Execute the documented enhanced supports and monitor safe return/placement continuity; do not convert the crisis event into an automatic discharge.",
-    automatic_discharge_blocked:
-      "Complete reassessment, support modification, and return-capability review before any discharge decision; route the hospitalization-to-discharge pattern for executive review.",
-    justified_discharge_after_review:
-      "Preserve the completed continuity and discharge-coordination evidence and monitor the downstream transition; do not characterize this as automatic crisis discharge.",
+    administrator_ready: "Continue operating against the five Administrator benchmarks and verified workforce-fit evidence; escalate material variances rather than redefining doctrine.",
+    administrator_benchmark_exception: "Complete the scheduled follow-up, verify corrective-action effectiveness, then close or escalate the Administrator benchmark exception with evidence.",
+    workforce_clearance_gap: "Resolve missing clearance evidence and restore compliant qualified staffing before releasing the affected workforce member to duty.",
+    hospitalization_return: "Execute the documented enhanced supports and monitor safe return/placement continuity; do not convert the crisis event into an automatic discharge.",
+    automatic_discharge_blocked: "Complete reassessment, support modification, and return-capability review before any discharge decision; route the hospitalization-to-discharge pattern for executive review.",
+    justified_discharge_after_review: "Preserve the completed continuity and discharge-coordination evidence and monitor the downstream transition; do not characterize this as automatic crisis discharge.",
   }[scenario];
 }
 
@@ -601,25 +578,19 @@ export function getCypressS6Status(): CypressS6Status {
     noPhi: true,
     s5Accepted: true,
     productionPromotion: "NOT_AUTHORIZED",
-    message:
-      "S6 applies the approved role-based Administrator scorecard, M3.3 workforce readiness, M2.4 staffing controls, and the crisis-to-return/justified-discharge continuity doctrine using synthetic/no-PHI evidence only.",
+    message: "S6 applies the approved role-based Administrator scorecard, M3.3 workforce readiness, M2.4 staffing controls, and the crisis-to-return/justified-discharge continuity doctrine using synthetic/no-PHI evidence only.",
   };
 }
 
 export function buildCypressS6Preview(
   scenario: CypressS6PreviewScenario,
 ): CypressS6PreviewResult {
-  const administratorBenchmarks = benchmarks(scenario);
+  const benchmarks = administratorBenchmarks(scenario);
   const corrective = correctiveAction(scenario);
   const workforce = workforceControl(scenario);
   const staffing = staffingControl(scenario);
   const placementContinuity = continuity(scenario);
-  const exceptionRows = exceptions(
-    scenario,
-    workforce,
-    staffing,
-    placementContinuity,
-  );
+  const exceptions = exceptionRows(scenario, workforce, staffing, placementContinuity);
   const outcome = outcomeFor(scenario);
 
   return {
@@ -633,23 +604,17 @@ export function buildCypressS6Preview(
     administratorSubject: "ROLE:GRO_ADMINISTRATOR",
     licensedCapacity: LICENSED_CAPACITY,
     futureCapacity: FUTURE_CAPACITY,
-    administratorBenchmarks,
+    administratorBenchmarks: benchmarks,
     correctiveAction: corrective,
     workforce,
     staffing,
     placementContinuity,
     outcome,
-    exceptions: exceptionRows,
-    audit: auditEvents(
-      administratorBenchmarks,
-      workforce,
-      staffing,
-      placementContinuity,
-      corrective,
-    ),
+    exceptions,
+    audit: auditEvents(benchmarks, workforce, staffing, placementContinuity, corrective),
     executiveVisibility: [
       `S6 outcome: ${outcome}`,
-      `Administrator benchmarks missed: ${administratorBenchmarks.filter((row) => row.state === "MISSED").length}`,
+      `Administrator benchmarks missed: ${benchmarks.filter((row) => row.state === "MISSED").length}`,
       `Workforce release to duty: ${workforce.releaseToDutyAllowed ? "ALLOWED" : "HELD"}`,
       `Staffing readiness: ${staffing.compliant ? "COMPLIANT" : "INSUFFICIENT"}`,
       `Placement continuity flags: ${placementContinuity.executiveFlags.length}`,
