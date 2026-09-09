@@ -5,6 +5,7 @@ import { m2AskAmosMedicalRouter } from "./m2-ask-amos-medical";
 import { cypressLaunchCommandRouter } from "./cypress-launch-command";
 import { cypressReferralAcuityRateRouter } from "./cypress-referral-acuity-rate";
 import { cypressAdminWorkforceStabilityRouter } from "./cypress-admin-workforce-stability";
+import { cypressCwopContinuumIntelligenceRouter } from "./cypress-cwop-continuum-intelligence";
 
 /**
  * Cypress Doctrine Sprint 01 governed M2 composition boundary.
@@ -16,9 +17,11 @@ import { cypressAdminWorkforceStabilityRouter } from "./cypress-admin-workforce-
  * capacity, and $450/$550/$650 rate-control reasoning by reusing the existing
  * CCMG referral-readiness foundation. S6 adds role-based Administrator
  * benchmarks, M3.3 workforce readiness, M2.4 staffing evaluation, and
- * crisis-to-return/justified-discharge placement-stability controls. No
- * production promotion, capacity expansion, live-data acceptance, or live
- * Graph claim is implied by this composition.
+ * crisis-to-return/justified-discharge placement-stability controls. S7 adds
+ * before/during/outcome CWOP continuum intelligence, source-gated value
+ * evidence, and governed executive trend-to-decision routing. No production
+ * promotion, capacity expansion, live-data acceptance, S8 authorization, or
+ * live Graph claim is implied by this composition.
  */
 export const m2AuthorityRouter = createRouter({
   ...s1AuthorityRouter._def.record,
@@ -27,4 +30,5 @@ export const m2AuthorityRouter = createRouter({
   ...cypressLaunchCommandRouter._def.record,
   ...cypressReferralAcuityRateRouter._def.record,
   ...cypressAdminWorkforceStabilityRouter._def.record,
+  ...cypressCwopContinuumIntelligenceRouter._def.record,
 });

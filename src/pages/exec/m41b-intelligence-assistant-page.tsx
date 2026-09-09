@@ -6,6 +6,7 @@ import { M41bMedicalRecordPreview } from "@/components/m41b/m41b-medical-record-
 import { M41bLaunchCommandPreview } from "@/components/m41b/m41b-launch-command-preview";
 import { M41bReferralAcuityRatePreview } from "@/components/m41b/m41b-referral-acuity-rate-preview";
 import { M41bAdminWorkforceStabilityPreview } from "@/components/m41b/m41b-admin-workforce-stability-preview";
+import { M41bCwopContinuumIntelligencePreview } from "@/components/m41b/m41b-cwop-continuum-intelligence-preview";
 import type {
   M41bDispositionSubmission,
   M41bGuidanceSubmission,
@@ -230,6 +231,7 @@ export function M41bIntelligenceAssistantPage() {
         <M41bLaunchCommandPreview />
         <M41bReferralAcuityRatePreview />
         <M41bAdminWorkforceStabilityPreview />
+        <M41bCwopContinuumIntelligencePreview />
       </div>
     </>
   );

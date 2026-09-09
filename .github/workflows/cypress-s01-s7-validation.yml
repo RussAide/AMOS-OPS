@@ -1,0 +1,47 @@
+name: Cypress Doctrine S01 — S7 Validation
+
+on:
+  push:
+    branches:
+      - sprint/cypress-doctrine-s01
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: S7 CWOP Continuum Intelligence validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact sprint commit
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+
+      - name: Use pinned Node toolchain
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.14.0"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Strict lint
+        run: npm run lint:strict
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: S7 focused CWOP continuum intelligence tests
+        run: >-
+          npx vitest run
+          api/tests/s7-cypress-cwop-continuum-intelligence.test.ts
+          --reporter=verbose
+
+      - name: Full repository test suite
+        run: npm run test
+
+      - name: Build
+        run: npm run build
