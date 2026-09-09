@@ -5,6 +5,7 @@ import { M41bIntelligenceAssistantView } from "@/components/m41b/m41b-intelligen
 import { M41bMedicalRecordPreview } from "@/components/m41b/m41b-medical-record-preview";
 import { M41bLaunchCommandPreview } from "@/components/m41b/m41b-launch-command-preview";
 import { M41bReferralAcuityRatePreview } from "@/components/m41b/m41b-referral-acuity-rate-preview";
+import { M41bAdminWorkforceStabilityPreview } from "@/components/m41b/m41b-admin-workforce-stability-preview";
 import type {
   M41bDispositionSubmission,
   M41bGuidanceSubmission,
@@ -228,6 +229,7 @@ export function M41bIntelligenceAssistantPage() {
         <M41bMedicalRecordPreview />
         <M41bLaunchCommandPreview />
         <M41bReferralAcuityRatePreview />
+        <M41bAdminWorkforceStabilityPreview />
       </div>
     </>
   );
