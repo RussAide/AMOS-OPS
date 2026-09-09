@@ -86,7 +86,12 @@ export type RecordAuthorityResolution =
  * retrieval. Reference/submission/pending/superseded/archived copies never
  * silently substitute for a controlling record.
  *
- * More than one CURRENT_CONTROLLING candidate fails closed.
+ * Authority rows are immutable. A later row may retire an earlier row by
+ * naming it in `supersedesAuthorityId`; retired rows are historical evidence
+ * and are excluded from the effective authority set. This is what allows a
+ * controlling record to change without mutating or deleting the prior row.
+ *
+ * More than one effective CURRENT_CONTROLLING candidate fails closed.
  */
 export function resolveControllingRecord(
   recordKey: string,
@@ -96,10 +101,21 @@ export function resolveControllingRecord(
     .filter((candidate) => candidate.recordKey === recordKey)
     .slice()
     .sort((a, b) => a.id.localeCompare(b.id));
-  const controlling = scoped.filter(
+
+  const scopedIds = new Set(scoped.map((candidate) => candidate.id));
+  const retiredIds = new Set(
+    scoped
+      .map((candidate) => candidate.supersedesAuthorityId)
+      .filter(
+        (authorityId): authorityId is string =>
+          Boolean(authorityId) && scopedIds.has(authorityId as string),
+      ),
+  );
+  const effective = scoped.filter((candidate) => !retiredIds.has(candidate.id));
+  const controlling = effective.filter(
     (candidate) => candidate.authorityState === "CURRENT_CONTROLLING",
   );
-  const candidateIds = scoped.map((candidate) => candidate.id);
+  const candidateIds = effective.map((candidate) => candidate.id);
 
   if (controlling.length === 1) {
     return {
