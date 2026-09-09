@@ -3,6 +3,7 @@ import { m2AuthorityRouter as s1AuthorityRouter } from "./m2-authority-s1";
 import { m2SharePointRouter } from "./m2-sharepoint-authority";
 import { m2AskAmosMedicalRouter } from "./m2-ask-amos-medical";
 import { cypressLaunchCommandRouter } from "./cypress-launch-command";
+import { cypressReferralAcuityRateRouter } from "./cypress-referral-acuity-rate";
 
 /**
  * Cypress Doctrine Sprint 01 governed M2 composition boundary.
@@ -10,12 +11,16 @@ import { cypressLaunchCommandRouter } from "./cypress-launch-command";
  * ./m2-authority-s1.ts. S2 adds bounded SharePoint backend mapping and
  * verification administration procedures. S3 adds the Ask AMOS medical-record
  * bridge plus a synthetic no-PHI preview surface. S4 adds the bounded Launch
- * Command / Doctrine resolver and synthetic preview; no production promotion,
- * capacity expansion, or live Graph claim is implied by this composition.
+ * Command / Doctrine resolver. S5 adds referral, acuity, placement-decline,
+ * capacity, and $450/$550/$650 rate-control reasoning by reusing the existing
+ * CCMG referral-readiness foundation. No production promotion, capacity
+ * expansion, live-data acceptance, or live Graph claim is implied by this
+ * composition.
  */
 export const m2AuthorityRouter = createRouter({
   ...s1AuthorityRouter._def.record,
   ...m2SharePointRouter._def.record,
   ...m2AskAmosMedicalRouter._def.record,
   ...cypressLaunchCommandRouter._def.record,
+  ...cypressReferralAcuityRateRouter._def.record,
 });
