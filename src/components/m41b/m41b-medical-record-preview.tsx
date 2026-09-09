@@ -73,7 +73,7 @@ function OutcomeBadge({ result }: { result: AskAmosMedicalRecordPreviewResult })
       ) : (
         <CheckCircle2 aria-hidden="true" className="mr-1 size-3" />
       )}
-      {result.outcome.replaceAll("_", " ")}
+      {result.outcome.replace(/_/g, " ")}
     </Badge>
   );
 }
@@ -223,7 +223,7 @@ export function M41bMedicalRecordPreview() {
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline">CURRENT / CONTROLLING</Badge>
-                    <Badge variant="outline">{result.record.recordClass.replaceAll("_", " ")}</Badge>
+                    <Badge variant="outline">{result.record.recordClass.replace(/_/g, " ")}</Badge>
                     <Badge variant="outline">{result.record.governingVersion}</Badge>
                   </div>
                   <p className="mt-3 text-sm font-bold text-slate-950">{result.record.youthLabel}</p>

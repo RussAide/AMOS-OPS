@@ -218,7 +218,9 @@ function previewReader(
   fixture: ReturnType<typeof establishPreviewFixture>,
   scenario: AskAmosMedicalRecordPreviewScenario,
 ): SharePointBackendReader {
-  if (!("binding" in fixture) || !("bytes" in fixture)) {
+  const binding = "binding" in fixture ? fixture.binding : undefined;
+  const bytes = "bytes" in fixture ? fixture.bytes : undefined;
+  if (!binding || !bytes) {
     return {
       getItemMetadata: async () => {
         throw new Error("SHAREPOINT_MUST_NOT_BE_CONTACTED_ON_AUTHORITY_CONFLICT");
@@ -228,7 +230,6 @@ function previewReader(
       },
     };
   }
-  const { binding, bytes } = fixture;
   return {
     getItemMetadata: async () => ({
       tenantHost: binding.address.tenantHost,
@@ -385,14 +386,15 @@ export async function runAskAmosMedicalRecordPreview(
       };
     }
 
-    if (!("binding" in fixture)) throw new Error("S3_PREVIEW_BINDING_MISSING");
+    const binding = "binding" in fixture ? fixture.binding : undefined;
+    if (!binding) throw new Error("S3_PREVIEW_BINDING_MISSING");
     const backend: AskAmosMedicalRecordPreviewBackend = {
-      stableObjectId: fixture.binding.stableObjectId,
-      name: fixture.binding.name,
-      tenantHost: fixture.binding.address.tenantHost,
-      siteId: fixture.binding.address.siteId,
-      driveId: fixture.binding.address.driveId,
-      itemId: fixture.binding.address.itemId,
+      stableObjectId: binding.stableObjectId,
+      name: binding.name,
+      tenantHost: binding.address.tenantHost,
+      siteId: binding.address.siteId,
+      driveId: binding.address.driveId,
+      itemId: binding.address.itemId,
       integrityVerified: true,
     };
     const supersededProtected = scenario === "superseded_protected";
