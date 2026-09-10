@@ -89,6 +89,58 @@ export const m2SharePointRouter = createRouter({
     }
   }),
 
+  probeSharePointBridge: adminQuery.mutation(async ({ ctx }) => {
+    let config;
+    try {
+      config = loadSharePointGraphConfig();
+    } catch (error) {
+      const code =
+        error instanceof Error
+          ? error.message
+          : "SHAREPOINT_GRAPH_CONFIGURATION_ERROR";
+      auditLog({
+        action: "m2:sharepoint:live-probe-failed",
+        actor: ctx.user.email,
+        resource: "sharepoint:cypress-gro",
+        details: code,
+      });
+      throw new TRPCError({ code: "PRECONDITION_FAILED", message: code });
+    }
+
+    if (!config.enabled)
+      return precondition("SHAREPOINT_GRAPH_NOT_CONFIGURED");
+    if (config.writesEnabled)
+      return precondition("SHAREPOINT_GRAPH_WRITES_NOT_AUTHORIZED");
+    const driveId = config.allowedDriveIds[0];
+    if (!driveId) return precondition("SHAREPOINT_GRAPH_ALLOWED_DRIVE_MISSING");
+
+    try {
+      const probe = await new SharePointGraphAdapter(config).probeDriveRoot(driveId);
+      auditLog({
+        action: "m2:sharepoint:live-probe-verified",
+        actor: ctx.user.email,
+        resource: "sharepoint:cypress-gro",
+        details: `${probe.tenantHost} | ${probe.driveId} | ${probe.rootItemId} | read-only`,
+      });
+      return {
+        ...probe,
+        configured: true as const,
+        accessMode: "READ_ONLY" as const,
+        status: "CONNECTED" as const,
+      };
+    } catch (error) {
+      const code =
+        error instanceof Error ? error.message : "SHAREPOINT_GRAPH_PROBE_FAILED";
+      auditLog({
+        action: "m2:sharepoint:live-probe-failed",
+        actor: ctx.user.email,
+        resource: "sharepoint:cypress-gro",
+        details: code,
+      });
+      throw new TRPCError({ code: "PRECONDITION_FAILED", message: code });
+    }
+  }),
+
   getSharePointBackendMapping: adminQuery
     .input(z.object({ documentId: z.string().trim().min(1).max(500) }))
     .query(({ ctx, input }) => {
@@ -147,13 +199,7 @@ export const m2SharePointRouter = createRouter({
         documentId: z.string().trim().min(1).max(500),
         driveId: z.string().trim().min(1).max(500),
         itemId: z.string().trim().min(1).max(500),
-        supersedesBindingId: z
-          .string()
-          .trim()
-          .min(1)
-          .max(500)
-          .nullable()
-          .optional(),
+        supersedesBindingId: z.string().trim().min(1).max(500).nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
