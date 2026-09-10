@@ -29,6 +29,19 @@ export interface SharePointGraphItemSnapshot {
   lastModifiedAt: string | null;
 }
 
+export interface SharePointGraphDriveProbe {
+  connected: true;
+  verification: "LIVE_GRAPH_VERIFIED";
+  tenantHost: string;
+  siteId: string;
+  driveId: string;
+  rootItemId: string;
+  name: string;
+  webUrl: string;
+  writesEnabled: false;
+  verifiedAt: string;
+}
+
 interface TokenResponse {
   access_token?: string;
   token_type?: string;
@@ -143,11 +156,15 @@ export class SharePointGraphAdapter {
     if (!config.enabled) throw new Error("SHAREPOINT_GRAPH_NOT_CONFIGURED");
   }
 
-  private assertAddress(driveId: string, itemId: string): void {
+  private assertDrive(driveId: string): void {
     assertSafeIdentifier(driveId, "SHAREPOINT_GRAPH_DRIVE_ID_INVALID");
-    assertSafeIdentifier(itemId, "SHAREPOINT_GRAPH_ITEM_ID_INVALID");
     if (!this.config.allowedDriveIds.includes(driveId))
       throw new Error("SHAREPOINT_GRAPH_DRIVE_NOT_ALLOWED");
+  }
+
+  private assertAddress(driveId: string, itemId: string): void {
+    this.assertDrive(driveId);
+    assertSafeIdentifier(itemId, "SHAREPOINT_GRAPH_ITEM_ID_INVALID");
   }
 
   private async accessToken(): Promise<string> {
@@ -174,6 +191,54 @@ export class SharePointGraphAdapter {
         `SHAREPOINT_GRAPH_TOKEN_FAILED:${payload.error ?? response.status}`,
       );
     return payload.access_token;
+  }
+
+  async probeDriveRoot(driveId: string): Promise<SharePointGraphDriveProbe> {
+    this.assertDrive(driveId);
+    if (!this.config.tenantHost || !this.config.siteId)
+      throw new Error("SHAREPOINT_GRAPH_CONFIGURATION_INCOMPLETE");
+    if (this.config.writesEnabled)
+      throw new Error("SHAREPOINT_GRAPH_WRITES_NOT_AUTHORIZED");
+
+    const token = await this.accessToken();
+    const endpoint = `https://graph.microsoft.com/v1.0/drives/${encodeURIComponent(
+      driveId,
+    )}/root?$select=id,name,webUrl,parentReference`;
+    const response = await this.fetchImpl(endpoint, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (!response.ok)
+      throw new Error(`SHAREPOINT_GRAPH_DRIVE_PROBE_FAILED:${response.status}`);
+
+    const item = (await response.json()) as GraphDriveItemResponse;
+    if (!item.id || !item.name || !item.webUrl)
+      throw new Error("SHAREPOINT_GRAPH_DRIVE_PROBE_INCOMPLETE");
+    if (item.parentReference?.driveId && item.parentReference.driveId !== driveId)
+      throw new Error("SHAREPOINT_GRAPH_DRIVE_ID_MISMATCH");
+    if (item.parentReference?.siteId && item.parentReference.siteId !== this.config.siteId)
+      throw new Error("SHAREPOINT_GRAPH_SITE_ID_MISMATCH");
+
+    let web: URL;
+    try {
+      web = new URL(item.webUrl);
+    } catch {
+      throw new Error("SHAREPOINT_GRAPH_ITEM_WEB_URL_INVALID");
+    }
+    if (web.protocol !== "https:" || web.hostname.toLowerCase() !== this.config.tenantHost)
+      throw new Error("SHAREPOINT_GRAPH_ITEM_TENANT_MISMATCH");
+
+    return {
+      connected: true,
+      verification: "LIVE_GRAPH_VERIFIED",
+      tenantHost: this.config.tenantHost,
+      siteId: this.config.siteId,
+      driveId,
+      rootItemId: item.id,
+      name: item.name,
+      webUrl: item.webUrl,
+      writesEnabled: false,
+      verifiedAt: new Date().toISOString(),
+    };
   }
 
   async getItemMetadata(
@@ -261,5 +326,4 @@ export class SharePointGraphAdapter {
       );
     return new Uint8Array(await response.arrayBuffer());
   }
-
 }
