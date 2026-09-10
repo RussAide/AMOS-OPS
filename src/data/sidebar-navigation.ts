@@ -108,6 +108,11 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
   ]),
   group("my-work", "My Work", ListTodo, [
     link(
+      "my-work-ask-amos",
+      "Ask AMOS",
+      appRoutePath("workflows-intelligence-assistant"),
+    ),
+    link(
       "my-work-today",
       "Today’s work",
       appRoutePath("workflows-my-work-today"),
