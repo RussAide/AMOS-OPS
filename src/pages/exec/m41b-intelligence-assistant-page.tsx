@@ -11,6 +11,7 @@ import type {
   M41bDispositionSubmission,
   M41bGuidanceSubmission,
 } from "@/components/m41b/m41b-experience-model";
+import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/providers/trpc";
 
 function errorMessage(error: unknown): string | undefined {
@@ -41,7 +42,7 @@ function uniqueGuidance(
   ];
 }
 
-export function M41bIntelligenceAssistantPage() {
+function M41bSyntheticIntelligenceAssistantPage() {
   const [activeGuidance, setActiveGuidance] =
     useState<M41bGuidanceResponse | null>(null);
   const [latestRecommendation, setLatestRecommendation] =
@@ -235,6 +236,20 @@ export function M41bIntelligenceAssistantPage() {
       </div>
     </>
   );
+}
+
+export function M41bIntelligenceAssistantPage() {
+  const { workspace } = useAuth();
+
+  if (workspace === "operational") {
+    return (
+      <div className="space-y-6 bg-slate-50/40 px-4 py-6 md:px-6">
+        <M41bMedicalRecordPreview />
+      </div>
+    );
+  }
+
+  return <M41bSyntheticIntelligenceAssistantPage />;
 }
 
 export default M41bIntelligenceAssistantPage;
