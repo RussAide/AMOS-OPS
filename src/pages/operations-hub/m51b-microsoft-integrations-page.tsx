@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { M51BMicrosoftIntegrationsView } from "@/components/m51b/m51b-microsoft-integrations-view";
+import { SharePointBridgeStatusPanel } from "@/components/m51b/sharepoint-bridge-status-panel";
 import type { M51BScenarioResult } from "@/components/m51b/m51b-experience-model";
 import { trpc } from "@/providers/trpc";
 import { M51B_INTEGRATED_SCENARIO_ID } from "@contracts/m51b/integrated-scenario";
@@ -30,30 +31,32 @@ export function M51BMicrosoftIntegrationsPage() {
   });
 
   const refresh = async () => {
-    await Promise.all([
-      snapshotQuery.refetch(),
-      acceptanceQuery.refetch(),
-    ]);
+    await Promise.all([snapshotQuery.refetch(), acceptanceQuery.refetch()]);
   };
   const isLoading = snapshotQuery.isLoading || acceptanceQuery.isLoading;
   const isError = snapshotQuery.isError || acceptanceQuery.isError;
 
   return (
-    <M51BMicrosoftIntegrationsView
-      acceptance={acceptanceQuery.data ?? null}
-      errorMessage={
-        errorMessage(snapshotQuery.error) ?? errorMessage(acceptanceQuery.error)
-      }
-      isRefreshing={snapshotQuery.isFetching || acceptanceQuery.isFetching}
-      isRunningScenario={runScenario.isPending}
-      onRefresh={() => void refresh()}
-      onRunScenario={() =>
-        runScenario.mutate({ scenarioId: M51B_INTEGRATED_SCENARIO_ID })
-      }
-      scenarioResult={scenarioResult}
-      snapshot={snapshotQuery.data ?? null}
-      state={isLoading ? "loading" : isError ? "error" : "ready"}
-    />
+    <>
+      <div className="bg-slate-50 px-4 pt-6 md:px-6">
+        <SharePointBridgeStatusPanel />
+      </div>
+      <M51BMicrosoftIntegrationsView
+        acceptance={acceptanceQuery.data ?? null}
+        errorMessage={
+          errorMessage(snapshotQuery.error) ?? errorMessage(acceptanceQuery.error)
+        }
+        isRefreshing={snapshotQuery.isFetching || acceptanceQuery.isFetching}
+        isRunningScenario={runScenario.isPending}
+        onRefresh={() => void refresh()}
+        onRunScenario={() =>
+          runScenario.mutate({ scenarioId: M51B_INTEGRATED_SCENARIO_ID })
+        }
+        scenarioResult={scenarioResult}
+        snapshot={snapshotQuery.data ?? null}
+        state={isLoading ? "loading" : isError ? "error" : "ready"}
+      />
+    </>
   );
 }
 
