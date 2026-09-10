@@ -1,0 +1,59 @@
+name: Cypress Doctrine S01 — S8 Final Acceptance
+
+on:
+  push:
+    branches:
+      - sprint/cypress-doctrine-s01
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: S8 Security / Audit / Acceptance validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact sprint commit
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+
+      - name: Use pinned Node toolchain
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.14.0"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Strict lint
+        run: npm run lint:strict
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: S8 integrated security and acceptance tests
+        run: >-
+          npx vitest run
+          api/tests/s1-record-authority.test.ts
+          api/tests/s1-record-authority-access.test.ts
+          api/tests/s1-record-authority-service.test.ts
+          api/tests/s1-m2-authority-boundary.test.ts
+          api/tests/s1-record-authority-lineage.test.ts
+          api/tests/s2-sharepoint-backend-mapping.test.ts
+          api/tests/s2-sharepoint-graph-adapter.test.ts
+          api/tests/s2-sharepoint-authority-bridge.test.ts
+          api/tests/s3-ask-amos-medical-record-preview.test.ts
+          api/tests/s5-cypress-referral-acuity-rate.test.ts
+          api/tests/s6-cypress-admin-workforce-stability.test.ts
+          api/tests/s7-cypress-cwop-continuum-intelligence.test.ts
+          api/tests/s8-cypress-security-audit-acceptance.test.ts
+          --reporter=verbose
+
+      - name: Full repository test suite
+        run: npm run test
+
+      - name: Build
+        run: npm run build

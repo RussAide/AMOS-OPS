@@ -9,6 +9,7 @@ import { personaRouter } from "./routers/persona";
 import { hrRouter } from "./routers/hr";
 import { m1Router as workQueueRouter } from "./routers/m1";
 import { m2Router } from "./routers/m2";
+import { m2AuthorityRouter } from "./routers/m2-authority";
 import { m10Router } from "./routers/m10";
 import { m3Router } from "./routers/m3";
 import { m4Router } from "./routers/m4";
@@ -113,6 +114,14 @@ const nilRouter = m9Router;
 import { m8Router } from "./routers/m8";
 const workflowRouter = m8Router;
 
+// ─── S1 CONTROLLED M2 AUTHORITY BOUNDARY ───────────────────
+// Preserve every existing M2 procedure, but let the governed S1 router
+// override getById so document retrieval cannot bypass record authority.
+const controlledM2Router = createRouter({
+  ...m2Router._def.record,
+  ...m2AuthorityRouter._def.record,
+});
+
 // ─── ENTRA ID ──────────────────────────────────────────────
 const entraRouter = createRouter({
   status: adminQuery.query(() => ({
@@ -143,7 +152,7 @@ export const appRouter = createRouter({
   workflow: workflowRouter,
   msgraph: entraRouter,
   m1: workQueueRouter,
-  m2: m2Router,
+  m2: controlledM2Router,
   m3: m3Router,
   m5: m5Router,
   m13: m13Router,

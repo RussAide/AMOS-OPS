@@ -2,6 +2,11 @@ import type { M41bGuidanceResponse, M41bRecommendation } from "@contracts/m41b";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { M41bIntelligenceAssistantView } from "@/components/m41b/m41b-intelligence-assistant-view";
+import { M41bMedicalRecordPreview } from "@/components/m41b/m41b-medical-record-preview";
+import { M41bLaunchCommandPreview } from "@/components/m41b/m41b-launch-command-preview";
+import { M41bReferralAcuityRatePreview } from "@/components/m41b/m41b-referral-acuity-rate-preview";
+import { M41bAdminWorkforceStabilityPreview } from "@/components/m41b/m41b-admin-workforce-stability-preview";
+import { M41bCwopContinuumIntelligencePreview } from "@/components/m41b/m41b-cwop-continuum-intelligence-preview";
 import type {
   M41bDispositionSubmission,
   M41bGuidanceSubmission,
@@ -190,36 +195,45 @@ export function M41bIntelligenceAssistantPage() {
         : undefined;
 
   return (
-    <M41bIntelligenceAssistantView
-      activeGuidance={activeGuidance}
-      auditEvents={lineageQuery.data?.auditEvents ?? []}
-      completionEvidence={lineageQuery.data?.completionEvidence ?? []}
-      decisions={lineageQuery.data?.decisions ?? []}
-      errorMessage={combinedError}
-      guidanceHistory={guidanceHistory}
-      isRefreshing={workplanQuery.isFetching || lineageQuery.isFetching}
-      isSubmittingDisposition={recordDisposition.isPending}
-      isSubmittingGuidance={askAmos.isPending}
-      mutatingTaskId={pendingTaskId ?? null}
-      onAddEvidence={(taskId, summary) =>
-        addEvidence.mutate({
-          taskId,
-          evidenceRef: `SYNTH-M41B-UI-EVIDENCE-${crypto.randomUUID()}`,
-          summary,
-        })
-      }
-      onAsk={submitGuidance}
-      onCompleteTask={(taskId) => completeTask.mutate({ taskId })}
-      onDisposition={submitDisposition}
-      onEscalateTask={(taskId) => escalateTask.mutate({ taskId })}
-      onRefresh={() => void refreshGovernedState()}
-      onRouteSupervisor={routeSupervisor}
-      recommendations={recommendations}
-      requests={lineageQuery.data?.requests ?? []}
-      sources={lineageQuery.data?.sources ?? []}
-      state={isLoading ? "loading" : isError ? "error" : "ready"}
-      workplan={workplanQuery.data ?? null}
-    />
+    <>
+      <M41bIntelligenceAssistantView
+        activeGuidance={activeGuidance}
+        auditEvents={lineageQuery.data?.auditEvents ?? []}
+        completionEvidence={lineageQuery.data?.completionEvidence ?? []}
+        decisions={lineageQuery.data?.decisions ?? []}
+        errorMessage={combinedError}
+        guidanceHistory={guidanceHistory}
+        isRefreshing={workplanQuery.isFetching || lineageQuery.isFetching}
+        isSubmittingDisposition={recordDisposition.isPending}
+        isSubmittingGuidance={askAmos.isPending}
+        mutatingTaskId={pendingTaskId ?? null}
+        onAddEvidence={(taskId, summary) =>
+          addEvidence.mutate({
+            taskId,
+            evidenceRef: `SYNTH-M41B-UI-EVIDENCE-${crypto.randomUUID()}`,
+            summary,
+          })
+        }
+        onAsk={submitGuidance}
+        onCompleteTask={(taskId) => completeTask.mutate({ taskId })}
+        onDisposition={submitDisposition}
+        onEscalateTask={(taskId) => escalateTask.mutate({ taskId })}
+        onRefresh={() => void refreshGovernedState()}
+        onRouteSupervisor={routeSupervisor}
+        recommendations={recommendations}
+        requests={lineageQuery.data?.requests ?? []}
+        sources={lineageQuery.data?.sources ?? []}
+        state={isLoading ? "loading" : isError ? "error" : "ready"}
+        workplan={workplanQuery.data ?? null}
+      />
+      <div className="space-y-6 bg-slate-50/40 px-4 pb-8 md:px-6">
+        <M41bMedicalRecordPreview />
+        <M41bLaunchCommandPreview />
+        <M41bReferralAcuityRatePreview />
+        <M41bAdminWorkforceStabilityPreview />
+        <M41bCwopContinuumIntelligencePreview />
+      </div>
+    </>
   );
 }
 
