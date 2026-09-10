@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { M51BMicrosoftIntegrationsView } from "@/components/m51b/m51b-microsoft-integrations-view";
 import { SharePointBridgeStatusPanel } from "@/components/m51b/sharepoint-bridge-status-panel";
 import type { M51BScenarioResult } from "@/components/m51b/m51b-experience-model";
+import { runtimeConfig } from "@/config/runtime";
 import { trpc } from "@/providers/trpc";
 import { M51B_INTEGRATED_SCENARIO_ID } from "@contracts/m51b/integrated-scenario";
 
@@ -10,7 +11,7 @@ function errorMessage(error: unknown): string | undefined {
   return error instanceof Error ? error.message : undefined;
 }
 
-export function M51BMicrosoftIntegrationsPage() {
+function M51BEvaluationEvidence() {
   const [scenarioResult, setScenarioResult] =
     useState<M51BScenarioResult | null>(null);
   const snapshotQuery = trpc.m51b.getExperienceSnapshot.useQuery();
@@ -37,26 +38,30 @@ export function M51BMicrosoftIntegrationsPage() {
   const isError = snapshotQuery.isError || acceptanceQuery.isError;
 
   return (
-    <>
-      <div className="bg-slate-50 px-4 pt-6 md:px-6">
-        <SharePointBridgeStatusPanel />
-      </div>
-      <M51BMicrosoftIntegrationsView
-        acceptance={acceptanceQuery.data ?? null}
-        errorMessage={
-          errorMessage(snapshotQuery.error) ?? errorMessage(acceptanceQuery.error)
-        }
-        isRefreshing={snapshotQuery.isFetching || acceptanceQuery.isFetching}
-        isRunningScenario={runScenario.isPending}
-        onRefresh={() => void refresh()}
-        onRunScenario={() =>
-          runScenario.mutate({ scenarioId: M51B_INTEGRATED_SCENARIO_ID })
-        }
-        scenarioResult={scenarioResult}
-        snapshot={snapshotQuery.data ?? null}
-        state={isLoading ? "loading" : isError ? "error" : "ready"}
-      />
-    </>
+    <M51BMicrosoftIntegrationsView
+      acceptance={acceptanceQuery.data ?? null}
+      errorMessage={
+        errorMessage(snapshotQuery.error) ?? errorMessage(acceptanceQuery.error)
+      }
+      isRefreshing={snapshotQuery.isFetching || acceptanceQuery.isFetching}
+      isRunningScenario={runScenario.isPending}
+      onRefresh={() => void refresh()}
+      onRunScenario={() =>
+        runScenario.mutate({ scenarioId: M51B_INTEGRATED_SCENARIO_ID })
+      }
+      scenarioResult={scenarioResult}
+      snapshot={snapshotQuery.data ?? null}
+      state={isLoading ? "loading" : isError ? "error" : "ready"}
+    />
+  );
+}
+
+export function M51BMicrosoftIntegrationsPage() {
+  return (
+    <div className="min-h-full bg-slate-50 px-4 py-6 md:px-6">
+      <SharePointBridgeStatusPanel />
+      {runtimeConfig.evaluationMode ? <M51BEvaluationEvidence /> : null}
+    </div>
   );
 }
 
