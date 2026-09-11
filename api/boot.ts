@@ -20,7 +20,6 @@ import { createPublicRuntimeConfig } from "./runtime-mode";
 import { blockedProductionSyntheticProcedures } from "./lib/production-data-boundary";
 import { inheritResponseHeaders } from "./response-headers";
 import { createIdentityOperator, verifyOperatorRequest } from "./security/identity-operator";
-import { canonicalWebLocation } from "./canonical-web";
 import { loadRuntimeReleaseIdentity } from "./release-identity";
 import {
   diagnoseOperationalAlerts,
@@ -610,12 +609,10 @@ app.use("/api/trpc/*", async (c) => {
 app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 
 // ─── Canonical Web Surface ───────────────────────────────────
-// Netlify is the sole Production web surface. Railway remains the durable API
-// and redirects browser/deep-link traffic to the canonical site, preventing a
-// second embedded frontend artifact from drifting or rendering blank.
-if (env.isProduction) {
-  app.get("*", (c) => c.redirect(canonicalWebLocation(c.req.url), 308));
-} else if (fs.existsSync(DIST_DIR)) {
+// Railway serves the immutable frontend and backend from the same release.
+// Browser and deep-link traffic stay on the same Production origin as the API,
+// preventing divergent web artifacts and release drift.
+if (fs.existsSync(DIST_DIR)) {
   app.use("/*", serveStatic({ root: DIST_DIR }));
   app.get("*", (c) => {
     try {
