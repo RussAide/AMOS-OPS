@@ -1,12 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
+import { appRoutePath } from "@/data/app-route-registry";
 import { SIDEBAR_NAVIGATION } from "@/data/sidebar-navigation";
-import {
-  ASK_AMOS_LAUNCHER_PATH,
-  PageLayout,
-  shouldShowAskAmosLauncher,
-} from "./page-layout";
+import { PageLayout } from "./page-layout";
+
+const askAmosPath = appRoutePath("workflows-intelligence-assistant");
 
 function renderPage(path: string) {
   return renderToStaticMarkup(
@@ -20,31 +19,27 @@ function renderPage(path: string) {
 
 describe("Ask AMOS My Work navigation", () => {
   it("surfaces the launcher on both supported My Work landing routes", () => {
-    expect(shouldShowAskAmosLauncher("/workflows/my-work-today")).toBe(true);
-    expect(shouldShowAskAmosLauncher("/my-work-today")).toBe(true);
-
     for (const path of ["/workflows/my-work-today", "/my-work-today"]) {
       const markup = renderPage(path);
       expect(markup).toContain('data-testid="ask-amos-launcher"');
       expect(markup).toContain("Open Ask AMOS");
-      expect(markup).toContain(`href="${ASK_AMOS_LAUNCHER_PATH}"`);
+      expect(markup).toContain(`href="${askAmosPath}"`);
       expect(markup).toContain("w-full");
       expect(markup).toContain("md:w-auto");
     }
   });
 
   it("does not add the primary launcher outside the My Work landing page", () => {
-    expect(shouldShowAskAmosLauncher("/workflows/my-work-assigned")).toBe(false);
-    expect(
-      shouldShowAskAmosLauncher("/workflows/intelligence-assistant"),
-    ).toBe(false);
     expect(renderPage("/workflows/my-work-assigned")).not.toContain(
+      'data-testid="ask-amos-launcher"',
+    );
+    expect(renderPage(askAmosPath)).not.toContain(
       'data-testid="ask-amos-launcher"',
     );
   });
 
   it("keeps the launcher and existing sidebar entry on the canonical Ask AMOS route", () => {
-    expect(ASK_AMOS_LAUNCHER_PATH).toBe("/workflows/intelligence-assistant");
+    expect(askAmosPath).toBe("/workflows/intelligence-assistant");
 
     const myWork = SIDEBAR_NAVIGATION.find((node) => node.id === "my-work");
     expect(myWork?.type).toBe("group");
@@ -58,7 +53,7 @@ describe("Ask AMOS My Work navigation", () => {
     expect(askAmos).toMatchObject({
       type: "link",
       label: "Ask AMOS",
-      href: ASK_AMOS_LAUNCHER_PATH,
+      href: askAmosPath,
     });
   });
 });
