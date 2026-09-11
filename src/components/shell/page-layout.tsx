@@ -21,11 +21,11 @@ const pageVariants = {
   exit: { opacity: 0, y: -4 },
 };
 
-export const ASK_AMOS_LAUNCHER_PATH = appRoutePath(
+const ASK_AMOS_LAUNCHER_PATH = appRoutePath(
   "workflows-intelligence-assistant",
 );
 
-export function shouldShowAskAmosLauncher(path: string): boolean {
+function shouldShowAskAmosLauncher(path: string): boolean {
   return (
     path === appRoutePath("workflows-my-work-today") ||
     path === appRoutePath("my-work-today")
