@@ -1,0 +1,24 @@
+{
+  "product": "IntraLink Navigator",
+  "release": "v0.9",
+  "work_item": "Ask AMOS Action Import",
+  "status": "READY_FOR_PREVIEW_DEPLOYMENT",
+  "authoritative_sharepoint_package": "https://adolbi.sharepoint.com/sites/IntraLinkEnterprise/Shared%20Documents/04%20-%20Digital%20Presence/04%20IntraLink%20Enterprise%20Navigator/Web%20App%20v1/05%20Releases/IntraLink_Navigator_LIVE_v0_9_Ask_AMOS_Action_Import_Production.zip",
+  "sha256": "e98cf6df54219b9edb3d1f537733ff3f3ae4405eeec1914e465b0ebe69c35bb6",
+  "vercel_project": {
+    "name": "intralink-navigator-webapp-v1",
+    "project_id": "prj_K7c3hkDLgaBhr8Y1ftIJatsa7d3l",
+    "team_id": "team_vkMgJA1AHcV8s5buoNuCvQoG",
+    "production_aliases": [
+      "intralink-navigator-webapp-v1.vercel.app",
+      "intralink-navigator-webapp-v1-aideyanruss-2001.vercel.app"
+    ]
+  },
+  "controls": {
+    "sharepoint_is_system_of_record": true,
+    "duplicate_detection": true,
+    "user_approval_required_before_write": true,
+    "changes_permissions_or_retention": false
+  },
+  "deployment_gate": "Preview deploy and verify Navigator load, Microsoft 365 connection, My To-Do read, AMOS import detection, duplicate protection; then promote exact artifact to production."
+}
