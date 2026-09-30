@@ -1,10 +1,17 @@
-name: AMOS-OPS Evaluation Build CI
+name: AMOS-OPS Release Qualification CI
 
 on:
   push:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: amos-ops-qualification-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -23,145 +30,20 @@ jobs:
       - run: npm ci
       - run: npm run ${{ matrix.check }}
 
-  production:
-    name: Publish the matching Production pair
+  release-qualification:
+    name: Qualify exact source identity
     needs: verify
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: amos-production
-    permissions:
-      contents: read
-      statuses: write
     runs-on: ubuntu-latest
-    timeout-minutes: 35
-    concurrency:
-      group: amos-ops-production-main-pair
-      cancel-in-progress: true
-    env:
-      RELEASE_SHA: ${{ github.sha }}
-      RELEASE_ID: RAILWAY-GITHUB-${{ github.sha }}
-      RAILWAY_PUBLIC_ORIGIN: https://amos-ops-production.up.railway.app
-      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-      NETLIFY_SITE_ID: 53a02d95-9cd5-4d22-8c17-8ed2378b91e8
-
     steps:
-      - name: Check out the exact CI-approved main commit
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-          persist-credentials: false
-
-      - name: Use the pinned Node toolchain
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "24.14.0"
-          cache: npm
-
-      - name: Install the locked dependency graph
-        run: npm ci
-
-      - name: Build the matching frontend and backend
-        env:
-          VITE_AMOS_API_ORIGIN: https://amos-ops-production.up.railway.app
-        run: npm run build
-
-      - name: Verify the built runtime and all sidebar deep links
+      - name: Record qualified source identity
         run: |
-          npm run test:dms1:built-runtime
-          npm run test:sidebar:built-runtime
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          printf 'Qualified AMOS-OPS source: %s\n' "${GITHUB_SHA}"
 
-      - name: Seal the CI-approved GitHub identity into both artifacts
-        run: >-
-          node scripts/production-release-manifest.mjs
-          --release-id "$RELEASE_ID"
-          --release-sha "$RELEASE_SHA"
-
-      - name: Wait for Railway's connected-main deployment to match
-        run: >-
-          node scripts/main-paired-release.mjs wait-railway
-          --origin "$RAILWAY_PUBLIC_ORIGIN"
-          --manifest dist/release-manifest.json
-          --attempts 90
-          --delay-ms 10000
-
-      - name: Record Railway identity readiness
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh api --method POST
-          "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
-          -f state=success
-          -f context=amos-production-pair/railway-ready
-          -f description="Railway is healthy on the exact approved release identity"
-
-      - name: Publish the byte-matched frontend to the existing Netlify site
-        id: netlify
-        run: |
-          npx --yes netlify-cli@23.11.1 deploy \
-            --prod \
-            --dir dist/public \
-            --site "$NETLIFY_SITE_ID" \
-            --message "AMOS-OPS $RELEASE_ID $RELEASE_SHA" \
-            --json > "$RUNNER_TEMP/netlify-deploy.json"
-          node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          const deploy = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/netlify-deploy.json`, "utf8"));
-          const deployId = deploy.deploy_id ?? deploy.id ?? "";
-          const parsed = new URL(deploy.deploy_ssl_url ?? deploy.deploy_url ?? "");
-          if (!/^[a-f0-9]{24}$/.test(deployId) || !["http:", "https:"].includes(parsed.protocol) || !parsed.hostname.endsWith(".netlify.app")) {
-            throw new Error("Netlify did not return an exact deploy identity.");
-          }
-          parsed.protocol = "https:";
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `deploy_id=${deployId}\n`);
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `deploy_origin=${parsed.origin}\n`);
-          NODE
-
-      - name: Verify the Netlify Production deployment record
-        env:
-          NETLIFY_DEPLOY_ID: ${{ steps.netlify.outputs.deploy_id }}
-          NETLIFY_DEPLOY_ORIGIN: ${{ steps.netlify.outputs.deploy_origin }}
-        run: |
-          curl --fail --silent --show-error \
-            --retry 6 --retry-all-errors --retry-delay 3 \
-            --connect-timeout 10 --max-time 30 \
-            --header "Authorization: Bearer $NETLIFY_AUTH_TOKEN" \
-            "https://api.netlify.com/api/v1/deploys/${NETLIFY_DEPLOY_ID}" \
-            > "$RUNNER_TEMP/netlify-deploy-proof.json"
-          node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          const deploy = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/netlify-deploy-proof.json`, "utf8"));
-          const expectedTitle = `AMOS-OPS ${process.env.RELEASE_ID} ${process.env.RELEASE_SHA}`;
-          const exact = deploy.id === process.env.NETLIFY_DEPLOY_ID
-            && deploy.site_id === process.env.NETLIFY_SITE_ID
-            && deploy.state === "ready"
-            && deploy.context === "production"
-            && deploy.title === expectedTitle
-            && deploy.deploy_ssl_url === process.env.NETLIFY_DEPLOY_ORIGIN
-            && typeof deploy.published_at === "string"
-            && deploy.error_message === null
-            && Array.isArray(deploy.required) && deploy.required.length === 0
-            && Array.isArray(deploy.required_functions) && deploy.required_functions.length === 0
-            && Array.isArray(deploy.required_edge_functions) && deploy.required_edge_functions.length === 0;
-          if (!exact) throw new Error("Netlify Production deploy proof did not match the exact release.");
-          NODE
-
-      - name: Record paired Production completion
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh api --method POST
-          "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
-          -f state=success
-          -f context=amos-production-pair/complete
-          -f description="Railway identity and the Netlify Production deploy are exact and ready"
-
-      - name: Record paired Production failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh api --method POST
-          "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
-          -f state=failure
-          -f context=amos-production-pair/failed
-          -f description="The automatic paired Production release failed closed"
+# Production publishing is intentionally absent.
+# A push or merge to main qualifies source only; it is not Production authorization.
