@@ -202,7 +202,7 @@ export function UniversalFooterNav() {
               type="button"
               className={`amos-universal-footer__item ${item.active ? "is-active" : ""}`}
               aria-current={item.active ? "page" : undefined}
-              aria-label={item.fullLabel}
+              aria-label={`${item.fullLabel} mobile navigation`}
               title={item.fullLabel}
               onClick={() => go(item.href)}
             >
