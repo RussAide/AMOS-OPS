@@ -158,12 +158,12 @@ export function UniversalFooterNav() {
     workspaceLink,
   ]);
 
-  const primaryHrefs = new Set(primary.map((item) => item.href));
   const secondaryLinks = useMemo(() => {
+    const primaryHrefs = new Set(primary.map((item) => item.href));
     return dedupeByHref(flattenSidebarLinks(navigation)).filter(
       (link) => !primaryHrefs.has(link.href),
     );
-  }, [navigation, primaryHrefs]);
+  }, [navigation, primary]);
 
   const moreActive =
     !primary.some((item) => item.active) &&
@@ -181,10 +181,6 @@ export function UniversalFooterNav() {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [moreOpen]);
-
-  useEffect(() => {
-    setMoreOpen(false);
-  }, [location.pathname]);
 
   const go = (href: string) => {
     navigate(href);
