@@ -8,7 +8,6 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { runtimeConfig } from "@/config/runtime";
 import { ROLE_DEFINITIONS } from "@/constants/roles";
 import { useAuth } from "@/hooks/use-auth";
 import {
