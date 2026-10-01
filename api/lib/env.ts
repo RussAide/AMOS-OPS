@@ -9,6 +9,7 @@ import {
   loadStorageEncryptionConfiguration,
   type StorageMigrationMode,
 } from "../security/storage-encryption";
+import { withRailwayStagingOrigin } from "../cors-policy";
 
 export const APP_ENVIRONMENTS = [
   "development",
@@ -340,10 +341,15 @@ export function buildEnvironmentConfig(
       ? isDevelopment || isDemo
       : enabled(source.ALLOW_SELF_REGISTRATION);
   const mfaPolicy = parseMfaPolicy(source.MFA_POLICY);
-  const allowedOrigins = (source.AMOS_ALLOWED_ORIGINS || "")
+  const configuredAllowedOrigins = (source.AMOS_ALLOWED_ORIGINS || "")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
+  const allowedOrigins = withRailwayStagingOrigin(
+    configuredAllowedOrigins,
+    appEnvironment,
+    source.RAILWAY_PUBLIC_DOMAIN,
+  );
 
   if (source.VITE_AMOS_EVALUATION_MODE !== undefined) {
     throw new Error(
@@ -479,7 +485,7 @@ export function buildEnvironmentConfig(
         `${appEnvironment} requires DEPLOYMENT_APPROVAL_ID and DEPLOYMENT_CHANGE_REFERENCE.`,
       );
     }
-    if (!allowedOrigins.length) {
+    if (!configuredAllowedOrigins.length) {
       throw new Error(
         `${appEnvironment} requires AMOS_ALLOWED_ORIGINS with exact origins; wildcard CORS is prohibited.`,
       );
