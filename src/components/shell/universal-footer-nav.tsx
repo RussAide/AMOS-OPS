@@ -153,6 +153,7 @@ export function UniversalFooterNav() {
               key={item.id}
               type="button"
               aria-current={active ? "page" : undefined}
+              aria-label={`${item.label} mobile navigation`}
               className="flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-xl border-none px-1 text-[10px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7EC8CA] focus-visible:ring-offset-1"
               style={{
                 color: active ? "#123C3A" : "#64748B",
@@ -171,6 +172,7 @@ export function UniversalFooterNav() {
           type="button"
           aria-haspopup="dialog"
           aria-expanded={moreOpen}
+          aria-label="More mobile navigation"
           className="flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-xl border-none px-1 text-[10px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7EC8CA] focus-visible:ring-offset-1"
           style={{
             color: moreOpen || moreIsActive ? "#123C3A" : "#64748B",
