@@ -9,9 +9,9 @@ import {
 } from "../services/m41c/m41b-adapter";
 
 describe("M4.1C Ask AMOS and five-cadence clinical workplan integration", () => {
-  it("extends the authoritative M4.1B workplan for all 36 roles and all five cadences", () => {
+  it("extends the authoritative M4.1B workplan for all 38 roles and all five cadences", () => {
     const plans = ALL_ROLES.map(buildM41cClinicalWorkplan);
-    expect(plans).toHaveLength(36);
+    expect(plans).toHaveLength(38);
     for (const plan of plans) {
       expect(plan.representedCadences).toEqual(M41B_CADENCES);
       expect(plan.allFiveCadences).toBe(true);
