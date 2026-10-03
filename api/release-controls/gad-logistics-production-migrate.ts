@@ -9,6 +9,7 @@ import {
   planMigrations,
   validateDatabaseIntegrity,
 } from "../data-lifecycle";
+import { isStrictlyAdditiveMigrationSql } from "./strictly-additive-migration";
 
 const TARGET_MIGRATION = "0011_gad_logistics_r1.sql";
 const TARGET_CHECKSUM =
@@ -103,11 +104,7 @@ async function main(): Promise<void> {
   if (sha256(Buffer.from(targetSql, "utf8")) !== TARGET_CHECKSUM) {
     throw new Error("TARGET_MIGRATION_CHECKSUM_MISMATCH");
   }
-  if (
-    /\b(DROP|ALTER|DELETE|UPDATE|INSERT|REPLACE|VACUUM|ATTACH|DETACH)\b/i.test(
-      targetSql,
-    )
-  ) {
+  if (!isStrictlyAdditiveMigrationSql(targetSql)) {
     throw new Error("TARGET_MIGRATION_NOT_STRICTLY_ADDITIVE");
   }
 

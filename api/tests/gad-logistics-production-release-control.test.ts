@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { isStrictlyAdditiveMigrationSql } from "../release-controls/strictly-additive-migration";
 
 const root = path.resolve(process.cwd());
 
@@ -44,5 +45,38 @@ describe("GAD Logistics Production release control", () => {
     expect(control).toContain("createDatabaseBackup");
     expect(control).toContain("applyPendingMigrations");
     expect(control).toContain("validateDatabaseIntegrity");
+    expect(control).toContain("isStrictlyAdditiveMigrationSql");
+  });
+
+  it("accepts the actual additive Logistics migration including foreign-key actions", () => {
+    const migration = fs.readFileSync(
+      path.join(root, "db", "migrations", "0011_gad_logistics_r1.sql"),
+      "utf8",
+    );
+
+    expect(migration).toContain("ON UPDATE no action ON DELETE restrict");
+    expect(isStrictlyAdditiveMigrationSql(migration)).toBe(true);
+  });
+
+  it.each([
+    "DELETE FROM gad_logistics_requests;",
+    "UPDATE gad_logistics_requests SET status = 'closed';",
+    "INSERT INTO gad_logistics_requests (id) VALUES ('x');",
+    "ALTER TABLE gad_logistics_requests ADD COLUMN unsafe text;",
+    "DROP TABLE gad_logistics_requests;",
+    "REPLACE INTO gad_logistics_requests (id) VALUES ('x');",
+    "VACUUM;",
+    "ATTACH DATABASE 'other.db' AS other;",
+    "DETACH DATABASE other;",
+  ])("rejects non-additive SQL: %s", (sql) => {
+    expect(isStrictlyAdditiveMigrationSql(sql)).toBe(false);
+  });
+
+  it("rejects a destructive statement appended after an allowed CREATE", () => {
+    expect(
+      isStrictlyAdditiveMigrationSql(
+        "CREATE TABLE safe_table (id text); DELETE FROM safe_table;",
+      ),
+    ).toBe(false);
   });
 });
