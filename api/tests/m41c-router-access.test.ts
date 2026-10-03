@@ -52,7 +52,7 @@ describe("M4.1C authenticated application router and access policy", () => {
     ).rejects.toThrow("Unauthorized");
   });
 
-  it("admits all 36 roles to the synthetic shell and endpoint-level controls", () => {
+  it("admits all 38 roles to the synthetic shell and endpoint-level controls", () => {
     const procedures = [
       ["getExperienceSnapshot", "query"],
       ["getMyClinicalWorkplan", "query"],
