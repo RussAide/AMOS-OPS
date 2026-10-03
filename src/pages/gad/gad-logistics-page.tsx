@@ -61,6 +61,7 @@ export default function GadLogisticsPage() {
   const [note, setNote] = useState("");
   const [closureSummary, setClosureSummary] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [queueEvaluationTime] = useState(() => Date.now());
 
   const { data: requests = [], isLoading } =
     trpc.gad.listLogisticsRequests.useQuery();
@@ -124,7 +125,7 @@ export default function GadLogisticsPage() {
           ["critical", "urgent"].includes(request.priority) ||
           ["escalated", "pending_dependency"].includes(request.status) ||
           (request.need_by &&
-            Date.parse(request.need_by) < Date.now() &&
+            Date.parse(request.need_by) < queueEvaluationTime &&
             !["closed", "cancelled", "declined"].includes(request.status)),
       );
     if (queue === "verification")
@@ -132,7 +133,7 @@ export default function GadLogisticsPage() {
         (request) => request.status === "ready_for_verification",
       );
     return requests;
-  }, [queue, requests, user?.id]);
+  }, [queue, queueEvaluationTime, requests, user?.id]);
 
   const selected =
     (detail && selectedId === detail.id ? detail : undefined) ??
