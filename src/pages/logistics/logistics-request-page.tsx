@@ -314,7 +314,7 @@ export default function LogisticsRequestPage() {
                   </div>
                   <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">
                     <span>Priority: {request.priority}</span>
-                    <span>Service: {request.service_type.replaceAll("_", " ")}</span>
+                    <span>Service: {request.service_type.replace(/_/g, " ")}</span>
                     {request.need_by && <span>Need by: {request.need_by}</span>}
                     <span>
                       Submitted: {new Date(request.created_at).toLocaleDateString()}
