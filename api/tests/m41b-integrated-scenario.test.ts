@@ -8,7 +8,7 @@ describe("M4.1B integrated operational acceptance", () => {
     expect(result.exitGate).toBe(true);
     expect(result.criteria).toHaveLength(10);
     expect(result.criteria.every((criterion) => criterion.passed)).toBe(true);
-    expect(result.workplans).toHaveLength(36);
+    expect(result.workplans).toHaveLength(38);
     expect(result.productionActionsBlocked).toBe(true);
     expect(result.evidenceClass).toBe("synthetic_demo");
     expect(result.requests).toHaveLength(result.guidance.length);
