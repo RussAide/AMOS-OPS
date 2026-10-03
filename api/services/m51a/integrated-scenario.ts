@@ -451,7 +451,7 @@ export async function runM51AIntegratedScenario(
       "M5.1A-AC-06",
       hub.criteria[3]?.passed === true &&
         hub.criteria[4]?.passed === true &&
-        hub.roleProjections.length === 36 &&
+        hub.roleProjections.length === 38 &&
         authoritativeCitations.length === 2 &&
         hub.roleProjections.every((projection) => projection.permissionTrimmed),
       15,
