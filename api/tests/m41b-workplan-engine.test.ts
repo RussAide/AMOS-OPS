@@ -12,8 +12,8 @@ import {
 } from "../services/m41b/workplan-engine";
 
 describe("M4.1B deterministic five-cadence workplan engine", () => {
-  it("builds the same authoritative five-cadence plan for all 36 canonical roles", () => {
-    expect(ALL_ROLES).toHaveLength(36);
+  it("builds the same authoritative five-cadence plan for all 38 canonical roles", () => {
+    expect(ALL_ROLES).toHaveLength(38);
     const canonicalSourceIds = new Set(
       M41B_SOURCE_REGISTER.map((source) => source.id),
     );
