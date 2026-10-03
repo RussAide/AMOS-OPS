@@ -10,7 +10,7 @@ import {
 describe("M4.2 shared document and knowledge role foundation", () => {
   it("builds one deterministic synthetic context for every canonical role", () => {
     const contexts = buildAllM42ActorContexts();
-    expect(contexts).toHaveLength(36);
+    expect(contexts).toHaveLength(38);
     expect(contexts.map((context) => context.role)).toEqual(ALL_ROLES);
     expect(contexts.every((context) => context.actorId.startsWith("SYNTH-M42-ACTOR-"))).toBe(true);
     expect(contexts.every((context) => context.synthetic)).toBe(true);
