@@ -6,13 +6,13 @@ import {
 } from "../services/m51a/pilot/security-evaluation";
 
 describe("M5.1A T1-T4 and divisional security evaluation", () => {
-  it("evaluates all 36 canonical roles across all four tiers and divisions", () => {
+  it("evaluates all 38 canonical roles across all four tiers and divisions", () => {
     const result = runM51aSecurityEvaluation();
-    expect(result.rolesEvaluated).toBe(36);
+    expect(result.rolesEvaluated).toBe(38);
     expect(result.tiersEvaluated).toEqual(["T1", "T2", "T3", "T4"]);
     expect(result.divisionsEvaluated).toEqual(["bhc", "eo", "gad", "gro"]);
     expect(result.resources).toHaveLength(6);
-    expect(result.decisionCount).toBe(36 * 6 * 5);
+    expect(result.decisionCount).toBe(38 * 6 * 5);
     expect(result.accepted).toBe(true);
   });
 
