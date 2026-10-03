@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type FormEvent, useMemo, useState } from "react";
 import { ClipboardList, CheckCircle2, AlertTriangle, Send } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 
@@ -93,7 +93,7 @@ export default function LogisticsRequestPage() {
     onError: (error) => setMessage(error.message),
   });
 
-  const submit = (event: React.FormEvent) => {
+  const submit = (event: FormEvent) => {
     event.preventDefault();
     setMessage(null);
     createRequest.mutate({
