@@ -188,6 +188,7 @@ import MarketingSiteReviewPage from "@/pages/exec/marketing-site-review-page";
 
 // ─── GAD / LOGISTICS ───
 import GadDashboardPage from "@/pages/gad/gad-dashboard-page";
+import GadLogisticsPage from "@/pages/gad/gad-logistics-page";
 import LogisticsRequestPage from "@/pages/logistics/logistics-request-page";
 
 // ─── ANALYTICS ───
@@ -1355,7 +1356,7 @@ function AppShellAuthenticated({ children }: AppShellProps) {
                 />
                 <Route
                   path={appRoutePath("gad-transportation-logistics")}
-                  element={<GadDashboardPage initialTab="transportation" />}
+                  element={<GadLogisticsPage />}
                 />
                 <Route
                   path={appRoutePath("gad-regulatory-support")}
