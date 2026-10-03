@@ -46,7 +46,7 @@ describe("M5.1A Hub A06 integrated architecture scenario", () => {
       metadataFields: 18,
       handlingClasses: 6,
       intranetDestinations: 11,
-      canonicalRolesEvaluated: 36,
+      canonicalRolesEvaluated: 38,
       authoritativeGuidanceItems: 2,
       productionRows: 0,
       liveExternalWrites: 0,
@@ -55,7 +55,7 @@ describe("M5.1A Hub A06 integrated architecture scenario", () => {
 
   it("keeps all role projections permission-trimmed and free of physical URLs", () => {
     const result = runM51aHubArchitectureScenario();
-    expect(result.roleProjections).toHaveLength(36);
+    expect(result.roleProjections).toHaveLength(38);
     for (const projection of result.roleProjections) {
       expect(projection.permissionTrimmed).toBe(true);
       expect(projection.unknownRouteDisclosure).toBe(false);

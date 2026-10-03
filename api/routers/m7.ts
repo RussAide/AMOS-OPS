@@ -3,10 +3,77 @@ import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery, authedQuery, adminQuery, auditLog } from "../middleware";
 import { randomUUID } from "crypto";
 import { assertSyntheticScenarioRuntime, env } from "../lib/env";
+import type { LogisticsRequestPatch } from "../services/gad-logistics";
 
 // ═══════════════════════════════════════════════════════════════
 // M7: GAD — General Administration
 // ═══════════════════════════════════════════════════════════════
+
+const LOGISTICS_MANAGER_ROLES = new Set([
+  "logistics-manager",
+  "super-admin",
+  "managing-director",
+  "administrator",
+]);
+
+const LOGISTICS_OPERATOR_ROLES = new Set([
+  ...LOGISTICS_MANAGER_ROLES,
+  "logistics-coordinator",
+]);
+
+function assertLogisticsManagerRole(role: string): void {
+  if (!LOGISTICS_MANAGER_ROLES.has(role)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Logistics Manager authority is required for this action.",
+    });
+  }
+}
+
+function assertLogisticsOperatorRole(role: string): void {
+  if (!LOGISTICS_OPERATOR_ROLES.has(role)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "An authorized Logistics role is required for this action.",
+    });
+  }
+}
+
+async function requireActiveLogisticsUser(
+  userId: string,
+  expectedRole: "logistics-manager" | "logistics-coordinator",
+) {
+  const { sqlite } = await import("../queries/connection");
+  const row = sqlite
+    .prepare(
+      `SELECT id, first_name AS firstName, last_name AS lastName, role,
+              is_active AS isActive, access_status AS accessStatus
+       FROM users
+       WHERE id = ?`,
+    )
+    .get(userId) as
+    | {
+        id: string;
+        firstName: string;
+        lastName: string;
+        role: string;
+        isActive: number;
+        accessStatus: string;
+      }
+    | undefined;
+  if (
+    !row ||
+    row.role !== expectedRole ||
+    row.isActive !== 1 ||
+    !["cleared", "training"].includes(row.accessStatus)
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Selected user is not an active ${expectedRole.replace(/-/g, " ")}.`,
+    });
+  }
+  return row;
+}
 
 // ─── Seed Data ─────────────────────────────────────────────
 
@@ -821,6 +888,358 @@ export const m7Router = createRouter({
       upcomingDue, pendingCorrective, avgScore, byType,
     };
   }),
+
+  // ════════════════════════════════════════════════════════════
+  // GAD LOGISTICS R1 - DURABLE MANAGEMENT QUEUES
+  // ════════════════════════════════════════════════════════════
+
+  listLogisticsRequests: authedQuery
+    .input(
+      z
+        .object({
+          status: z.string().optional(),
+          priority: z.string().optional(),
+          originDivision: z.enum(["eo", "gad", "bhc", "gro"]).optional(),
+          assigneeId: z.string().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input }) => {
+      const { listLogisticsRequests } = await import("../services/gad-logistics");
+      let requests = listLogisticsRequests();
+      if (input?.status)
+        requests = requests.filter((request) => request.status === input.status);
+      if (input?.priority)
+        requests = requests.filter(
+          (request) => request.priority === input.priority,
+        );
+      if (input?.originDivision)
+        requests = requests.filter(
+          (request) => request.origin_division === input.originDivision,
+        );
+      if (input?.assigneeId)
+        requests = requests.filter(
+          (request) =>
+            request.logistics_manager_id === input.assigneeId ||
+            request.logistics_coordinator_id === input.assigneeId,
+        );
+      return requests;
+    }),
+
+  getLogisticsRequest: authedQuery
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ input }) => {
+      const { getLogisticsRequest, listLogisticsEvents } =
+        await import("../services/gad-logistics");
+      const request = getLogisticsRequest(input.id);
+      if (!request) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Logistics request not found.",
+        });
+      }
+      return { ...request, events: listLogisticsEvents(request.id) };
+    }),
+
+  listAssignableLogisticsStaff: authedQuery.query(async () => {
+    const { sqlite } = await import("../queries/connection");
+    return sqlite
+      .prepare(
+        `SELECT id, first_name AS firstName, last_name AS lastName, role, department
+         FROM users
+         WHERE role IN ('logistics-manager', 'logistics-coordinator')
+           AND is_active = 1
+           AND access_status IN ('cleared', 'training')
+         ORDER BY role, last_name, first_name`,
+      )
+      .all() as Array<{
+        id: string;
+        firstName: string;
+        lastName: string;
+        role: "logistics-manager" | "logistics-coordinator";
+        department: string | null;
+      }>;
+  }),
+
+  logisticsKPIs: authedQuery.query(async () => {
+    const { logisticsKpis } = await import("../services/gad-logistics");
+    return logisticsKpis();
+  }),
+
+  updateLogisticsRequest: authedQuery
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        status: z.enum([
+          "in_progress",
+          "pending_dependency",
+          "ready_for_verification",
+        ]),
+        dependencyType: z.string().max(160).nullable().optional(),
+        dependencyOwner: z.string().max(240).nullable().optional(),
+        evidenceReference: z.string().max(1000).nullable().optional(),
+        linkedWorkOrderId: z.string().max(120).nullable().optional(),
+        linkedProcurementRequestId: z.string().max(120).nullable().optional(),
+        linkedVendorId: z.string().max(120).nullable().optional(),
+        linkedSafetyRecordId: z.string().max(120).nullable().optional(),
+        note: z.string().max(1200).nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      assertLogisticsOperatorRole(ctx.user.role);
+      const { getLogisticsRequest, updateLogisticsRequest } =
+        await import("../services/gad-logistics");
+      const request = getLogisticsRequest(input.id);
+      if (!request) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Logistics request not found.",
+        });
+      }
+      if (["closed", "declined", "cancelled"].includes(request.status)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "A terminal Logistics request cannot be changed.",
+        });
+      }
+      if (
+        ctx.user.role === "logistics-coordinator" &&
+        request.logistics_coordinator_id !== ctx.user.id
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Coordinator updates are limited to assigned Logistics requests.",
+        });
+      }
+      if (
+        input.status === "ready_for_verification" &&
+        !input.evidenceReference
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Completion evidence is required before verification.",
+        });
+      }
+
+      const completedAt =
+        input.status === "ready_for_verification"
+          ? new Date().toISOString()
+          : undefined;
+      const eventType =
+        input.status === "pending_dependency"
+          ? "dependency_recorded"
+          : input.status === "ready_for_verification"
+            ? "evidence_linked"
+            : "status_changed";
+      const updated = updateLogisticsRequest({
+        id: request.id,
+        patch: {
+          status: input.status,
+          dependencyType: input.dependencyType,
+          dependencyOwner: input.dependencyOwner,
+          linkedWorkOrderId: input.linkedWorkOrderId,
+          linkedProcurementRequestId: input.linkedProcurementRequestId,
+          linkedVendorId: input.linkedVendorId,
+          linkedSafetyRecordId: input.linkedSafetyRecordId,
+          completedAt,
+          verificationStatus:
+            input.status === "ready_for_verification" ? "pending" : undefined,
+        },
+        event: {
+          eventType,
+          actorUserId: ctx.user.id,
+          actorRole: ctx.user.role,
+          note: input.note ?? null,
+          evidenceReference: input.evidenceReference ?? null,
+          toStatus: input.status,
+        },
+      });
+      auditLog({
+        action: "m7:updateLogisticsRequest",
+        actor: ctx.user.email,
+        resource: `logistics:${request.request_number}`,
+        details: input.status,
+      });
+      return updated;
+    }),
+
+  approveLogisticsDisposition: authedQuery
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        action: z.enum([
+          "triage",
+          "assign",
+          "escalate",
+          "return_for_information",
+          "close",
+          "decline",
+          "cancel",
+        ]),
+        priority: z
+          .enum(["routine", "priority", "urgent", "critical"])
+          .optional(),
+        managerId: z.string().uuid().nullable().optional(),
+        coordinatorId: z.string().uuid().nullable().optional(),
+        dependencyType: z.string().max(160).nullable().optional(),
+        dependencyOwner: z.string().max(240).nullable().optional(),
+        escalationLevel: z.number().int().min(1).max(5).optional(),
+        verificationOwnerId: z.string().max(120).nullable().optional(),
+        closureSummary: z.string().max(1600).nullable().optional(),
+        note: z.string().max(1200).nullable().optional(),
+        evidenceReference: z.string().max(1000).nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      assertLogisticsManagerRole(ctx.user.role);
+      const { getLogisticsRequest, updateLogisticsRequest } =
+        await import("../services/gad-logistics");
+      const request = getLogisticsRequest(input.id);
+      if (!request) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Logistics request not found.",
+        });
+      }
+      if (["closed", "declined", "cancelled"].includes(request.status)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "A terminal Logistics request cannot be changed.",
+        });
+      }
+
+      const now = new Date().toISOString();
+      let status = request.status;
+      let eventType:
+        | "triaged"
+        | "assigned"
+        | "escalated"
+        | "information_requested"
+        | "closed"
+        | "status_changed"
+        | "cancelled" = "status_changed";
+      const patch: LogisticsRequestPatch = {};
+
+      if (input.action === "triage") {
+        status = "triage";
+        eventType = "triaged";
+        patch.priority = input.priority ?? request.priority;
+        if (ctx.user.role === "logistics-manager") {
+          patch.logisticsManagerId = ctx.user.id;
+        } else if (input.managerId) {
+          await requireActiveLogisticsUser(input.managerId, "logistics-manager");
+          patch.logisticsManagerId = input.managerId;
+        }
+      } else if (input.action === "assign") {
+        if (!input.coordinatorId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Coordinator assignment is required.",
+          });
+        }
+        await requireActiveLogisticsUser(
+          input.coordinatorId,
+          "logistics-coordinator",
+        );
+        let managerId = request.logistics_manager_id;
+        if (ctx.user.role === "logistics-manager") managerId = ctx.user.id;
+        else if (input.managerId) {
+          await requireActiveLogisticsUser(input.managerId, "logistics-manager");
+          managerId = input.managerId;
+        }
+        if (!managerId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "A Logistics Manager must own the request before assignment.",
+          });
+        }
+        status = "assigned";
+        eventType = "assigned";
+        patch.logisticsManagerId = managerId;
+        patch.logisticsCoordinatorId = input.coordinatorId;
+        patch.assignedAt = now;
+      } else if (input.action === "escalate") {
+        status = "escalated";
+        eventType = "escalated";
+        patch.escalationLevel =
+          input.escalationLevel ??
+          Math.min(Math.max(request.escalation_level + 1, 1), 5);
+        patch.dependencyType = input.dependencyType ?? request.dependency_type;
+        patch.dependencyOwner = input.dependencyOwner ?? request.dependency_owner;
+      } else if (input.action === "return_for_information") {
+        if (!input.note) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "A reason is required when returning a request for information.",
+          });
+        }
+        status = "returned_for_information";
+        eventType = "information_requested";
+      } else if (input.action === "close") {
+        if (request.status !== "ready_for_verification") {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Only requests ready for verification can be closed.",
+          });
+        }
+        if (request.verification_status !== "verified") {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Requester verification is required before closure.",
+          });
+        }
+        if (!input.closureSummary) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "A closure summary is required.",
+          });
+        }
+        status = "closed";
+        eventType = "closed";
+        patch.closureSummary = input.closureSummary;
+        patch.closedAt = now;
+        patch.verificationOwnerId =
+          input.verificationOwnerId ?? request.verification_owner_id;
+      } else if (input.action === "decline") {
+        if (!input.note) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "A decline reason is required.",
+          });
+        }
+        status = "declined";
+      } else if (input.action === "cancel") {
+        if (!input.note) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "A cancellation reason is required.",
+          });
+        }
+        status = "cancelled";
+        eventType = "cancelled";
+      }
+
+      patch.status = status;
+      const updated = updateLogisticsRequest({
+        id: request.id,
+        patch,
+        event: {
+          eventType,
+          actorUserId: ctx.user.id,
+          actorRole: ctx.user.role,
+          note: input.note ?? null,
+          evidenceReference: input.evidenceReference ?? null,
+          toStatus: status,
+        },
+      });
+      auditLog({
+        action: "m7:approveLogisticsDisposition",
+        actor: ctx.user.email,
+        resource: `logistics:${request.request_number}`,
+        details: input.action,
+      });
+      return updated;
+    }),
 
   // ════════════════════════════════════════════════════════════
   // DASHBOARD KPIs

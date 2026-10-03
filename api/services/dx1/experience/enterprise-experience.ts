@@ -676,7 +676,7 @@ export function validateDx1ExperienceGovernanceResult(
   if (
     !result.acceptedModules.operationsHubAccepted ||
     result.acceptedModules.intranetDestinations !== 11 ||
-    result.acceptedModules.canonicalRolesEvaluated !== 36 ||
+    result.acceptedModules.canonicalRolesEvaluated !== 38 ||
     !result.acceptedModules.workplanAssistantAccepted ||
     result.acceptedModules.governedGuidanceIntents !== 7 ||
     !result.acceptedModules.changeControlAccepted ||
@@ -713,7 +713,7 @@ export function runDx1ExperienceGovernanceStream(): Dx1ExperienceGovernanceResul
       [
         "DX1-01-A1-OPERATIONS-HUB-ACCEPTED",
         "DX1-01-A2-ELEVEN-WORKSPACES-CONFIGURED",
-        "DX1-01-A3-THIRTY-SIX-ROLES-EVALUATED",
+        "DX1-01-A3-THIRTY-EIGHT-ROLES-EVALUATED",
         "DX1-01-A4-FIVE-PERSONAS-ROUTED",
         "DX1-01-A5-ASSIGNED-WORK-PATHS-VISIBLE",
         "DX1-01-A6-PERMISSION-TRIMMED-NO-PHYSICAL-URL",

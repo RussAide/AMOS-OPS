@@ -186,8 +186,10 @@ import MgmaScorecardPage from "@/pages/exec/mgma-scorecard-page";
 import StrategicProjectsHubPage from "@/pages/exec/strategic-projects-hub-page";
 import MarketingSiteReviewPage from "@/pages/exec/marketing-site-review-page";
 
-// ─── GAD ───
+// ─── GAD / LOGISTICS ───
 import GadDashboardPage from "@/pages/gad/gad-dashboard-page";
+import GadLogisticsPage from "@/pages/gad/gad-logistics-page";
+import LogisticsRequestPage from "@/pages/logistics/logistics-request-page";
 
 // ─── ANALYTICS ───
 import AnalyticsPage from "@/pages/analytics-page";
@@ -1337,7 +1339,8 @@ function AppShellAuthenticated({ children }: AppShellProps) {
                   element={<MarketingSiteReviewPage />}
                 />
 
-                {/* ─── GAD ─── */}
+                {/* ─── GAD / LOGISTICS ─── */}
+                <Route path={appRoutePath("logistics")} element={<LogisticsRequestPage />} />
                 <Route path={appRoutePath("gad")} element={<GadDashboardPage />} />
                 <Route
                   path={appRoutePath("gad-facilities-work-orders")}
@@ -1353,7 +1356,7 @@ function AppShellAuthenticated({ children }: AppShellProps) {
                 />
                 <Route
                   path={appRoutePath("gad-transportation-logistics")}
-                  element={<GadDashboardPage initialTab="transportation" />}
+                  element={<GadLogisticsPage />}
                 />
                 <Route
                   path={appRoutePath("gad-regulatory-support")}

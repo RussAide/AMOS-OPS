@@ -52,7 +52,7 @@ describe("M5.1A Hub A04 permission-trimmed intranet map", () => {
       routes,
       createSyntheticM51aHubTopology(),
     );
-    expect(projections).toHaveLength(36);
+    expect(projections).toHaveLength(38);
     expect(projections.map((projection) => projection.role)).toEqual(ALL_ROLES);
     for (const projection of projections) {
       const allowed = new Set(projection.routes.map((route) => route.code));

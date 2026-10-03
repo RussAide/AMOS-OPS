@@ -62,6 +62,7 @@ const PRIVILEGED_ROLES = new Set([
   "hr-compliance-officer",
   "revenue-cycle-manager",
   "facilities-manager",
+  "logistics-manager",
   "gro-administrator",
   "program-director",
   "bhc-director",

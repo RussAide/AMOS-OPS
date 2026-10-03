@@ -37,6 +37,8 @@ export const ROLE_TIER_BY_ROLE: Record<UserRole, RoleTier> = {
   "billing-specialist": "T4",
   "training-coordinator": "T3",
   "facilities-manager": "T3",
+  "logistics-manager": "T3",
+  "logistics-coordinator": "T4",
   "gro-administrator": "T2",
   "program-director": "T2",
   "shift-supervisor": "T3",
@@ -450,7 +452,7 @@ export function authorizeAccess(
     return decision(
       false,
       "DENY_UNKNOWN_ROLE",
-      "Role is not in the canonical 36-role Enterprise Role Registry.",
+      "Role is not in the canonical 38-role Enterprise Role Registry.",
     );
 
   const claimFailure = validateClaims(subject, role);
@@ -762,6 +764,7 @@ export const PROCEDURE_ROOT_ACCESS: Readonly<
   m29: { domain: "knowledge" },
   persona: { domain: "knowledge" },
   notifications: { domain: "self-service" },
+  logistics: { domain: "self-service" },
   msgraph: {
     domain: "admin",
     division: "eo",
@@ -879,6 +882,7 @@ const CLIENT_ROUTE_ACCESS: readonly [
 ][] = [
   ["/home", { domain: "dashboard" }],
   ["/operations-hub", { domain: "self-service" }],
+  ["/logistics", { domain: "self-service" }],
   ["/my-work-today", { domain: "self-service" }],
   ["/my-shift", { domain: "self-service" }],
   ["/meetings-escalations", { domain: "self-service" }],

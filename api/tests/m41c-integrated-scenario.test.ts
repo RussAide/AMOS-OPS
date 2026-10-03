@@ -46,7 +46,7 @@ describe("M4.1C integrated acceptance scenario", () => {
   it("covers every role and all five workplan cadences without exposing live actions", () => {
     const result = runM41cIntegratedScenario();
 
-    expect(result.workplans).toHaveLength(36);
+    expect(result.workplans).toHaveLength(38);
     for (const workplan of result.workplans) {
       expect(workplan.representedCadences).toEqual(M41B_CADENCES);
       expect(workplan.productionActionsBlocked).toBe(true);

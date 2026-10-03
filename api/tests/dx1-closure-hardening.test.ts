@@ -179,8 +179,8 @@ describe("DX.1 independent-review hardening", () => {
     const files = inventory.collectDx1SourceFiles(process.cwd());
     const coverage = inventory.verifyDx1DatabaseSourceCoverage(files);
 
-    expect(coverage.databaseSourceFileCount).toBe(23);
-    expect(coverage.databaseMigrationFileCount).toBe(13);
+    expect(coverage.databaseSourceFileCount).toBe(24);
+    expect(coverage.databaseMigrationFileCount).toBe(14);
     expect(coverage.databaseFiles).toContain("db/schema.ts");
     expect(coverage.databaseFiles).toContain("db/current-schema.sql");
     expect(coverage.databaseFiles).toContain("db/relations.ts");

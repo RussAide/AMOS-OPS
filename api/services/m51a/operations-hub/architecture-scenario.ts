@@ -221,11 +221,11 @@ export function runM51aHubArchitectureScenario(): M51aHubArchitectureScenarioRes
       "M5.1A-HUB-04",
       routeValidationErrors.length === 0 &&
         architecture.intranetRoutes.length === 11 &&
-        roleProjections.length === 36 &&
+        roleProjections.length === 38 &&
         allRolesHaveCoreRoutes &&
         unknownRoleDenied,
       8,
-      "The eleven-area stable logical intranet map is evaluated for all thirty-six canonical roles and denies unknown roles without disclosing targets.",
+      "The eleven-area stable logical intranet map is evaluated for all thirty-eight canonical roles and denies unknown roles without disclosing targets.",
       ["M51A_HUB_INTRANET_MAP"],
     ),
     criterion(

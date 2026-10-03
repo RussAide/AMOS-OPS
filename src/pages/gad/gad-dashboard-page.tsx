@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { appRoutePath } from "@/data/app-route-registry";
 import { useQueryClient } from "@tanstack/react-query";
 import { trpc } from "@/providers/trpc";
 import {
@@ -471,6 +473,7 @@ function parseSafetyChecklist(value: string): SafetyChecklistItem[] {
 export function GADDashboardPage({
   initialTab = "overview",
 }: GADDashboardPageProps) {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<GadDashboardTab>(initialTab);
   const [woFilter, setWoFilter] = useState<string>("all");
   const [vendorFilter, setVendorFilter] = useState<string>("all");
@@ -750,6 +753,10 @@ export function GADDashboardPage({
           <button
             key={tab.key}
             onClick={() => {
+              if (tab.key === "transportation") {
+                navigate(appRoutePath("gad-transportation-logistics"));
+                return;
+              }
               setActiveTab(tab.key);
               setDetailView(null);
             }}

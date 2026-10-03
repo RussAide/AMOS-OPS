@@ -113,6 +113,12 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
       appRoutePath("workflows-intelligence-assistant"),
     ),
     link(
+      "my-work-logistics-requests",
+      "Logistics requests",
+      appRoutePath("logistics"),
+      appRoutePath("workflows"),
+    ),
+    link(
       "my-work-today",
       "Today’s work",
       appRoutePath("workflows-my-work-today"),

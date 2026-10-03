@@ -45,7 +45,7 @@ describe("M4.1B immutable workplan and guidance runtime", () => {
     const first = initializeM41bRuntime(db, CONTROL);
     const second = initializeM41bRuntime(db);
     expect(second.runId).toBe(first.runId);
-    expect(first.roleCount).toBe(36);
+    expect(first.roleCount).toBe(38);
     expect(first.cadenceCount).toBe(5);
     expect(
       db.prepare("SELECT COUNT(*) AS count FROM m41b_scenario_runs").get(),
@@ -56,7 +56,7 @@ describe("M4.1B immutable workplan and guidance runtime", () => {
           "SELECT COUNT(*) AS count FROM m41b_workplan_snapshots WHERE is_current=1",
         )
         .get(),
-    ).toEqual({ count: 36 });
+    ).toEqual({ count: 38 });
 
     const frontline = getM41bWorkplan("rcs-day", db);
     expect(Object.keys(frontline.briefs)).toEqual([

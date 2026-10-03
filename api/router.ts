@@ -54,6 +54,7 @@ import { trainingRouter } from "./routers/training";
 import { formsRouter } from "./routers/forms";
 import { emailRouter } from "./routers/email";
 import { regulatoryFrameworkRouter } from "./routers/regulatory-framework";
+import { logisticsRouter } from "./routers/logistics";
 import { authRouter } from "./routers/auth";
 import { getDb } from "./queries/connection";
 import {
@@ -180,6 +181,7 @@ export const appRouter = createRouter({
   m29: m29Router,
   analytics: m10Router,
   notifications: notificationsRouter,
+  logistics: logisticsRouter,
   persona: personaRouter,
   mhtcm: mhtcmRouter,
   ccmg: ccmgRouter,

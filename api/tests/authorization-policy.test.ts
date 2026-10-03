@@ -35,13 +35,13 @@ const identity = (
 });
 
 describe("M1.1 deny-by-default authorization", () => {
-  it("maps all 36 canonical roles to exactly one tier and authoritative division", () => {
-    expect(ALL_ROLES).toHaveLength(36);
-    expect(new Set(ALL_ROLES)).toHaveLength(36);
+  it("maps all 38 canonical roles to exactly one tier and authoritative division", () => {
+    expect(ALL_ROLES).toHaveLength(38);
+    expect(new Set(ALL_ROLES)).toHaveLength(38);
     expect(Object.keys(ROLE_TIER_BY_ROLE).sort()).toEqual(
       [...ALL_ROLES].sort(),
     );
-    expect(ENTERPRISE_ROLE_REGISTRY).toHaveLength(36);
+    expect(ENTERPRISE_ROLE_REGISTRY).toHaveLength(38);
     for (const role of ALL_ROLES) {
       const definition = getRoleDef(role);
       expect(["T1", "T2", "T3", "T4"]).toContain(ROLE_TIER_BY_ROLE[role]);

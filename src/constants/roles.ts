@@ -1,7 +1,7 @@
 /**
  * AMOS-OPS Canonical Role Definitions v4.2
  * Source: AMOS-OPS Enterprise Architecture Thesis v4.2
- * Total: 36 roles across 4 Operating Divisions
+ * Total: 38 roles across 4 Operating Divisions
  * Division Model: Profit Center (GRO, BHC) | Corporate Office (EO, GAD)
  * Last Updated: 2026-07-05
  */
@@ -26,8 +26,10 @@ export type UserRole =
   | "revenue-cycle-manager"
   | "billing-specialist"
   | "training-coordinator"
-  // ── General Administration support role (CTR-018) ─────
+  // ── General Administration support roles (CTR-018 / Logistics R1) ─────
   | "facilities-manager"
+  | "logistics-manager"
+  | "logistics-coordinator"
   // ── GRO Residential Division ───────────────────────────
   | "gro-administrator"
   | "program-director"
@@ -73,8 +75,10 @@ export const ALL_ROLES: UserRole[] = [
   "revenue-cycle-manager",
   "billing-specialist",
   "training-coordinator",
-  // General Administration support (CTR-018)
+  // General Administration support (CTR-018 / Logistics R1)
   "facilities-manager",
+  "logistics-manager",
+  "logistics-coordinator",
   // GRO
   "gro-administrator",
   "program-director",
@@ -122,7 +126,7 @@ export interface RoleDef {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ═── Role Definitions (36 roles) ───────────────────────────────
+// ═── Role Definitions (38 roles) ───────────────────────────────
 // ═══════════════════════════════════════════════════════════════
 
 export const ROLE_DEFINITIONS: RoleDef[] = [
@@ -222,6 +226,26 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
     divisionCategory: "corporate-office",
     description: "Facility operations, maintenance oversight, safety inspections, environmental compliance.",
     clearances: ["operations", "compliance"],
+  },
+  {
+    id: "logistics-manager",
+    label: "Logistics Manager",
+    badgeColor: "#245C5A",
+    department: "Logistics Management",
+    division: "gad",
+    divisionCategory: "corporate-office",
+    description: "GAD logistics leadership: triage, prioritization, assignment, escalation, resource coordination, and closure governance.",
+    clearances: ["operations"],
+  },
+  {
+    id: "logistics-coordinator",
+    label: "Logistics Coordinator",
+    badgeColor: "#397C78",
+    department: "Logistics Coordination",
+    division: "gad",
+    divisionCategory: "corporate-office",
+    description: "GAD logistics execution: scheduling, tracking, vendor and delivery follow-through, evidence capture, and readiness verification.",
+    clearances: ["operations"],
   },
 
   // ───────────────────────────────────────────────────────────
@@ -504,7 +528,7 @@ export const ROLE_DEFINITIONS: RoleDef[] = [
 ];
 
 // ═══════════════════════════════════════════════════════════════
-// ═── Permission Matrix (derived from 36-role registry) ─────────
+// ═── Permission Matrix (derived from 38-role registry) ─────────
 // ═══════════════════════════════════════════════════════════════
 
 export interface Permissions {
@@ -641,6 +665,32 @@ export const PERMISSION_MATRIX: Record<UserRole, Permissions> = {
     canViewExecutive: false,
     canSupervise: true, canClearPersonnel: false,
     canViewReports: true, canViewOnboarding: false,
+    canManageDocuments: true,
+  },
+  "logistics-manager": {
+    canViewHR: false, canEditHR: false,
+    canViewCompliance: true, canEditCompliance: false,
+    canViewClinical: false, canEditClinical: false,
+    canViewRevenue: false, canEditRevenue: false,
+    canViewGRO: true, canEditGRO: false,
+    canViewOperations: true, canEditOperations: true,
+    canViewAdmin: false, canEditAdmin: false,
+    canViewExecutive: false,
+    canSupervise: true, canClearPersonnel: false,
+    canViewReports: true, canViewOnboarding: false,
+    canManageDocuments: true,
+  },
+  "logistics-coordinator": {
+    canViewHR: false, canEditHR: false,
+    canViewCompliance: false, canEditCompliance: false,
+    canViewClinical: false, canEditClinical: false,
+    canViewRevenue: false, canEditRevenue: false,
+    canViewGRO: false, canEditGRO: false,
+    canViewOperations: true, canEditOperations: true,
+    canViewAdmin: false, canEditAdmin: false,
+    canViewExecutive: false,
+    canSupervise: false, canClearPersonnel: false,
+    canViewReports: false, canViewOnboarding: false,
     canManageDocuments: true,
   },
   // ── GRO Residential ────────────────────────────────────
@@ -999,7 +1049,7 @@ export const PERMISSION_MATRIX: Record<UserRole, Permissions> = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// ═── Nav Visibility (derived from 36-role registry) ────────────
+// ═── Nav Visibility (derived from 38-role registry) ────────────
 // ═══════════════════════════════════════════════════════════════
 
 export const ROLE_NAV_VISIBILITY: Record<UserRole, Record<string, boolean>> = {
@@ -1014,6 +1064,8 @@ export const ROLE_NAV_VISIBILITY: Record<UserRole, Record<string, boolean>> = {
   "billing-specialist":     { dashboard: true, clinical: true, revenue: true, qa: false, hr: false, gro: false, bhc: false, gad: true, executive: false, nil: false, admin: false, documents: true, knowledge: true, audit: false },
   "training-coordinator":   { dashboard: true, clinical: false, revenue: false, qa: true, hr: true, gro: false, bhc: false, gad: true, executive: false, nil: false, admin: false, documents: true, knowledge: true, audit: true },
   "facilities-manager":     { dashboard: true, clinical: false, revenue: false, qa: false, hr: false, gro: true, bhc: false, gad: true, executive: false, nil: false, admin: false, documents: true, knowledge: true, audit: false },
+  "logistics-manager":      { dashboard: true, clinical: false, revenue: false, qa: false, hr: false, gro: true, bhc: false, gad: true, executive: false, nil: false, admin: false, documents: true, knowledge: true, audit: true },
+  "logistics-coordinator":  { dashboard: true, clinical: false, revenue: false, qa: false, hr: false, gro: false, bhc: false, gad: true, executive: false, nil: false, admin: false, documents: true, knowledge: true, audit: false },
   // ── GRO Residential ────────────────────────────────────
   "gro-administrator":      { dashboard: true, clinical: true, revenue: false, qa: true, hr: true, gro: true, bhc: false, gad: true, executive: false, nil: false, admin: false, documents: true, knowledge: true, audit: true },
   "program-director":       { dashboard: true, clinical: true, revenue: true, qa: true, hr: true, gro: true, bhc: true, gad: true, executive: true, nil: true, admin: true, documents: true, knowledge: true, audit: true },

@@ -34,7 +34,7 @@ describe("M5.1A integrated Operations Hub experience", () => {
       stableObjects: 7,
       connectorOperationDecisions: 99,
       pilotItems: 12,
-      securityDecisions: 1080,
+      securityDecisions: 1140,
       securityViolations: 0,
       liveGraphCalls: 0,
       liveMicrosoftWrites: 0,
@@ -103,7 +103,7 @@ describe("M5.1A integrated Operations Hub experience", () => {
     });
     expect(result.security).toMatchObject({
       accepted: true,
-      decisionCount: 1080,
+      decisionCount: 1140,
       metadataOnlyViolations: 0,
       excludedModeViolations: 0,
       staleSuppressionViolations: 0,
