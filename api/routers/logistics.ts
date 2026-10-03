@@ -6,6 +6,7 @@ import {
   getLogisticsRequest,
   listLogisticsEvents,
   listLogisticsRequestsForRequester,
+  updateLogisticsRequest,
 } from "../services/gad-logistics";
 import { getRoleDef, isUserRole } from "../../src/constants/roles";
 
@@ -90,5 +91,52 @@ export const logisticsRouter = createRouter({
         ...request,
         events: listLogisticsEvents(request.id),
       };
+    }),
+
+  recordMyVerification: publicQuery
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        outcome: z.enum(["verified", "returned"]),
+        note: z.string().max(1200).nullable().optional(),
+      }),
+    )
+    .mutation(({ ctx, input }) => {
+      const request = getLogisticsRequest(input.id);
+      if (!request || request.requester_user_id !== ctx.user.id) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Logistics request not found.",
+        });
+      }
+      if (request.status !== "ready_for_verification") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Only requests ready for verification can be verified.",
+        });
+      }
+      const updated = updateLogisticsRequest({
+        id: request.id,
+        patch: {
+          verificationOwnerId: ctx.user.id,
+          verificationStatus: input.outcome,
+          status: input.outcome === "returned" ? "in_progress" : request.status,
+        },
+        event: {
+          eventType: "verification_recorded",
+          actorUserId: ctx.user.id,
+          actorRole: ctx.user.role,
+          note: input.note ?? null,
+          toStatus:
+            input.outcome === "returned" ? "in_progress" : request.status,
+        },
+      });
+      auditLog({
+        action: "logistics_request_verification",
+        actor: ctx.user.email,
+        resource: request.id,
+        details: input.outcome,
+      });
+      return updated;
     }),
 });
