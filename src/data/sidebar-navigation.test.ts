@@ -58,6 +58,7 @@ describe("department-grouped sidebar navigation", () => {
         label: "My Work",
         children: [
           "Ask AMOS",
+          "Logistics requests",
           "Today’s work",
           "Assigned tasks",
           "Items requiring attention",
