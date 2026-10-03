@@ -10,8 +10,6 @@ import {
   validateDatabaseIntegrity,
 } from "../data-lifecycle";
 
-const EXPECTED_CANDIDATE_SHA =
-  "40fd8ae70b72a6fcb21b074a508ea9eb95635c6a";
 const TARGET_MIGRATION = "0011_gad_logistics_r1.sql";
 const TARGET_CHECKSUM =
   "65a4f1b76dfa105cc8b9b451b7bc66cd5a1850ccf820bf78f0414eccc0615764";
@@ -93,9 +91,6 @@ async function main(): Promise<void> {
   const releaseManifest = JSON.parse(
     fs.readFileSync(releaseManifestPath, "utf8"),
   ) as { commitSha?: string; releaseId?: string };
-  if (releaseManifest.commitSha !== EXPECTED_CANDIDATE_SHA) {
-    throw new Error("RELEASE_SHA_MISMATCH");
-  }
   if (
     !process.env.AMOS_PRODUCTION_RELEASE_ID ||
     releaseManifest.releaseId !== process.env.AMOS_PRODUCTION_RELEASE_ID
@@ -161,6 +156,12 @@ async function main(): Promise<void> {
     target.checksum !== TARGET_CHECKSUM
   ) {
     throw new Error("TARGET_MIGRATION_PLAN_MISMATCH");
+  }
+  if (
+    target.state === "pending" &&
+    releaseManifest.releaseId !== "AMOS-OPS-GAD-LOGISTICS-R1-RC3-20261003"
+  ) {
+    throw new Error("MIGRATION_RELEASE_ID_NOT_AUTHORIZED");
   }
 
   fs.mkdirSync(backupRoot, { recursive: true });
