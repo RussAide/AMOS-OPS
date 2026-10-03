@@ -27,12 +27,12 @@ describe("GAD Logistics Production release control", () => {
       "api/release-controls/gad-logistics-production-migrate.ts",
     );
     expect(packageJson.scripts["start:production-release"]).toBe(
-      "node dist/gad-logistics-production-migrate.js && npm run start",
+      "node dist/release-controls/gad-logistics-production-migrate.js && npm run start",
     );
     expect(stage).toContain(
       'startCommand = "npm run start:production-release"',
     );
-    expect(stage).toContain('"dist/gad-logistics-production-migrate.js"');
+    expect(stage).toContain('"dist/release-controls/gad-logistics-production-migrate.js"');
 
     expect(control).toContain('"0011_gad_logistics_r1.sql"');
     expect(control).toContain(
