@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   AlertTriangle,
-  CheckCircle2,
   Clock3,
   ClipboardList,
   Link2,
@@ -213,7 +212,7 @@ export default function GadLogisticsPage() {
             </p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-            Role: <span className="font-semibold">{currentRole.replaceAll("-", " ")}</span>
+            Role: <span className="font-semibold">{currentRole.replace(/-/g, " ")}</span>
           </div>
         </div>
 
@@ -356,7 +355,7 @@ export default function GadLogisticsPage() {
                   </p>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
                     <span>Origin: {selected.origin_division.toUpperCase()}</span>
-                    <span>Service: {selected.service_type.replaceAll("_", " ")}</span>
+                    <span>Service: {selected.service_type.replace(/_/g, " ")}</span>
                     <span>Priority: {selected.priority}</span>
                     <span>Verification: {selected.verification_status}</span>
                     {selected.location && (
