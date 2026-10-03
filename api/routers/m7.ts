@@ -954,7 +954,13 @@ export const m7Router = createRouter({
            AND access_status IN ('cleared', 'training')
          ORDER BY role, last_name, first_name`,
       )
-      .all(),
+      .all() as Array<{
+        id: string;
+        firstName: string;
+        lastName: string;
+        role: "logistics-manager" | "logistics-coordinator";
+        department: string | null;
+      }>,
   ),
 
   logisticsKPIs: authedQuery.query(() => logisticsKpis()),
