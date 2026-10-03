@@ -20,6 +20,24 @@ function exactConfiguredOrigin(value: string): string | null {
   return normalized === candidate ? normalized : null;
 }
 
+export function withRailwayStagingOrigin(
+  allowedOrigins: readonly string[],
+  appEnvironment: string,
+  railwayPublicDomain: string | undefined,
+): string[] {
+  const result = [...allowedOrigins];
+  if (appEnvironment !== "staging") return result;
+
+  const domain = railwayPublicDomain?.trim();
+  if (!domain) return result;
+
+  const railwayOrigin = exactConfiguredOrigin(`https://${domain}`);
+  if (railwayOrigin && !result.includes(railwayOrigin)) {
+    result.push(railwayOrigin);
+  }
+  return result;
+}
+
 export function evaluateCorsOrigin(
   requestOrigin: string | undefined,
   requestUrl: string,
