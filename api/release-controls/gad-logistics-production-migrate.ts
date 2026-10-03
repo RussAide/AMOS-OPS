@@ -111,7 +111,7 @@ async function main(): Promise<void> {
     throw new Error("TARGET_MIGRATION_NOT_STRICTLY_ADDITIVE");
   }
 
-  let readonly = openLifecycleDatabase(databasePath, { readonly: true });
+  const readonly = openLifecycleDatabase(databasePath, { readonly: true });
   let plan;
   let appliedRecords;
   try {
