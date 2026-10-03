@@ -24,6 +24,8 @@ export const users = sqliteTable("users", {
       "billing-specialist",
       "training-coordinator",
       "facilities-manager",
+      "logistics-manager",
+      "logistics-coordinator",
       // GRO Residential
       "gro-administrator",
       "program-director",
@@ -4463,6 +4465,112 @@ export const vendorContracts = sqliteTable("vendor_contracts", {
   notes: text("notes"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
+});
+
+// ─── GAD Logistics R1: Logistics Support Requests ─────────
+
+export const gadLogisticsRequests = sqliteTable("gad_logistics_requests", {
+  id: text("id").primaryKey(),
+  requestNumber: text("request_number").notNull().unique(),
+  originDivision: text("origin_division", {
+    enum: ["eo", "gad", "bhc", "gro"],
+  }).notNull(),
+  originDepartment: text("origin_department"),
+  requesterUserId: text("requester_user_id").notNull(),
+  requesterRole: text("requester_role").notNull(),
+  facilityId: text("facility_id"),
+  location: text("location"),
+  serviceType: text("service_type", {
+    enum: [
+      "facilities",
+      "procurement",
+      "inventory",
+      "vendor",
+      "transportation",
+      "equipment",
+      "technology",
+      "workforce_training",
+      "safety_emergency",
+      "regulatory_support",
+      "other",
+    ],
+  }).notNull(),
+  title: text("title").notNull(),
+  requirement: text("requirement").notNull(),
+  priority: text("priority", {
+    enum: ["routine", "priority", "urgent", "critical"],
+  })
+    .notNull()
+    .default("routine"),
+  needBy: text("need_by"),
+  logisticsManagerId: text("logistics_manager_id"),
+  logisticsCoordinatorId: text("logistics_coordinator_id"),
+  status: text("status", {
+    enum: [
+      "submitted",
+      "triage",
+      "assigned",
+      "in_progress",
+      "ready_for_verification",
+      "closed",
+      "returned_for_information",
+      "pending_dependency",
+      "escalated",
+      "declined",
+      "cancelled",
+    ],
+  })
+    .notNull()
+    .default("submitted"),
+  dependencyType: text("dependency_type"),
+  dependencyOwner: text("dependency_owner"),
+  escalationLevel: integer("escalation_level").notNull().default(0),
+  linkedWorkOrderId: text("linked_work_order_id"),
+  linkedProcurementRequestId: text("linked_procurement_request_id"),
+  linkedVendorId: text("linked_vendor_id"),
+  linkedSafetyRecordId: text("linked_safety_record_id"),
+  verificationOwnerId: text("verification_owner_id"),
+  verificationStatus: text("verification_status", {
+    enum: ["not_required", "pending", "verified", "returned"],
+  })
+    .notNull()
+    .default("pending"),
+  closureSummary: text("closure_summary"),
+  assignedAt: text("assigned_at"),
+  completedAt: text("completed_at"),
+  closedAt: text("closed_at"),
+  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+  updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
+});
+
+export const gadLogisticsEvents = sqliteTable("gad_logistics_events", {
+  id: text("id").primaryKey(),
+  requestId: text("request_id")
+    .notNull()
+    .references(() => gadLogisticsRequests.id, { onDelete: "restrict" }),
+  sequence: integer("sequence").notNull(),
+  eventType: text("event_type", {
+    enum: [
+      "submitted",
+      "triaged",
+      "assigned",
+      "status_changed",
+      "information_requested",
+      "dependency_recorded",
+      "escalated",
+      "evidence_linked",
+      "verification_recorded",
+      "closed",
+      "cancelled",
+    ],
+  }).notNull(),
+  actorUserId: text("actor_user_id").notNull(),
+  actorRole: text("actor_role").notNull(),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status"),
+  note: text("note"),
+  evidenceReference: text("evidence_reference"),
+  occurredAt: text("occurred_at").$defaultFn(() => new Date().toISOString()),
 });
 
 // ═══════════════════════════════════════════════════════════════
