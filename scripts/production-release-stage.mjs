@@ -56,7 +56,7 @@ export function assembleStage(root, output) {
     "dist/public/index.html",
     "dist/release-manifest.json",
     "dist/public/release-manifest.json",
-    "dist/gad-logistics-production-migrate.js",
+    "dist/release-controls/gad-logistics-production-migrate.js",
     "db",
     "docs",
     "accepted-baselines",
