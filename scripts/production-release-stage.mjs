@@ -37,6 +37,7 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
+startCommand = "npm run start:production-release"
 healthcheckPath = "/api/health/ready"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
@@ -55,6 +56,7 @@ export function assembleStage(root, output) {
     "dist/public/index.html",
     "dist/release-manifest.json",
     "dist/public/release-manifest.json",
+    "dist/gad-logistics-production-migrate.js",
     "db",
     "docs",
     "accepted-baselines",
