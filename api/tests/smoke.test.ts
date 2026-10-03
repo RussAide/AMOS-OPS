@@ -2,13 +2,13 @@ import { describe, it, expect } from "vitest";
 
 // ─── Role System Tests ─────────────────────────────────────
 
-describe("Role System (36 canonical roles)", async () => {
+describe("Role System (38 canonical roles)", async () => {
   // Dynamic import to handle module resolution
   const rolesModule = await import("../../src/constants/roles");
 
-  it("should have exactly 36 unique roles", () => {
-    expect(rolesModule.ALL_ROLES).toHaveLength(36);
-    expect(new Set(rolesModule.ALL_ROLES).size).toBe(36);
+  it("should have exactly 38 unique roles", () => {
+    expect(rolesModule.ALL_ROLES).toHaveLength(38);
+    expect(new Set(rolesModule.ALL_ROLES).size).toBe(38);
   });
 
   it("should have super-admin as first role", () => {
