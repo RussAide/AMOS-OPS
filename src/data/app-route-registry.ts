@@ -138,6 +138,7 @@ export const APP_ROUTE_REGISTRY = [
     path: "/knowledge/document-intelligence",
   },
   { id: "operations-hub", path: "/operations-hub" },
+  { id: "logistics", path: "/logistics" },
   {
     id: "operations-hub-microsoft-integrations",
     path: "/operations-hub/microsoft-integrations",
