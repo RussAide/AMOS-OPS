@@ -311,7 +311,7 @@ export function runM41cIntegratedScenario(): M41cAcceptanceScenarioResult {
     "M4.1C-13": criterion(
       "M4.1C-13",
       [
-        assertion("ALL-ROLES", "All thirty-six enterprise roles received governed clinical workplan context.", workplans.length, workplans.length === 36),
+        assertion("ALL-ROLES", "All thirty-eight enterprise roles received governed clinical workplan context.", workplans.length, workplans.length === 38),
         assertion("ALL-FIVE-CADENCES", "Daily, weekly, monthly, quarterly, and annual cadences are present for every role.", exactAcceptance.allFiveCadences),
       ],
       workplans.flatMap((workplan) => M41B_CADENCES.flatMap((cadence) => workplan.briefs[cadence].items.map((item) => item.id))),
