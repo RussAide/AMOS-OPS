@@ -104,7 +104,8 @@
     "report:dx1:qa": "node scripts/dx1-run-qa.mjs --root .. --output ../evidence",
     "package:dx1": "node scripts/dx1-seal-package.mjs --root .. --output ../package",
     "report:m1.1:login": "vitest run api/tests/login-evidence.test.ts --reporter=verbose",
-    "report:m1.1:baseline": "vitest run api/tests/baseline-adoption-evidence.test.ts --reporter=verbose"
+    "report:m1.1:baseline": "vitest run api/tests/baseline-adoption-evidence.test.ts --reporter=verbose",
+    "start:production-release": "node dist/gad-logistics-production-migrate.js && npm run start"
   },
   "dependencies": {
     "@hono/node-server": "^1.14.3",
