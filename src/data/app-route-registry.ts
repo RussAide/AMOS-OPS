@@ -117,6 +117,7 @@ export const APP_ROUTE_REGISTRY = [
   { id: "executive-mgma", path: "/executive/mgma" },
   { id: "executive-strategic-projects", path: "/executive/strategic-projects" },
   { id: "executive-marketing-review", path: "/executive/marketing-review" },
+  { id: "logistics", path: "/logistics" },
   { id: "gad", path: "/gad" },
   { id: "gad-facilities-work-orders", path: "/gad/facilities-work-orders" },
   { id: "gad-procurement-vendors", path: "/gad/procurement-vendors" },
@@ -138,7 +139,6 @@ export const APP_ROUTE_REGISTRY = [
     path: "/knowledge/document-intelligence",
   },
   { id: "operations-hub", path: "/operations-hub" },
-  { id: "logistics", path: "/logistics" },
   {
     id: "operations-hub-microsoft-integrations",
     path: "/operations-hub/microsoft-integrations",
