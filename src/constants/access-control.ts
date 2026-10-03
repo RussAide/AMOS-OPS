@@ -37,6 +37,8 @@ export const ROLE_TIER_BY_ROLE: Record<UserRole, RoleTier> = {
   "billing-specialist": "T4",
   "training-coordinator": "T3",
   "facilities-manager": "T3",
+  "logistics-manager": "T3",
+  "logistics-coordinator": "T4",
   "gro-administrator": "T2",
   "program-director": "T2",
   "shift-supervisor": "T3",
