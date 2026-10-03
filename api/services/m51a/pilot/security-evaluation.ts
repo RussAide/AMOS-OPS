@@ -381,7 +381,7 @@ export function runM51aSecurityEvaluation(): M51aSecurityEvaluationResult {
     [...new Set(actors.map((actor) => actor.divisionId))].sort() as DivisionId[],
   );
   const accepted =
-    actors.length === 36 &&
+    actors.length === 38 &&
     tiersEvaluated.length === 4 &&
     divisionsEvaluated.length === 4 &&
     decisions.length === actors.length * RESOURCES.length * M51A_SECURITY_ACTIONS.length &&
