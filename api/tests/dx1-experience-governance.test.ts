@@ -53,7 +53,7 @@ describe("DX.1 enterprise experience and governance verification", () => {
     expect(runDx1ExperienceGovernanceStream().acceptedModules).toMatchObject({
       operationsHubAccepted: true,
       intranetDestinations: 11,
-      canonicalRolesEvaluated: 36,
+      canonicalRolesEvaluated: 38,
       workplanAssistantAccepted: true,
       governedGuidanceIntents: 7,
       changeControlAccepted: true,
