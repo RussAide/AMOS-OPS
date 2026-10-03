@@ -141,6 +141,10 @@ function getRoleRedirectPath(role: string): string {
     case "hr-director":
     case "hr-compliance-officer":
       return "/hr";
+    case "facilities-manager":
+    case "logistics-manager":
+    case "logistics-coordinator":
+      return "/gad";
     case "chart-auditor":
       return "/qa";
     case "super-admin":
