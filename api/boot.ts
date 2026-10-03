@@ -13,7 +13,7 @@ import {
   createStructuredLogger,
   OperationalMonitor,
 } from "./observability";
-import { evaluateCorsOrigin } from "./cors-policy";
+import { evaluateCorsOrigin, isCorsExemptPublicAssetPath } from "./cors-policy";
 import { env } from "./lib/env";
 import { enforceDatabaseStartupPolicy } from "./startup-policy";
 import { createPublicRuntimeConfig } from "./runtime-mode";
@@ -221,6 +221,10 @@ app.use("*", async (c, next) => {
 
 // ─── CORS ────────────────────────────────────────────────────
 app.use("*", async (c, next) => {
+  if (isCorsExemptPublicAssetPath(c.req.path)) {
+    await next();
+    return;
+  }
   const decision = evaluateCorsOrigin(
     c.req.header("origin"),
     c.req.url,

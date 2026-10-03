@@ -42,3 +42,12 @@ export function evaluateCorsOrigin(
   }
   return { allowed: false, reason: "denied" };
 }
+
+
+export function isCorsExemptPublicAssetPath(pathname: string): boolean {
+  return (
+    pathname.startsWith("/assets/") ||
+    pathname === "/favicon.ico" ||
+    pathname === "/release-manifest.json"
+  );
+}
