@@ -3,14 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery, authedQuery, adminQuery, auditLog } from "../middleware";
 import { randomUUID } from "crypto";
 import { assertSyntheticScenarioRuntime, env } from "../lib/env";
-import { sqlite } from "../queries/connection";
-import {
-  getLogisticsRequest,
-  listLogisticsEvents,
-  listLogisticsRequests,
-  logisticsKpis,
-  updateLogisticsRequest as persistLogisticsRequest,
-} from "../services/gad-logistics";
+import type { LogisticsRequestPatch } from "../services/gad-logistics";
 
 // ═══════════════════════════════════════════════════════════════
 // M7: GAD — General Administration
@@ -46,10 +39,11 @@ function assertLogisticsOperatorRole(role: string): void {
   }
 }
 
-function requireActiveLogisticsUser(
+async function requireActiveLogisticsUser(
   userId: string,
   expectedRole: "logistics-manager" | "logistics-coordinator",
 ) {
+  const { sqlite } = await import("../queries/connection");
   const row = sqlite
     .prepare(
       `SELECT id, first_name AS firstName, last_name AS lastName, role,
@@ -910,7 +904,8 @@ export const m7Router = createRouter({
         })
         .optional(),
     )
-    .query(({ input }) => {
+    .query(async ({ input }) => {
+      const { listLogisticsRequests } = await import("../services/gad-logistics");
       let requests = listLogisticsRequests();
       if (input?.status)
         requests = requests.filter((request) => request.status === input.status);
@@ -933,7 +928,9 @@ export const m7Router = createRouter({
 
   getLogisticsRequest: authedQuery
     .input(z.object({ id: z.string().uuid() }))
-    .query(({ input }) => {
+    .query(async ({ input }) => {
+      const { getLogisticsRequest, listLogisticsEvents } =
+        await import("../services/gad-logistics");
       const request = getLogisticsRequest(input.id);
       if (!request) {
         throw new TRPCError({
@@ -944,8 +941,9 @@ export const m7Router = createRouter({
       return { ...request, events: listLogisticsEvents(request.id) };
     }),
 
-  listAssignableLogisticsStaff: authedQuery.query(() =>
-    sqlite
+  listAssignableLogisticsStaff: authedQuery.query(async () => {
+    const { sqlite } = await import("../queries/connection");
+    return sqlite
       .prepare(
         `SELECT id, first_name AS firstName, last_name AS lastName, role, department
          FROM users
@@ -960,10 +958,13 @@ export const m7Router = createRouter({
         lastName: string;
         role: "logistics-manager" | "logistics-coordinator";
         department: string | null;
-      }>,
-  ),
+      }>;
+  }),
 
-  logisticsKPIs: authedQuery.query(() => logisticsKpis()),
+  logisticsKPIs: authedQuery.query(async () => {
+    const { logisticsKpis } = await import("../services/gad-logistics");
+    return logisticsKpis();
+  }),
 
   updateLogisticsRequest: authedQuery
     .input(
@@ -984,8 +985,10 @@ export const m7Router = createRouter({
         note: z.string().max(1200).nullable().optional(),
       }),
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       assertLogisticsOperatorRole(ctx.user.role);
+      const { getLogisticsRequest, updateLogisticsRequest } =
+        await import("../services/gad-logistics");
       const request = getLogisticsRequest(input.id);
       if (!request) {
         throw new TRPCError({
@@ -1028,7 +1031,7 @@ export const m7Router = createRouter({
           : input.status === "ready_for_verification"
             ? "evidence_linked"
             : "status_changed";
-      const updated = persistLogisticsRequest({
+      const updated = updateLogisticsRequest({
         id: request.id,
         patch: {
           status: input.status,
@@ -1087,8 +1090,10 @@ export const m7Router = createRouter({
         evidenceReference: z.string().max(1000).nullable().optional(),
       }),
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       assertLogisticsManagerRole(ctx.user.role);
+      const { getLogisticsRequest, updateLogisticsRequest } =
+        await import("../services/gad-logistics");
       const request = getLogisticsRequest(input.id);
       if (!request) {
         throw new TRPCError({
@@ -1113,7 +1118,7 @@ export const m7Router = createRouter({
         | "closed"
         | "status_changed"
         | "cancelled" = "status_changed";
-      const patch: Parameters<typeof persistLogisticsRequest>[0]["patch"] = {};
+      const patch: LogisticsRequestPatch = {};
 
       if (input.action === "triage") {
         status = "triage";
@@ -1122,7 +1127,7 @@ export const m7Router = createRouter({
         if (ctx.user.role === "logistics-manager") {
           patch.logisticsManagerId = ctx.user.id;
         } else if (input.managerId) {
-          requireActiveLogisticsUser(input.managerId, "logistics-manager");
+          await requireActiveLogisticsUser(input.managerId, "logistics-manager");
           patch.logisticsManagerId = input.managerId;
         }
       } else if (input.action === "assign") {
@@ -1132,14 +1137,14 @@ export const m7Router = createRouter({
             message: "Coordinator assignment is required.",
           });
         }
-        requireActiveLogisticsUser(
+        await requireActiveLogisticsUser(
           input.coordinatorId,
           "logistics-coordinator",
         );
         let managerId = request.logistics_manager_id;
         if (ctx.user.role === "logistics-manager") managerId = ctx.user.id;
         else if (input.managerId) {
-          requireActiveLogisticsUser(input.managerId, "logistics-manager");
+          await requireActiveLogisticsUser(input.managerId, "logistics-manager");
           managerId = input.managerId;
         }
         if (!managerId) {
@@ -1215,7 +1220,7 @@ export const m7Router = createRouter({
       }
 
       patch.status = status;
-      const updated = persistLogisticsRequest({
+      const updated = updateLogisticsRequest({
         id: request.id,
         patch,
         event: {
