@@ -75,7 +75,7 @@ function requireActiveLogisticsUser(
   ) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: `Selected user is not an active ${expectedRole.replaceAll("-", " ")}.`,
+      message: `Selected user is not an active ${expectedRole.replace(/-/g, " ")}.`,
     });
   }
   return row;
