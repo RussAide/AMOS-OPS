@@ -40,7 +40,7 @@ describe("GAD Logistics Production release control", () => {
       '"65a4f1b76dfa105cc8b9b451b7bc66cd5a1850ccf820bf78f0414eccc0615764"',
     );
     expect(control).toContain(
-      '"AMOS-OPS-GAD-LOGISTICS-R1-RC3-20261003"',
+      '"AMOS-OPS-GAD-LOGISTICS-R1-RC4-20261004"',
     );
     expect(control).toContain("createDatabaseBackup");
     expect(control).toContain("applyPendingMigrations");
