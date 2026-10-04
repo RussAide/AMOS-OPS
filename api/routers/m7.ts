@@ -1241,6 +1241,191 @@ export const m7Router = createRouter({
       return updated;
     }),
 
+  listLogisticsWorkplanItems: authedQuery
+    .input(
+      z
+        .object({
+          ownerUserId: z.string().uuid().optional(),
+          requestId: z.string().uuid().optional(),
+          status: z
+            .enum(["planned", "in_progress", "waiting", "completed", "cancelled"])
+            .optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      assertLogisticsOperatorRole(ctx.user.role);
+      const { listLogisticsWorkplanItems } =
+        await import("../services/gad-logistics");
+      const ownerUserId =
+        ctx.user.role === "logistics-coordinator"
+          ? ctx.user.id
+          : input?.ownerUserId ??
+            (ctx.user.role === "logistics-manager" ? ctx.user.id : undefined);
+      return listLogisticsWorkplanItems({
+        ownerUserId,
+        requestId: input?.requestId,
+        status: input?.status,
+      });
+    }),
+
+  createLogisticsWorkplanItem: authedQuery
+    .input(
+      z.object({
+        requestId: z.string().uuid(),
+        ownerUserId: z.string().uuid(),
+        title: z.string().min(3).max(200),
+        actionType: z.enum([
+          "plan",
+          "schedule",
+          "follow_up",
+          "dependency",
+          "handoff",
+          "evidence",
+          "verification",
+          "coordination",
+        ]),
+        priority: z.enum(["routine", "priority", "urgent", "critical"]),
+        plannedFor: z.string().min(8).max(40),
+        dueAt: z.string().min(8).max(40).nullable().optional(),
+        dependencyOwner: z.string().max(240).nullable().optional(),
+        handoffTo: z.string().max(240).nullable().optional(),
+        notes: z.string().max(1600).nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      assertLogisticsOperatorRole(ctx.user.role);
+      const {
+        createLogisticsWorkplanItem,
+        getLogisticsRequest,
+      } = await import("../services/gad-logistics");
+      const request = getLogisticsRequest(input.requestId);
+      if (!request) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Logistics request not found.",
+        });
+      }
+      if (["closed", "declined", "cancelled"].includes(request.status)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "A terminal Logistics request cannot receive new workplan actions.",
+        });
+      }
+
+      const { sqlite } = await import("../queries/connection");
+      const owner = sqlite
+        .prepare(
+          `SELECT id, role, is_active AS isActive, access_status AS accessStatus
+           FROM users WHERE id = ?`,
+        )
+        .get(input.ownerUserId) as
+        | {
+            id: string;
+            role: string;
+            isActive: number;
+            accessStatus: string;
+          }
+        | undefined;
+      if (
+        !owner ||
+        !["logistics-manager", "logistics-coordinator"].includes(owner.role) ||
+        owner.isActive !== 1 ||
+        !["cleared", "training"].includes(owner.accessStatus)
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Workplan owner must be an active Logistics Manager or Logistics Coordinator.",
+        });
+      }
+      if (
+        ctx.user.role === "logistics-coordinator" &&
+        (input.ownerUserId !== ctx.user.id ||
+          request.logistics_coordinator_id !== ctx.user.id)
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Coordinators may plan only their own assigned Logistics work.",
+        });
+      }
+
+      const item = createLogisticsWorkplanItem({
+        requestId: input.requestId,
+        ownerUserId: input.ownerUserId,
+        ownerRole: owner.role,
+        title: input.title,
+        actionType: input.actionType,
+        priority: input.priority,
+        plannedFor: input.plannedFor,
+        dueAt: input.dueAt ?? null,
+        dependencyOwner: input.dependencyOwner ?? null,
+        handoffTo: input.handoffTo ?? null,
+        notes: input.notes ?? null,
+        createdBy: ctx.user.id,
+      });
+      auditLog({
+        action: "m7:createLogisticsWorkplanItem",
+        actor: ctx.user.email,
+        resource: `logistics-workplan:${item.id}`,
+        details: `${request.request_number}|${item.action_type}|${item.owner_role}`,
+      });
+      return item;
+    }),
+
+  updateLogisticsWorkplanItem: authedQuery
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        status: z
+          .enum(["planned", "in_progress", "waiting", "completed", "cancelled"])
+          .optional(),
+        plannedFor: z.string().min(8).max(40).optional(),
+        dueAt: z.string().min(8).max(40).nullable().optional(),
+        dependencyOwner: z.string().max(240).nullable().optional(),
+        handoffTo: z.string().max(240).nullable().optional(),
+        notes: z.string().max(1600).nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      assertLogisticsOperatorRole(ctx.user.role);
+      const {
+        getLogisticsWorkplanItem,
+        updateLogisticsWorkplanItem,
+      } = await import("../services/gad-logistics");
+      const item = getLogisticsWorkplanItem(input.id);
+      if (!item) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Logistics workplan item not found.",
+        });
+      }
+      if (
+        ctx.user.role === "logistics-coordinator" &&
+        item.owner_user_id !== ctx.user.id
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Coordinators may update only their own workplan items.",
+        });
+      }
+      const updated = updateLogisticsWorkplanItem({
+        id: input.id,
+        status: input.status,
+        plannedFor: input.plannedFor,
+        dueAt: input.dueAt,
+        dependencyOwner: input.dependencyOwner,
+        handoffTo: input.handoffTo,
+        notes: input.notes,
+      });
+      auditLog({
+        action: "m7:updateLogisticsWorkplanItem",
+        actor: ctx.user.email,
+        resource: `logistics-workplan:${input.id}`,
+        details: input.status ?? "updated",
+      });
+      return updated;
+    }),
+
   // ════════════════════════════════════════════════════════════
   // DASHBOARD KPIs
   // ════════════════════════════════════════════════════════════
