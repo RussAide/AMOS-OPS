@@ -1015,21 +1015,6 @@ function AppShellAuthenticated({ children }: AppShellProps) {
             </span>
           </div>
         )}
-        {runtimeConfig.mode === "production" &&
-          runtimeConfig.productionReleaseAuthorized && (
-            <div
-              role="status"
-              data-amos-environment={runtimeConfig.environmentId}
-              data-amos-runtime-mode="production"
-              className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-emerald-800 bg-emerald-950 px-3 py-1.5 text-center text-[11px] font-bold tracking-wide text-emerald-50 print:flex"
-            >
-              <span>PRODUCTION</span>
-              <span aria-hidden="true">•</span>
-              <span>Authorized live operations</span>
-              <span aria-hidden="true">•</span>
-              <span>Release: {runtimeConfig.productionReleaseId}</span>
-            </div>
-          )}
 
         {/* ─── Main Content ─── */}
         <main className="flex-1 overflow-auto p-4 md:p-6">
