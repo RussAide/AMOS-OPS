@@ -14,6 +14,8 @@ import { isStrictlyAdditiveMigrationSql } from "./strictly-additive-migration";
 const TARGET_MIGRATION = "0011_gad_logistics_r1.sql";
 const TARGET_CHECKSUM =
   "65a4f1b76dfa105cc8b9b451b7bc66cd5a1850ccf820bf78f0414eccc0615764";
+const AUTHORIZED_PENDING_RELEASE_ID =
+  "AMOS-OPS-GAD-LOGISTICS-R1-RC4-20261004";
 
 const EXPECTED_MIGRATIONS = [
   "0000_concerned_kronos.sql",
@@ -156,7 +158,7 @@ async function main(): Promise<void> {
   }
   if (
     target.state === "pending" &&
-    releaseManifest.releaseId !== "AMOS-OPS-GAD-LOGISTICS-R1-RC3-20261003"
+    releaseManifest.releaseId !== AUTHORIZED_PENDING_RELEASE_ID
   ) {
     throw new Error("MIGRATION_RELEASE_ID_NOT_AUTHORIZED");
   }
