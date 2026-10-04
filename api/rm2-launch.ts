@@ -108,4 +108,12 @@ if (env.storageMigrationMode !== "none") {
   );
 }
 
+const { runGadLogisticsR2WorkplanMigration } = await import(
+  "./release-controls/gad-logistics-r2-migration"
+);
+const logisticsR2Migration = await runGadLogisticsR2WorkplanMigration();
+process.stdout.write(
+  `GAD_LOGISTICS_R2_MIGRATION_RESULT=${JSON.stringify(logisticsR2Migration)}\n`,
+);
+
 await import("./boot");
