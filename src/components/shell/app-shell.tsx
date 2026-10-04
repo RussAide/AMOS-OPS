@@ -19,6 +19,7 @@ import ErrorBoundary from "@/components/error-boundary";
 import { AppSidebar } from "./app-sidebar";
 import { AccessDeniedPage } from "./access-denied-page";
 import { NotFoundPage } from "./not-found-page";
+import { UniversalFooterNav } from "./universal-footer-nav";
 import {
   Menu,
   X,
@@ -1017,7 +1018,7 @@ function AppShellAuthenticated({ children }: AppShellProps) {
         )}
 
         {/* ─── Main Content ─── */}
-        <main className="flex-1 overflow-auto p-4 md:p-6">
+        <main className="flex-1 overflow-auto p-4 pb-24 md:p-6 md:pb-24 lg:pb-6">
           <ErrorBoundary>
             {children ?? (
               <Routes>
@@ -1555,6 +1556,7 @@ function AppShellAuthenticated({ children }: AppShellProps) {
           </ErrorBoundary>
         </main>
       </div>
+      <UniversalFooterNav />
       <Toaster />
 
       {/* ═══════ KEYBOARD SHORTCUTS MODAL ═══════ */}
