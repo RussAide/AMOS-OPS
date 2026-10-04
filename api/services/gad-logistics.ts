@@ -570,7 +570,7 @@ export function updateLogisticsWorkplanItem(input: {
   const completedAt =
     input.status === "completed"
       ? new Date().toISOString()
-      : input.status && input.status !== "completed"
+      : input.status
         ? null
         : current.completed_at;
   if (input.status !== undefined) updates.push(["completed_at", completedAt]);
