@@ -109,7 +109,7 @@
     "migrate:gad-logistics-r2": "node dist/release-controls/gad-logistics-r2-workplans-migrate.js"
   },
   "dependencies": {
-    "@hono/node-server": "^1.14.3",
+    "@hono/node-server": "^2.0.10",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
