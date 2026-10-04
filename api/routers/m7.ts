@@ -1260,8 +1260,7 @@ export const m7Router = createRouter({
       const ownerUserId =
         ctx.user.role === "logistics-coordinator"
           ? ctx.user.id
-          : input?.ownerUserId ??
-            (ctx.user.role === "logistics-manager" ? ctx.user.id : undefined);
+          : input?.ownerUserId;
       return listLogisticsWorkplanItems({
         ownerUserId,
         requestId: input?.requestId,
