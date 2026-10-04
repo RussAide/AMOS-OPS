@@ -1327,6 +1327,10 @@ function AppShellAuthenticated({ children }: AppShellProps) {
                 {/* ─── GAD / LOGISTICS ─── */}
                 <Route path={appRoutePath("logistics")} element={<LogisticsRequestPage />} />
                 <Route
+                  path={appRoutePath("logistics-intake")}
+                  element={<LogisticsRequestPage />}
+                />
+                <Route
                   path={appRoutePath("logistics-workspace")}
                   element={<LogisticsManagementWorkspace view="command" />}
                 />
