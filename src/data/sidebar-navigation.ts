@@ -150,6 +150,55 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
     ),
   ]),
   group(
+    "logistics-management",
+    "Logistics Management & Coordination",
+    ListTodo,
+    [
+      link(
+        "logistics-command-center",
+        "Command Center",
+        appRoutePath("logistics-workspace"),
+        appRoutePath("gad"),
+      ),
+      link(
+        "logistics-manager-workspace",
+        "Logistics Manager Workspace",
+        appRoutePath("logistics-manager"),
+        appRoutePath("gad"),
+      ),
+      link(
+        "logistics-coordinator-workspace",
+        "Logistics Coordinator Workspace",
+        appRoutePath("logistics-coordinator"),
+        appRoutePath("gad"),
+      ),
+      link(
+        "logistics-requests-intake",
+        "Requests & Intake",
+        appRoutePath("logistics"),
+        appRoutePath("gad"),
+      ),
+      link(
+        "logistics-service-coordination",
+        "Service Coordination Board",
+        appRoutePath("logistics-service-coordination"),
+        appRoutePath("gad"),
+      ),
+      link(
+        "logistics-workplans",
+        "Workplans & Schedule",
+        appRoutePath("logistics-workplans"),
+        appRoutePath("gad"),
+      ),
+      link(
+        "logistics-verification",
+        "Verification & Closeout",
+        appRoutePath("logistics-verification"),
+        appRoutePath("gad"),
+      ),
+    ],
+  ),
+  group(
     "bhc",
     "Behavioral Health Center",
     Activity,
@@ -292,7 +341,7 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
       ),
       link(
         "gad-transportation-logistics",
-        "Transportation and Logistics",
+        "Transportation Services",
         appRoutePath("gad-transportation-logistics"),
         appRoutePath("gad"),
       ),
