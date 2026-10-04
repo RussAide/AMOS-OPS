@@ -29,7 +29,7 @@ describe("Logistics Management & Coordination R2 workspace contract", () => {
       "My Today / My Week",
       "Requesting operation ↔ Logistics interaction",
       "One accountable operating path",
-      "startup messaging, including WhatsApp",
+      "Startup messaging, including WhatsApp",
     ]) {
       expect(source).toContain(label);
     }
@@ -56,9 +56,9 @@ describe("Logistics Management & Coordination R2 workspace contract", () => {
     expect(source).toContain('"Logistics Management & Coordination"');
     expect(source).toContain('"Logistics Manager Workspace"');
     expect(source).toContain('"Logistics Coordinator Workspace"');
-    expect(source).toContain('"Workplans & Schedule"');
-    expect(source).toContain('"Transportation Services"');
-    expect(source).not.toContain('"Transportation and Logistics"');
+    expect(source).toContain('"Workplans and Schedule"');
+        expect(source).not.toContain('"Transportation and Logistics"');
+    expect(source).not.toContain('"Transportation Services"');
   });
 
   it("binds workplans to Logistics-owned storage rather than the shared core work queue", () => {
