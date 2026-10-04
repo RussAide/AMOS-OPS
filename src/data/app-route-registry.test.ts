@@ -29,7 +29,7 @@ describe("canonical application route registry", () => {
     const ids = APP_ROUTE_REGISTRY.map((route) => route.id);
     const paths = APP_ROUTE_REGISTRY.map((route) => route.path);
 
-    expect(APP_ROUTE_REGISTRY).toHaveLength(157);
+    expect(APP_ROUTE_REGISTRY).toHaveLength(164);
     expect(new Set(ids)).toHaveLength(ids.length);
     expect(new Set(paths)).toHaveLength(paths.length);
     expect(paths.filter((path) => path.includes(":"))).toHaveLength(8);

@@ -2421,6 +2421,50 @@ export const bedCensusV2 = sqliteTable("bed_census_v2", {
   updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
 });
 
+export const gadLogisticsWorkplanItems = sqliteTable(
+  "gad_logistics_workplan_items",
+  {
+    id: text("id").primaryKey(),
+    requestId: text("request_id")
+      .notNull()
+      .references(() => gadLogisticsRequests.id, { onDelete: "restrict" }),
+    ownerUserId: text("owner_user_id").notNull(),
+    ownerRole: text("owner_role").notNull(),
+    title: text("title").notNull(),
+    actionType: text("action_type", {
+      enum: [
+        "plan",
+        "schedule",
+        "follow_up",
+        "dependency",
+        "handoff",
+        "evidence",
+        "verification",
+        "coordination",
+      ],
+    }).notNull(),
+    priority: text("priority", {
+      enum: ["routine", "priority", "urgent", "critical"],
+    })
+      .notNull()
+      .default("routine"),
+    status: text("status", {
+      enum: ["planned", "in_progress", "waiting", "completed", "cancelled"],
+    })
+      .notNull()
+      .default("planned"),
+    plannedFor: text("planned_for").notNull(),
+    dueAt: text("due_at"),
+    dependencyOwner: text("dependency_owner"),
+    handoffTo: text("handoff_to"),
+    notes: text("notes"),
+    createdBy: text("created_by").notNull(),
+    completedAt: text("completed_at"),
+    createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
+    updatedAt: text("updated_at").$defaultFn(() => new Date().toISOString()),
+  },
+);
+
 // ═══════════════════════════════════════════════════════════════
 // M21: Agent Persona Registry
 // ═══════════════════════════════════════════════════════════════

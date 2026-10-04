@@ -158,6 +158,16 @@ const ENTERPRISE_SCOPE_ROLES = new Set<UserRole>([
   "managing-director",
   "administrator",
 ]);
+const LOGISTICS_MANAGER_ROUTE_ROLES = new Set<UserRole>([
+  "super-admin",
+  "managing-director",
+  "administrator",
+  "logistics-manager",
+]);
+const LOGISTICS_OPERATOR_ROUTE_ROLES = new Set<UserRole>([
+  ...LOGISTICS_MANAGER_ROUTE_ROLES,
+  "logistics-coordinator",
+]);
 const BHC_CROSS_DEPARTMENT_ROLES = new Set<UserRole>([
   "super-admin",
   "managing-director",
@@ -882,6 +892,34 @@ const CLIENT_ROUTE_ACCESS: readonly [
 ][] = [
   ["/home", { domain: "dashboard" }],
   ["/operations-hub", { domain: "self-service" }],
+  [
+    "/logistics/intake",
+    { domain: "operations", division: "gad", divisionCategory: "corporate-office" },
+  ],
+  [
+    "/logistics/workspace",
+    { domain: "operations", division: "gad", divisionCategory: "corporate-office" },
+  ],
+  [
+    "/logistics/manager",
+    { domain: "operations", division: "gad", divisionCategory: "corporate-office" },
+  ],
+  [
+    "/logistics/coordinator",
+    { domain: "operations", division: "gad", divisionCategory: "corporate-office" },
+  ],
+  [
+    "/logistics/service-coordination",
+    { domain: "operations", division: "gad", divisionCategory: "corporate-office" },
+  ],
+  [
+    "/logistics/workplans",
+    { domain: "operations", division: "gad", divisionCategory: "corporate-office" },
+  ],
+  [
+    "/logistics/verification",
+    { domain: "operations", division: "gad", divisionCategory: "corporate-office" },
+  ],
   ["/logistics", { domain: "self-service" }],
   ["/my-work-today", { domain: "self-service" }],
   ["/my-shift", { domain: "self-service" }],
@@ -1052,6 +1090,36 @@ export function authorizeClientRoute(
   role: UserRole | string,
   pathname: string,
 ): AccessDecision {
+  if (
+    pathname === "/logistics/manager" ||
+    pathname.startsWith("/logistics/manager/")
+  ) {
+    if (
+      !CANONICAL_ROLES.has(role) ||
+      !LOGISTICS_MANAGER_ROUTE_ROLES.has(role as UserRole)
+    ) {
+      return decision(
+        false,
+        "DENY_NO_PERMISSION",
+        "Logistics Manager workspace requires manager authority.",
+      );
+    }
+  } else if (
+    pathname.startsWith("/logistics/") &&
+    pathname !== "/logistics"
+  ) {
+    if (
+      !CANONICAL_ROLES.has(role) ||
+      !LOGISTICS_OPERATOR_ROUTE_ROLES.has(role as UserRole)
+    ) {
+      return decision(
+        false,
+        "DENY_NO_PERMISSION",
+        "Logistics operating workspaces require an authorized Logistics role.",
+      );
+    }
+  }
+
   const resource = clientRouteAccessResource(pathname);
   if (!resource)
     return decision(

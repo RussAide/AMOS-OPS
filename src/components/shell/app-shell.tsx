@@ -188,8 +188,8 @@ import MarketingSiteReviewPage from "@/pages/exec/marketing-site-review-page";
 
 // ─── GAD / LOGISTICS ───
 import GadDashboardPage from "@/pages/gad/gad-dashboard-page";
-import GadLogisticsPage from "@/pages/gad/gad-logistics-page";
 import LogisticsRequestPage from "@/pages/logistics/logistics-request-page";
+import LogisticsManagementWorkspace from "@/pages/logistics/logistics-management-workspace";
 
 // ─── ANALYTICS ───
 import AnalyticsPage from "@/pages/analytics-page";
@@ -1326,6 +1326,34 @@ function AppShellAuthenticated({ children }: AppShellProps) {
 
                 {/* ─── GAD / LOGISTICS ─── */}
                 <Route path={appRoutePath("logistics")} element={<LogisticsRequestPage />} />
+                <Route
+                  path={appRoutePath("logistics-intake")}
+                  element={<LogisticsRequestPage />}
+                />
+                <Route
+                  path={appRoutePath("logistics-workspace")}
+                  element={<LogisticsManagementWorkspace view="command" />}
+                />
+                <Route
+                  path={appRoutePath("logistics-manager")}
+                  element={<LogisticsManagementWorkspace view="manager" />}
+                />
+                <Route
+                  path={appRoutePath("logistics-coordinator")}
+                  element={<LogisticsManagementWorkspace view="coordinator" />}
+                />
+                <Route
+                  path={appRoutePath("logistics-service-coordination")}
+                  element={<LogisticsManagementWorkspace view="coordination" />}
+                />
+                <Route
+                  path={appRoutePath("logistics-workplans")}
+                  element={<LogisticsManagementWorkspace view="workplans" />}
+                />
+                <Route
+                  path={appRoutePath("logistics-verification")}
+                  element={<LogisticsManagementWorkspace view="verification" />}
+                />
                 <Route path={appRoutePath("gad")} element={<GadDashboardPage />} />
                 <Route
                   path={appRoutePath("gad-facilities-work-orders")}
@@ -1341,7 +1369,12 @@ function AppShellAuthenticated({ children }: AppShellProps) {
                 />
                 <Route
                   path={appRoutePath("gad-transportation-logistics")}
-                  element={<GadLogisticsPage />}
+                  element={
+                    <Navigate
+                      to={appRoutePath("logistics-service-coordination")}
+                      replace
+                    />
+                  }
                 />
                 <Route
                   path={appRoutePath("gad-regulatory-support")}

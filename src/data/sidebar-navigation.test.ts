@@ -33,6 +33,7 @@ describe("department-grouped sidebar navigation", () => {
     expect(navigation.map((node) => node.label)).toEqual([
       "Home",
       "My Work",
+      "Logistics Management & Coordination",
       "Behavioral Health Center",
       "General Residential Operations",
       "General Administration",
@@ -64,6 +65,18 @@ describe("department-grouped sidebar navigation", () => {
           "Items requiring attention",
           "Calendar and deadlines",
           "Recent activity",
+        ],
+      },
+      {
+        label: "Logistics Management & Coordination",
+        children: [
+          "Command Center",
+          "Logistics Manager Workspace",
+          "Logistics Coordinator Workspace",
+          "Requests and Intake",
+          "Service Coordination Board",
+          "Workplans and Schedule",
+          "Verification and Closeout",
         ],
       },
       {
@@ -127,7 +140,6 @@ describe("department-grouped sidebar navigation", () => {
           "Facilities and Work Orders",
           "Procurement and Vendors",
           "Safety and Emergency Preparedness",
-          "Transportation and Logistics",
           "Regulatory Support",
         ],
       },

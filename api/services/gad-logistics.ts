@@ -414,3 +414,174 @@ export function logisticsKpis(now = new Date()) {
     averageAgingDays,
   };
 }
+
+
+export type LogisticsWorkplanActionType =
+  | "plan"
+  | "schedule"
+  | "follow_up"
+  | "dependency"
+  | "handoff"
+  | "evidence"
+  | "verification"
+  | "coordination";
+
+export type LogisticsWorkplanStatus =
+  | "planned"
+  | "in_progress"
+  | "waiting"
+  | "completed"
+  | "cancelled";
+
+export interface LogisticsWorkplanItemRow {
+  id: string;
+  request_id: string;
+  owner_user_id: string;
+  owner_role: string;
+  title: string;
+  action_type: LogisticsWorkplanActionType;
+  priority: LogisticsPriority;
+  status: LogisticsWorkplanStatus;
+  planned_for: string;
+  due_at: string | null;
+  dependency_owner: string | null;
+  handoff_to: string | null;
+  notes: string | null;
+  created_by: string;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function listLogisticsWorkplanItems(filters: {
+  ownerUserId?: string;
+  requestId?: string;
+  status?: LogisticsWorkplanStatus;
+} = {}): LogisticsWorkplanItemRow[] {
+  const conditions: string[] = [];
+  const params: string[] = [];
+  if (filters.ownerUserId) {
+    conditions.push("owner_user_id = ?");
+    params.push(filters.ownerUserId);
+  }
+  if (filters.requestId) {
+    conditions.push("request_id = ?");
+    params.push(filters.requestId);
+  }
+  if (filters.status) {
+    conditions.push("status = ?");
+    params.push(filters.status);
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  return sqlite
+    .prepare(
+      `SELECT * FROM gad_logistics_workplan_items
+       ${where}
+       ORDER BY
+         CASE status
+           WHEN 'in_progress' THEN 1
+           WHEN 'planned' THEN 2
+           WHEN 'waiting' THEN 3
+           WHEN 'completed' THEN 4
+           ELSE 5
+         END,
+         planned_for ASC,
+         CASE WHEN due_at IS NULL THEN 1 ELSE 0 END,
+         due_at ASC,
+         created_at ASC`,
+    )
+    .all(...params) as LogisticsWorkplanItemRow[];
+}
+
+export function getLogisticsWorkplanItem(
+  id: string,
+): LogisticsWorkplanItemRow | undefined {
+  return sqlite
+    .prepare("SELECT * FROM gad_logistics_workplan_items WHERE id = ?")
+    .get(id) as LogisticsWorkplanItemRow | undefined;
+}
+
+export function createLogisticsWorkplanItem(input: {
+  requestId: string;
+  ownerUserId: string;
+  ownerRole: string;
+  title: string;
+  actionType: LogisticsWorkplanActionType;
+  priority: LogisticsPriority;
+  plannedFor: string;
+  dueAt?: string | null;
+  dependencyOwner?: string | null;
+  handoffTo?: string | null;
+  notes?: string | null;
+  createdBy: string;
+}): LogisticsWorkplanItemRow {
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  sqlite
+    .prepare(
+      `INSERT INTO gad_logistics_workplan_items
+        (id, request_id, owner_user_id, owner_role, title, action_type, priority,
+         status, planned_for, due_at, dependency_owner, handoff_to, notes,
+         created_by, completed_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+    )
+    .run(
+      id,
+      input.requestId,
+      input.ownerUserId,
+      input.ownerRole,
+      input.title,
+      input.actionType,
+      input.priority,
+      input.plannedFor,
+      input.dueAt ?? null,
+      input.dependencyOwner ?? null,
+      input.handoffTo ?? null,
+      input.notes ?? null,
+      input.createdBy,
+      now,
+      now,
+    );
+  return getLogisticsWorkplanItem(id)!;
+}
+
+export function updateLogisticsWorkplanItem(input: {
+  id: string;
+  status?: LogisticsWorkplanStatus;
+  plannedFor?: string;
+  dueAt?: string | null;
+  dependencyOwner?: string | null;
+  handoffTo?: string | null;
+  notes?: string | null;
+}): LogisticsWorkplanItemRow | undefined {
+  const current = getLogisticsWorkplanItem(input.id);
+  if (!current) return undefined;
+  const updates: Array<[string, string | null]> = [];
+  if (input.status !== undefined) updates.push(["status", input.status]);
+  if (input.plannedFor !== undefined)
+    updates.push(["planned_for", input.plannedFor]);
+  if (input.dueAt !== undefined) updates.push(["due_at", input.dueAt]);
+  if (input.dependencyOwner !== undefined)
+    updates.push(["dependency_owner", input.dependencyOwner]);
+  if (input.handoffTo !== undefined)
+    updates.push(["handoff_to", input.handoffTo]);
+  if (input.notes !== undefined) updates.push(["notes", input.notes]);
+
+  const completedAt =
+    input.status === "completed"
+      ? new Date().toISOString()
+      : input.status
+        ? null
+        : current.completed_at;
+  if (input.status !== undefined) updates.push(["completed_at", completedAt]);
+  updates.push(["updated_at", new Date().toISOString()]);
+
+  sqlite
+    .prepare(
+      `UPDATE gad_logistics_workplan_items
+       SET ${updates.map(([column]) => `${column} = ?`).join(", ")}
+       WHERE id = ?`,
+    )
+    .run(...updates.map(([, value]) => value), input.id);
+  return getLogisticsWorkplanItem(input.id);
+}
