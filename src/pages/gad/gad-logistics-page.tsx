@@ -196,6 +196,90 @@ export default function GadLogisticsPage() {
     },
   ];
 
+  const terminalStatuses = new Set(["closed", "cancelled", "declined"]);
+  const openRequests = requests.filter(
+    (request) => !terminalStatuses.has(request.status),
+  );
+
+  const workflowStages = [
+    {
+      label: "Intake",
+      statuses: ["submitted", "returned_for_information"],
+      description: "Capture and clarify the operational requirement.",
+    },
+    {
+      label: "Triage",
+      statuses: ["triage"],
+      description: "Set priority, ownership and service pathway.",
+    },
+    {
+      label: "Plan & assign",
+      statuses: ["assigned"],
+      description: "Coordinate manager/coordinator ownership and dependencies.",
+    },
+    {
+      label: "Execute",
+      statuses: ["in_progress"],
+      description: "Carry the work through the accountable service owner.",
+    },
+    {
+      label: "Dependency follow-up",
+      statuses: ["pending_dependency", "escalated"],
+      description: "Track blocked work, external owners and escalations.",
+    },
+    {
+      label: "Verify",
+      statuses: ["ready_for_verification"],
+      description: "Return completed work to the requester for confirmation.",
+    },
+    {
+      label: "Close",
+      statuses: ["closed"],
+      description: "Record evidence, outcome and accountable closure.",
+    },
+  ].map((stage) => ({
+    ...stage,
+    count: requests.filter((request) => stage.statuses.includes(request.status))
+      .length,
+  }));
+
+  const servicePortfolio = [
+    ["facilities", "Facilities & maintenance"],
+    ["procurement", "Procurement & purchasing"],
+    ["inventory", "Inventory & supplies"],
+    ["vendor", "Vendor coordination"],
+    ["transportation", "Transportation & movement"],
+    ["equipment", "Equipment & assets"],
+    ["technology", "Technology logistics"],
+    ["workforce_training", "Workforce & training"],
+    ["safety_emergency", "Safety & emergency"],
+    ["regulatory_support", "Regulatory support"],
+    ["other", "Other operational support"],
+  ].map(([id, label]) => ({
+    id,
+    label,
+    open: openRequests.filter((request) => request.service_type === id).length,
+  }));
+
+  const unassignedCount = openRequests.filter(
+    (request) =>
+      !request.logistics_manager_id && !request.logistics_coordinator_id,
+  ).length;
+  const dependencyCount = openRequests.filter(
+    (request) =>
+      request.status === "pending_dependency" ||
+      Boolean(request.dependency_owner),
+  ).length;
+  const dueSoonCount = openRequests.filter((request) => {
+    if (!request.need_by) return false;
+    const dueAt = Date.parse(request.need_by);
+    return (
+      Number.isFinite(dueAt) &&
+      dueAt >= queueEvaluationTime &&
+      dueAt <= queueEvaluationTime + 7 * 86_400_000
+    );
+  }).length;
+
   return (
     <div className="min-h-screen bg-[#f5f7f7] px-4 py-5 md:px-6">
       <div className="mx-auto max-w-7xl space-y-5">
@@ -207,9 +291,10 @@ export default function GadLogisticsPage() {
             <h1 className="mt-1 text-2xl font-bold text-[#173F3D]">
               Logistics Management & Coordination
             </h1>
-            <p className="mt-1 text-sm text-slate-600">
-              GAD queue for triage, assignment, execution, dependency control,
-              requester verification and accountable closure.
+            <p className="mt-1 max-w-4xl text-sm text-slate-600">
+              Command workspace for planning, triage, assignment, service
+              coordination, dependency control, execution, verification and
+              accountable closure across shared operations.
             </p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
@@ -232,6 +317,164 @@ export default function GadLogisticsPage() {
               </p>
             </div>
           ))}
+        </div>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+          <div className="mb-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#397C78]">
+              Management & coordination workflow
+            </p>
+            <h2 className="mt-1 text-lg font-bold text-[#173F3D]">
+              One accountable operating path
+            </h2>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
+            {workflowStages.map((stage, index) => (
+              <div
+                key={stage.label}
+                className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-[#397C78]">
+                    {index + 1}
+                  </span>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold text-[#173F3D]">
+                    {stage.count}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm font-semibold text-slate-900">
+                  {stage.label}
+                </p>
+                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                  {stage.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="grid gap-5 xl:grid-cols-[1.45fr_1fr]">
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+            <div className="mb-4 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#397C78]">
+                  Service coordination board
+                </p>
+                <h2 className="mt-1 text-lg font-bold text-[#173F3D]">
+                  Shared-support workload
+                </h2>
+              </div>
+              <span className="text-xs text-slate-500">
+                {openRequests.length} open
+              </span>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {servicePortfolio.map((service) => (
+                <div
+                  key={service.id}
+                  className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5"
+                >
+                  <span className="text-xs font-medium text-slate-700">
+                    {service.label}
+                  </span>
+                  <span className="rounded-full bg-[#E8F3F2] px-2 py-0.5 text-xs font-bold text-[#245C5A]">
+                    {service.open}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#397C78]">
+              Planning, dependencies & handoffs
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+              <div className="rounded-lg bg-slate-50 p-3">
+                <p className="text-xs text-slate-500">Unassigned work</p>
+                <p className="mt-1 text-xl font-bold text-[#173F3D]">
+                  {unassignedCount}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Requires manager/coordinator ownership.
+                </p>
+              </div>
+              <div className="rounded-lg bg-amber-50 p-3">
+                <p className="text-xs text-amber-700">Dependencies / blockers</p>
+                <p className="mt-1 text-xl font-bold text-amber-900">
+                  {dependencyCount}
+                </p>
+                <p className="mt-1 text-[11px] text-amber-700">
+                  Requires follow-up with an accountable owner.
+                </p>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-3">
+                <p className="text-xs text-slate-500">Due within 7 days</p>
+                <p className="mt-1 text-xl font-bold text-[#173F3D]">
+                  {dueSoonCount}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Upcoming work requiring scheduling attention.
+                </p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-2">
+              <UserRoundCog className="h-4 w-4 text-[#397C78]" />
+              <h3 className="text-sm font-bold text-[#173F3D]">
+                Logistics Manager
+              </h3>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-slate-600">
+              Owns triage, priority, workload distribution, escalation,
+              resource decisions and accountable closure.
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-[#397C78]" />
+              <h3 className="text-sm font-bold text-[#173F3D]">
+                Logistics Coordinator
+              </h3>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-slate-600">
+              Drives scheduling, follow-up, service-provider coordination,
+              dependencies, evidence and readiness for verification.
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Truck className="h-4 w-4 text-[#397C78]" />
+              <h3 className="text-sm font-bold text-[#173F3D]">
+                Service owners & requesting divisions
+              </h3>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-slate-600">
+              Retain professional decision rights while Logistics coordinates
+              movement, timing, dependencies and completion evidence.
+            </p>
+          </div>
+        </section>
+
+        <div className="rounded-xl border border-[#BFD8D5] bg-[#F0F7F6] px-4 py-3 text-xs leading-5 text-[#245C5A]">
+          <span className="font-semibold">Operating record:</span> AMOS-OPS is
+          the permanent Logistics operating environment. Messaging channels,
+          including the startup WhatsApp bridge, may support coordination but
+          do not replace the governed request, decision, dependency, evidence
+          and closure record maintained here.
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#397C78]">
+            Live work queues
+          </p>
+          <h2 className="mt-1 text-lg font-bold text-[#173F3D]">
+            Manage and coordinate active work
+          </h2>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -265,7 +508,7 @@ export default function GadLogisticsPage() {
         <div className="grid gap-5 lg:grid-cols-[1.35fr_1fr]">
           <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-200 px-4 py-3">
-              <h2 className="font-semibold text-[#173F3D]">Request queue</h2>
+              <h2 className="font-semibold text-[#173F3D]">Live logistics work queue</h2>
               <p className="text-xs text-slate-500">
                 {visibleRequests.length} request{visibleRequests.length === 1 ? "" : "s"}
               </p>
