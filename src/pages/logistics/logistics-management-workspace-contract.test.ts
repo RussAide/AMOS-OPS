@@ -47,7 +47,7 @@ describe("Logistics Management & Coordination R2 workspace contract", () => {
     }
   });
 
-  it("promotes Logistics in the sidebar and demotes transportation to a service label", () => {
+  it("promotes Logistics in the sidebar and removes the buried transportation entry", () => {
     const source = fs.readFileSync(
       path.join(root, "src", "data", "sidebar-navigation.ts"),
       "utf8",
@@ -57,7 +57,7 @@ describe("Logistics Management & Coordination R2 workspace contract", () => {
     expect(source).toContain('"Logistics Manager Workspace"');
     expect(source).toContain('"Logistics Coordinator Workspace"');
     expect(source).toContain('"Workplans and Schedule"');
-        expect(source).not.toContain('"Transportation and Logistics"');
+    expect(source).not.toContain('"Transportation and Logistics"');
     expect(source).not.toContain('"Transportation Services"');
   });
 
