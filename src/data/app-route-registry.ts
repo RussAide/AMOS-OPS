@@ -118,6 +118,7 @@ export const APP_ROUTE_REGISTRY = [
   { id: "executive-strategic-projects", path: "/executive/strategic-projects" },
   { id: "executive-marketing-review", path: "/executive/marketing-review" },
   { id: "logistics", path: "/logistics" },
+  { id: "logistics-intake", path: "/logistics/intake" },
   { id: "logistics-workspace", path: "/logistics/workspace" },
   { id: "logistics-manager", path: "/logistics/manager" },
   { id: "logistics-coordinator", path: "/logistics/coordinator" },
