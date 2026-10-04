@@ -893,6 +893,10 @@ const CLIENT_ROUTE_ACCESS: readonly [
   ["/home", { domain: "dashboard" }],
   ["/operations-hub", { domain: "self-service" }],
   [
+    "/logistics/intake",
+    { domain: "operations", division: "gad", divisionCategory: "corporate-office" },
+  ],
+  [
     "/logistics/workspace",
     { domain: "operations", division: "gad", divisionCategory: "corporate-office" },
   ],
