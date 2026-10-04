@@ -174,8 +174,8 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
       ),
       link(
         "logistics-requests-intake",
-        "Requests & Intake",
-        appRoutePath("logistics"),
+        "Requests and Intake",
+        appRoutePath("logistics-intake"),
         appRoutePath("gad"),
       ),
       link(
@@ -186,13 +186,13 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
       ),
       link(
         "logistics-workplans",
-        "Workplans & Schedule",
+        "Workplans and Schedule",
         appRoutePath("logistics-workplans"),
         appRoutePath("gad"),
       ),
       link(
         "logistics-verification",
-        "Verification & Closeout",
+        "Verification and Closeout",
         appRoutePath("logistics-verification"),
         appRoutePath("gad"),
       ),
@@ -337,12 +337,6 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
         "gad-safety-emergency",
         "Safety and Emergency Preparedness",
         appRoutePath("gad-safety-emergency-preparedness"),
-        appRoutePath("gad"),
-      ),
-      link(
-        "gad-transportation-logistics",
-        "Transportation Services",
-        appRoutePath("gad-transportation-logistics"),
         appRoutePath("gad"),
       ),
       link(
