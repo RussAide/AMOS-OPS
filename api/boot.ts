@@ -5,6 +5,7 @@ import { serve } from "@hono/node-server";
 import { initDatabase } from "./db-init";
 import { seedCypressLaunchTrainingMatrix } from "./launch/staging-launch-matrix";
 import { createPrimeDelegationGateway, initializeDelegatedAgents } from "./agents/prime-logistics-delegation";
+import { runLiveStagingDelegateAcceptance } from "./agents/prime-logistics-live-qa";
 import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
@@ -668,6 +669,20 @@ serve({ fetch: app.fetch, port }, () => {
       health: `http://localhost:${port}/api/health`,
     },
   });
+  // Explicit Staging-only, once-per-immutable-candidate live HTTP acceptance.
+  // QA credentials are generated in server memory, never returned to callers.
+  if (env.isStaging && !env.isProduction &&
+      process.env.AMOS_PRIME_LIVE_QA_RUN_ONCE === "true") {
+    void runLiveStagingDelegateAcceptance(port, publicRuntimeConfig.buildId)
+      .then((result) => {
+        logger.info("agents.staging_live_acceptance", { details: result });
+      })
+      .catch((error) => {
+        logger.error("agents.staging_live_acceptance_unhandled", {
+          details: { error: error instanceof Error ? error.message : "Unknown error" },
+        });
+      });
+  }
 });
 
 export default app;
