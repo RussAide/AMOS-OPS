@@ -8,6 +8,7 @@ import {
   type SidebarNavGroup,
   type SidebarNavLink,
   type SidebarNavNode,
+  type SidebarNavStatus,
 } from "@/data/sidebar-navigation";
 import { runtimeConfig } from "@/config/runtime";
 import { useAuth } from "@/hooks/use-auth";
@@ -23,18 +24,24 @@ interface AppSidebarProps {
   onNavigate?: () => void;
 }
 
-function pathMatches(href: string, pathname: string): boolean {
-  if (href === "/") return pathname === "/";
-  return pathname === href || pathname.startsWith(`${href}/`);
+function pathMatches(href: string, pathname: string, search: string): boolean {
+  const [path, query] = href.split("?");
+  const isLaunchRoute = new URLSearchParams(search).get("context") === "cypress-launch";
+  if (Boolean(query?.includes("context=cypress-launch")) !== isLaunchRoute) {
+    return false;
+  }
+  if (path === "/") return pathname === "/";
+  return pathname === path || pathname.startsWith(`${path}/`);
 }
 
 function findActiveHref(
   nodes: readonly SidebarNavNode[],
   pathname: string,
+  search: string,
 ): string | null {
   return (
     flattenSidebarLinks(nodes)
-      .filter((link) => pathMatches(link.href, pathname))
+      .filter((link) => pathMatches(link.href, pathname, search))
       .sort((left, right) => right.href.length - left.href.length)[0]?.href ??
     null
   );
@@ -61,8 +68,8 @@ export function AppSidebar({ mobile = false, onNavigate }: AppSidebarProps) {
     [currentRole, runtimeMode],
   );
   const activeHref = useMemo(
-    () => findActiveHref(navigation, location.pathname),
-    [navigation, location.pathname],
+    () => findActiveHref(navigation, location.pathname, location.search),
+    [navigation, location.pathname, location.search],
   );
 
   const primaryRoles: UserRole[] = [
@@ -123,6 +130,33 @@ export function AppSidebar({ mobile = false, onNavigate }: AppSidebarProps) {
           {link.label}
         </span>
       </button>
+    );
+  };
+
+  const renderStatus = (status: SidebarNavStatus, depth: number) => {
+    const Icon = status.icon;
+    return (
+      <div
+        key={status.id}
+        role="status"
+        aria-label={`${status.label}: ${status.detail}`}
+        className="mb-px flex w-full items-start gap-2 rounded-md py-2 pr-2"
+        style={{
+          paddingLeft: 12 + depth * 13,
+          backgroundColor: "rgba(126,200,202,0.035)",
+        }}
+        title={status.detail}
+      >
+        <Icon size={14} aria-hidden="true" style={{ color: "#6B9B99", flexShrink: 0 }} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[11px] font-medium text-[#B8D4D3]">
+            {status.label}
+          </span>
+          <span className="block text-[10px] leading-snug text-[#8DAEAB]">
+            Integration pending
+          </span>
+        </span>
+      </div>
     );
   };
 
@@ -196,8 +230,11 @@ export function AppSidebar({ mobile = false, onNavigate }: AppSidebarProps) {
     );
   };
 
-  const renderNode = (node: SidebarNavNode, depth = 0): React.ReactNode =>
-    node.type === "link" ? renderLink(node, depth) : renderGroup(node, depth);
+  const renderNode = (node: SidebarNavNode, depth = 0): React.ReactNode => {
+    if (node.type === "link") return renderLink(node, depth);
+    if (node.type === "status") return renderStatus(node, depth);
+    return renderGroup(node, depth);
+  };
 
   return (
     <aside
