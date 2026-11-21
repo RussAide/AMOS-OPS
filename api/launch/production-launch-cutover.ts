@@ -6,7 +6,10 @@
  * The SharePoint-origin 40-action projection is passed as a controlled Railway
  * runtime variable, not committed to public source control or logged.
  */
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import path from "node:path";
+import { sqlite } from "../queries/connection";
+import { createDatabaseBackup } from "../data-lifecycle";
 import { env } from "../lib/env";
 import type { RuntimeReleaseIdentity } from "../release-identity";
 import { importProductionCypressLaunchMatrix } from "./production-launch-matrix";
@@ -21,6 +24,7 @@ type CutoverResult =
       firstAdmissionHold: true;
       registrySha256: string;
       releaseId: string;
+      backupArtifact: string | null;
     };
 
 function required(
@@ -33,10 +37,10 @@ function required(
   return v;
 }
 
-export function applyControlledCypressLaunchAtStartup(
+export async function applyControlledCypressLaunchAtStartup(
   release: RuntimeReleaseIdentity,
   source: NodeJS.ProcessEnv = process.env,
-): CutoverResult {
+): Promise<CutoverResult> {
   if (source.AMOS_CYPRESS_LAUNCH_IMPORT_AUTHORIZED !== "true") {
     return { status: "NOT_REQUESTED" };
   }
@@ -57,10 +61,6 @@ export function applyControlledCypressLaunchAtStartup(
   if (!/^[0-9a-f]{40}$/.test(targetSha) || release.commitSha !== targetSha) {
     throw new Error("CYPRESS_LAUNCH_SOURCE_SHA_MISMATCH");
   }
-  const backup = required(source, "AMOS_CYPRESS_LAUNCH_VERIFIED_BACKUP_REFERENCE", 350);
-  if (!/^AMOSOPS-PROD-BACKUP-[A-Za-z0-9._/-]{10,250}$/.test(backup)) {
-    throw new Error("CYPRESS_LAUNCH_VERIFIED_BACKUP_REFERENCE_INVALID");
-  }
   const registrySha256 = required(source, "AMOS_CYPRESS_LAUNCH_REGISTRY_SHA256", 64);
   if (!/^[a-f0-9]{64}$/.test(registrySha256)) {
     throw new Error("CYPRESS_LAUNCH_REGISTRY_SHA256_INVALID");
@@ -69,8 +69,26 @@ export function applyControlledCypressLaunchAtStartup(
   if (createHash("sha256").update(payload).digest("hex") !== registrySha256) {
     throw new Error("CYPRESS_LAUNCH_REGISTRY_DIGEST_MISMATCH");
   }
-  // Transactional + idempotent; it preserves all existing M1 task progress
-  // and intentionally fails if Q04 has been closed without qualified review.
+  // Back up the EXISTING encrypted Production operational database before the
+  // first import. The existing backup utility atomically publishes a verified
+  // backup on the already-mounted protected volume; no SSH/Owner intervention.
+  // Repeat restarts retain all 40 tasks and create no redundant backups.
+  const existing = sqlite.prepare(
+    "SELECT COUNT(*) AS count FROM work_queue " +
+    "WHERE entity_type = 'adolbi_cypress_launch_2026'",
+  ).get() as { count: number };
+  let backupArtifact: string | null = null;
+  if (existing.count !== 40) {
+    const target = path.join(
+      env.backupPath,
+      "cypress-launch-g3-" + release.commitSha.slice(0, 12) + "-" +
+        Date.now() + "-" + randomUUID().slice(0, 8) + ".db.enc",
+    );
+    const verifiedPath = await createDatabaseBackup(env.databasePath, target);
+    backupArtifact = path.basename(verifiedPath);
+  }
+  // Transactional + idempotent; preserves M1 status, assignments, evidence
+  // and history. A failure leaves the new backup available for rollback.
   const result = importProductionCypressLaunchMatrix(payload);
   if (result.actionCount !== 40 || !result.firstAdmissionHold) {
     throw new Error("CYPRESS_LAUNCH_IMPORT_ACCEPTANCE_FAILED");
@@ -83,5 +101,6 @@ export function applyControlledCypressLaunchAtStartup(
     firstAdmissionHold: true,
     registrySha256: result.registrySha256,
     releaseId: release.releaseId,
+    backupArtifact,
   };
 }
