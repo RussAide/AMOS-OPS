@@ -45,7 +45,6 @@ vi.mock("../security/identity", () => ({
 import { logisticsRouter } from "../routers/logistics";
 import { m7Router } from "../routers/m7";
 import {
-  appendLogisticsEvent,
   getLogisticsRequest,
   listLogisticsEvents,
   updateLogisticsRequest,
