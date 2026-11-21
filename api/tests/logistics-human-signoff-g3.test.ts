@@ -42,8 +42,7 @@ vi.mock("../security/identity", () => ({
   resolveRequestedDataScope: () => "training",
 }));
 
-import { logisticsRouter } from "../routers/logistics";
-import { m7Router } from "../routers/m7";
+import { appRouter } from "../router";
 import {
   getLogisticsRequest,
   listLogisticsEvents,
@@ -91,10 +90,10 @@ describe("G3 Logistics requester verification and human-only closeout", () => {
   });
 
   it("refuses agent and unrelated person sign-off, allows requester verify then manager close", async () => {
-    const requester = logisticsRouter.createCaller(context("requester"));
-    const other = logisticsRouter.createCaller(context("other"));
-    const manager = m7Router.createCaller(context("manager"));
-    const agentAsHuman = logisticsRouter.createCaller(context("agent"));
+    const requester = appRouter.createCaller(context("requester")).logistics;
+    const other = appRouter.createCaller(context("other")).logistics;
+    const manager = appRouter.createCaller(context("manager")).gad;
+    const agentAsHuman = appRouter.createCaller(context("agent")).logistics;
     const created = await requester.createRequest({
       serviceType: "facilities", title: "SYNTHETIC QA: exterior lock",
       requirement: "SYNTHETIC QA: test complete evidence and requester control",
@@ -163,8 +162,8 @@ describe("G3 Logistics requester verification and human-only closeout", () => {
   });
 
   it("requester return-for-information reopens work and stops manager closure", async () => {
-    const requester = logisticsRouter.createCaller(context("requester"));
-    const manager = m7Router.createCaller(context("manager"));
+    const requester = appRouter.createCaller(context("requester")).logistics;
+    const manager = appRouter.createCaller(context("manager")).gad;
     const created = await requester.createRequest({
       serviceType: "equipment", title: "SYNTHETIC QA: backup generator",
       requirement: "SYNTHETIC QA: demonstrate return-to-work loop",
