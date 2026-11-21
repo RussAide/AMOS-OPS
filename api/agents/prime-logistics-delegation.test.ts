@@ -32,7 +32,7 @@ vi.mock("../security/identity", () => ({
 
 import {
   PRIME_ID, LOGISTICS_ID, createPrimeDelegationGateway, initializeDelegatedAgents,
-  verifyDelegate,
+  verifyDelegate, issueStagingScenarioCredential, revokeStagingScenarioCredential,
 } from "./prime-logistics-delegation";
 import {
   createLogisticsRequest, createLogisticsWorkplanItem, getLogisticsRequest,
@@ -56,7 +56,7 @@ function setup() {
   loadMigration(db, "0011_gad_logistics_r1.sql");
   loadMigration(db, "0012_gad_logistics_r2_workplans.sql");
   db.exec("CREATE TABLE users (id TEXT PRIMARY KEY, role TEXT, is_active INTEGER, access_status TEXT)");
-  db.exec("CREATE TABLE work_queue (priority TEXT, status TEXT, entity_type TEXT)");
+  db.exec("CREATE TABLE work_queue (priority TEXT, status TEXT, entity_type TEXT, entity_id TEXT, task_title TEXT, evidence_required INTEGER, evidence_uploaded INTEGER, due_date TEXT)");
   db.prepare("INSERT INTO users VALUES (?, 'logistics-coordinator', 1, 'training')")
     .run(coordinatorId);
   db.prepare("INSERT INTO work_queue VALUES ('urgent', 'pending', 'adolbi_cypress_launch_2026')").run();
@@ -105,6 +105,8 @@ describe("AMOS Prime / Adolbi GAD Logistics delegated Staging pilot", () => {
     expect(data.logistics.map((r: { division: string }) => r.division).sort())
       .toEqual(["bhc", "gro"]);
     expect(data.launch[0].count).toBe(1);
+    expect(data.providerNetworkReadiness.referralGate).toBe("HOLD");
+    expect(data.providerNetworkReadiness.authoritativeProviderNetworkConnected).toBe(false);
     expect(JSON.stringify(data)).not.toContain("Synthetic Staging operational request");
     expect((await app.request("/logistics/queue", { headers: header(primeKey) })).status)
       .toBe(401);
@@ -218,6 +220,37 @@ describe("AMOS Prime / Adolbi GAD Logistics delegated Staging pilot", () => {
     ).get() as { agent_id: string; action: string; outcome: string };
     expect(audit.agent_id).toBe("eghosa-test-actor");
     expect(audit.outcome).toBe("allowed");
+  });
+
+  it("accepts ephemeral credentials and revokes them without changing the parent identity", async () => {
+    const app = createPrimeDelegationGateway();
+    const { key, credentialId } = issueStagingScenarioCredential(LOGISTICS_ID);
+    expect(verifyDelegate(LOGISTICS_ID, key)).toBe(true);
+    expect((await app.request("/logistics/queue", { headers: header(key) })).status).toBe(200);
+    expect(revokeStagingScenarioCredential(LOGISTICS_ID, credentialId)).toBe(true);
+    expect(verifyDelegate(LOGISTICS_ID, key)).toBe(false);
+    expect((await app.request("/logistics/queue", { headers: header(key) })).status).toBe(401);
+    expect(verifyDelegate(LOGISTICS_ID, logisticsKey)).toBe(true);
+  });
+
+  it("includes N01-N04 in the live Prime readiness crosswalk without claiming provider verification", async () => {
+    const insert = fixture.db!.prepare(
+      "INSERT INTO work_queue (priority, status, entity_type, entity_id, task_title, evidence_required, evidence_uploaded, due_date) " +
+      "VALUES ('high', 'pending', 'adolbi_cypress_launch_2026', ?, ?, 1, 0, '2026-12-01')"
+    );
+    for (const id of ["N01", "N02", "N03", "N04"]) {
+      insert.run(id, "Synthetic provider readiness " + id);
+    }
+    const app = createPrimeDelegationGateway();
+    const response = await app.request("/prime/overview", { headers: header(primeKey) });
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.providerNetworkReadiness.recordedActions).toBe(4);
+    expect(data.providerNetworkReadiness.actions.map((a: { id: string }) => a.id))
+      .toEqual(["N01", "N02", "N03", "N04"]);
+    expect(data.providerNetworkReadiness.referralGate).toBe("HOLD");
+    expect(data.providerNetworkReadiness.verifiedProviders).toBeNull();
+    expect(data.providerNetworkReadiness.placementCrmConnected).toBe(false);
   });
 
   it("fails closed on key rotation without explicitly controlled re-provisioning", () => {
