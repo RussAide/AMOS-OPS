@@ -4,6 +4,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { serve } from "@hono/node-server";
 import { initDatabase } from "./db-init";
 import { seedCypressLaunchTrainingMatrix } from "./launch/staging-launch-matrix";
+import { createPrimeDelegationGateway, initializeDelegatedAgents } from "./agents/prime-logistics-delegation";
 import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
@@ -53,6 +54,15 @@ try {
     logger.info("launch.staging_training_matrix_seeded", {
       details: launchMatrixSeed,
     });
+  }
+  if (env.isStaging) {
+    const agents = runWithDataScope("training", () =>
+      initializeDelegatedAgents({
+        primeKeyHash: process.env.AMOS_PRIME_COMMAND_KEY_SHA256,
+        logisticsKeyHash: process.env.AMOS_GAD_LOGISTICS_KEY_SHA256,
+      }),
+    );
+    logger.info("agents.staging_delegation_initialized", { details: agents });
   }
   logger.info("database.initialized");
 } catch (err) {
@@ -574,6 +584,11 @@ app.get("/uploads/:filename", async (c) => {
   c.header("Content-Type", mimeTypes[ext] || "application/octet-stream");
   return c.body(new Uint8Array(fileBuffer));
 });
+
+// Staging-only AMOS Prime delegation. Separate agent credentials never authenticate tRPC.
+if (env.isStaging && !env.isProduction) {
+  app.route("/api/delegation", createPrimeDelegationGateway());
+}
 
 // ─── tRPC API (lazy load to avoid env.ts at startup) ─────────
 app.use("/api/trpc/*", async (c) => {
