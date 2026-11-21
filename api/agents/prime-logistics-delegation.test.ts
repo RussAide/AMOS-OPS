@@ -59,7 +59,7 @@ function setup() {
   db.exec("CREATE TABLE work_queue (priority TEXT, status TEXT, entity_type TEXT, entity_id TEXT, task_title TEXT, evidence_required INTEGER, evidence_uploaded INTEGER, due_date TEXT)");
   db.prepare("INSERT INTO users VALUES (?, 'logistics-coordinator', 1, 'training')")
     .run(coordinatorId);
-  db.prepare("INSERT INTO work_queue VALUES ('urgent', 'pending', 'adolbi_cypress_launch_2026')").run();
+  db.prepare("INSERT INTO work_queue (priority, status, entity_type) VALUES ('urgent', 'pending', 'adolbi_cypress_launch_2026')").run();
   fixture.db = db;
   initializeDelegatedAgents({ primeKeyHash: digest(primeKey), logisticsKeyHash: digest(logisticsKey) });
   return db;
