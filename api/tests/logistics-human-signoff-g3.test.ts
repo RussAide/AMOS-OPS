@@ -75,13 +75,13 @@ describe("G3 Logistics requester verification and human-only closeout", () => {
     migrate(db, "0012_gad_logistics_r2_workplans.sql");
     db.exec("CREATE TABLE workflow_audit_log (" +
       "id TEXT, action TEXT, actor TEXT, details TEXT, created_at TEXT)");
-    db.exec("CREATE TABLE users (id TEXT PRIMARY KEY, role TEXT, is_active INTEGER, access_status TEXT)");
+    db.exec("CREATE TABLE users (id TEXT PRIMARY KEY, first_name TEXT, last_name TEXT, role TEXT, is_active INTEGER, access_status TEXT)");
     for (const [id, role] of [
       [managerId, "logistics-manager"],
       [requesterId, "program-director"],
       [otherId, "program-director"],
       [coordinatorId, "logistics-coordinator"],
-    ]) db.prepare("INSERT INTO users VALUES (?, ?, 1, 'training')").run(id, role);
+    ]) db.prepare("INSERT INTO users (id, first_name, last_name, role, is_active, access_status) VALUES (?, 'Synthetic', 'G3 QA', ?, 1, 'training')").run(id, role);
     fixture.db = db;
   });
   afterEach(() => {
