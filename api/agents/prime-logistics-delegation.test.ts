@@ -4,11 +4,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
-const fixture = vi.hoisted(() => ({ db: null as any }));
+const fixture = vi.hoisted(() => ({ db: null as Database.Database | null }));
 vi.mock("../queries/connection", () => ({
   sqlite: new Proxy({}, {
     get(_target, key) {
-      const value = fixture.db[key];
+      if (!fixture.db) throw new Error("TEST_DATABASE_NOT_READY");
+      const value: unknown = Reflect.get(fixture.db, key);
       return typeof value === "function" ? value.bind(fixture.db) : value;
     },
   }),
