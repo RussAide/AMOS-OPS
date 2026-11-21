@@ -3,6 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { serve } from "@hono/node-server";
 import { initDatabase } from "./db-init";
+import { seedCypressLaunchTrainingMatrix } from "./launch/staging-launch-matrix";
 import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
@@ -43,6 +44,16 @@ let databaseInitializationError: unknown;
 try {
   initDatabase();
   runWithDataScope("training", () => initDatabase({ trainingWorkspace: true }));
+  if (env.isStaging && process.env.ADOLBI_CYPRESS_LAUNCH_MATRIX_2026) {
+    const launchMatrixSeed = runWithDataScope("training", () =>
+      seedCypressLaunchTrainingMatrix(
+        process.env.ADOLBI_CYPRESS_LAUNCH_MATRIX_2026!,
+      ),
+    );
+    logger.info("launch.staging_training_matrix_seeded", {
+      details: launchMatrixSeed,
+    });
+  }
   logger.info("database.initialized");
 } catch (err) {
   databaseInitializationError = err;

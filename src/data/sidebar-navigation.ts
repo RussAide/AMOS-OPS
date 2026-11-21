@@ -4,6 +4,7 @@ import {
   Home,
   LayoutDashboard,
   ListTodo,
+  Network,
   Settings,
   Shield,
   Users,
@@ -26,6 +27,14 @@ export interface SidebarNavLink {
   modes?: readonly SidebarRuntimeMode[];
 }
 
+export interface SidebarNavStatus {
+  type: "status";
+  id: string;
+  label: string;
+  detail: string;
+  icon: LucideIcon;
+}
+
 export interface SidebarNavGroup {
   type: "group";
   id: string;
@@ -35,9 +44,10 @@ export interface SidebarNavGroup {
   division?: DivisionId;
   adminOnly?: boolean;
   modes?: readonly SidebarRuntimeMode[];
+  roles?: readonly string[];
 }
 
-export type SidebarNavNode = SidebarNavLink | SidebarNavGroup;
+export type SidebarNavNode = SidebarNavLink | SidebarNavGroup | SidebarNavStatus;
 
 const navByHref = new Map(navItems.map((item) => [item.href, item]));
 
@@ -68,9 +78,33 @@ function group(
   label: string,
   icon: LucideIcon,
   children: readonly SidebarNavNode[],
-  options: Pick<SidebarNavGroup, "division" | "adminOnly" | "modes"> = {},
+  options: Pick<SidebarNavGroup, "division" | "adminOnly" | "modes" | "roles"> = {},
 ): SidebarNavGroup {
   return { type: "group", id, label, icon, children, ...options };
+}
+
+/**
+ * Cypress Launch Command is navigation over existing workspaces, not a
+ * duplicate operational module. The context query filters the existing
+ * My Work queue and distinguishes sidebar destinations.
+ */
+const CYPRESS_LAUNCH_CONTEXT = "?context=cypress-launch";
+
+function launchLink(
+  id: string,
+  label: string,
+  href: string,
+  sourceHref: string = href,
+): SidebarNavLink {
+  return link(id, label, href + CYPRESS_LAUNCH_CONTEXT, sourceHref);
+}
+
+function pendingStatus(
+  id: string,
+  label: string,
+  detail: string,
+): SidebarNavStatus {
+  return { type: "status", id, label, detail, icon: Network };
 }
 
 /**
@@ -149,6 +183,57 @@ export const SIDEBAR_NAVIGATION: readonly SidebarNavNode[] = [
       appRoutePath("workflows"),
     ),
   ]),
+  group("cypress-launch", "Cypress Launch Command", ListTodo, [
+    launchLink(
+      "cypress-launch-matrix",
+      "Launch Matrix · 40 Actions",
+      appRoutePath("workflows-my-work-today"),
+      appRoutePath("workflows"),
+    ),
+    launchLink(
+      "cypress-launch-recruitment",
+      "Recruitment & Hiring",
+      appRoutePath("hr-recruitment"),
+    ),
+    launchLink(
+      "cypress-launch-clearance",
+      "Screening & Clearance",
+      appRoutePath("hr-clearance"),
+    ),
+    launchLink(
+      "cypress-launch-onboarding",
+      "Staff Onboarding",
+      appRoutePath("hr-onboarding-workflow"),
+    ),
+    launchLink(
+      "cypress-launch-logistics",
+      "Logistics Readiness",
+      appRoutePath("logistics-manager"),
+      appRoutePath("gad"),
+    ),
+    pendingStatus(
+      "cypress-launch-provider-network",
+      "Provider Network",
+      "Integration pending — separate provider-network system; no verified AMOS-OPS referral connection.",
+    ),
+    launchLink(
+      "cypress-launch-referrals",
+      "Referrals & Intake (existing)",
+      appRoutePath("clinical-referrals"),
+    ),
+    launchLink(
+      "cypress-launch-evidence",
+      "Quality Evidence (existing)",
+      appRoutePath("qa-evidence-matrix"),
+      appRoutePath("qa"),
+    ),
+    launchLink(
+      "cypress-launch-approvals",
+      "Launch Exceptions & Approvals",
+      appRoutePath("workflows-attention"),
+      appRoutePath("workflows"),
+    ),
+  ], { roles: ["managing-director", "super-admin", "administrator"] }),
   group(
     "logistics-management",
     "Logistics Management & Coordination",
@@ -496,8 +581,11 @@ function filterNode(
   if (!modeAllows(node.modes, runtimeMode)) return null;
 
   if (node.type === "link") {
-    return authorizeClientRoute(role, node.href).allowed ? node : null;
+    const routePath = node.href.split("?")[0];
+    return authorizeClientRoute(role, routePath).allowed ? node : null;
   }
+  if (node.type === "status") return node;
+  if (node.roles && !node.roles.includes(role)) return null;
 
   if (
     node.adminOnly &&
@@ -525,7 +613,9 @@ export function getSidebarNavigation(
 export function flattenSidebarLinks(
   nodes: readonly SidebarNavNode[],
 ): readonly SidebarNavLink[] {
-  return nodes.flatMap((node) =>
-    node.type === "link" ? [node] : flattenSidebarLinks(node.children),
-  );
+  return nodes.flatMap((node) => {
+    if (node.type === "link") return [node];
+    if (node.type === "status") return [];
+    return flattenSidebarLinks(node.children);
+  });
 }

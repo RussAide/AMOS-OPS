@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { trpc } from "@/providers/trpc";
 import { PageLayout } from "@/components/shell/page-layout";
 import { WorkTaskFilters } from "@/components/workflows/work-task-filters";
@@ -270,6 +271,8 @@ const MY_WORK_VIEW_COPY: Record<
 };
 
 export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
+  const location = useLocation();
+  const isCypressLaunch = new URLSearchParams(location.search).get("context") === "cypress-launch";
   const [filteredTasks, setFilteredTasks] = useState<EnrichedTask[] | null>(
     null,
   );
@@ -321,7 +324,12 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
   const enrichedTasks: EnrichedTask[] = useMemo(() => {
     if (!rawTasks) return [];
     const now = new Date();
-    return (rawTasks as WorkTask[]).map((t) => {
+    const scopedRows = isCypressLaunch
+      ? (rawTasks as WorkTask[]).filter(
+          (task) => task.entity_type === "adolbi_cypress_launch_2026",
+        )
+      : (rawTasks as WorkTask[]);
+    return scopedRows.map((t) => {
       const wfDef = WORKFLOW_DEFS[t.task_type] || {
         code: "WF-000",
         name: "General",
@@ -337,7 +345,7 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
         isOverdue,
       };
     });
-  }, [rawTasks]);
+  }, [rawTasks, isCypressLaunch]);
 
   const sectionTasks = useMemo(() => {
     const tasks = [...enrichedTasks];
@@ -380,10 +388,15 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
   useEffect(() => {
     const timer = window.setTimeout(() => setFilteredTasks(null), 0);
     return () => window.clearTimeout(timer);
-  }, [view]);
+  }, [view, isCypressLaunch]);
 
   const visibleTasks = filteredTasks ?? sectionTasks;
-  const viewCopy = MY_WORK_VIEW_COPY[view];
+  const viewCopy = isCypressLaunch
+    ? {
+        title: view === "attention" ? "Cypress Launch · Exceptions & Approvals" : "Cypress Launch · 40-Action Matrix",
+        description: "Reprioritized launch work in the isolated Staging training workspace. All source action IDs retained; Provider Network integration pending.",
+      }
+    : MY_WORK_VIEW_COPY[view];
 
   /* ─── Stats (computed from ALL tasks, not filtered) ─── */
   const overdueCount = enrichedTasks.filter((t) => t.isOverdue).length;
