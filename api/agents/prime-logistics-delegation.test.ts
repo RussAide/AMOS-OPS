@@ -33,6 +33,7 @@ vi.mock("../security/identity", () => ({
 import {
   PRIME_ID, LOGISTICS_ID, createPrimeDelegationGateway, initializeDelegatedAgents,
   verifyDelegate, issueStagingScenarioCredential, revokeStagingScenarioCredential,
+  ensureStagingTrainingLogisticsSchema,
 } from "./prime-logistics-delegation";
 import {
   createLogisticsRequest, createLogisticsWorkplanItem, getLogisticsRequest,
@@ -220,6 +221,19 @@ describe("AMOS Prime / Adolbi GAD Logistics delegated Staging pilot", () => {
     ).get() as { agent_id: string; action: string; outcome: string };
     expect(audit.agent_id).toBe("eghosa-test-actor");
     expect(audit.outcome).toBe("allowed");
+  });
+
+  it("restores only versioned GAD R1/R2 tables in a fresh staging training database", () => {
+    const db = fixture.db!;
+    db.exec("DROP TABLE gad_logistics_workplan_items");
+    db.exec("DROP TABLE gad_logistics_events");
+    db.exec("DROP TABLE gad_logistics_requests");
+    const first = ensureStagingTrainingLogisticsSchema();
+    expect(first).toEqual({ r1Applied: true, r2Applied: true, requests: 0, workplans: 0 });
+    const again = ensureStagingTrainingLogisticsSchema();
+    expect(again).toEqual({ r1Applied: false, r2Applied: false, requests: 0, workplans: 0 });
+    const restored = makeRequest();
+    expect(getLogisticsRequest(restored.id)?.status).toBe("submitted");
   });
 
   it("accepts ephemeral credentials and revokes them without changing the parent identity", async () => {
