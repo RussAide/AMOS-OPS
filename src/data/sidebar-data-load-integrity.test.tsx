@@ -307,6 +307,25 @@ beforeAll(async () => {
     challengeId: login.challengeId,
     code: reviewMfaCode,
   });
+  // The Phase 3 fixture was reviewed on 2026-07-14. It must fail closed
+  // after 90 days. An authenticated, synthetic super-admin explicitly records
+  // the current QA access review with its existing audited procedure before
+  // loading the protected executive route. Do not bypass the freshness gate.
+  const reviewed = createTRPCProxyClient<AppRouter>({
+    links: [
+      httpBatchLink({
+        url: `${harness.origin}/api/trpc`,
+        transformer: superjson,
+        headers: { authorization: `Bearer ${verified.token}`, "x-amos-workspace": "operational" },
+      }),
+    ],
+  });
+  const previous = await reviewed.phase3.controlStatus.query();
+  expect(previous.productionWritesBlocked).toBe(true);
+  const currentReview = await reviewed.phase3.recordAccessReview.mutate();
+  expect(currentReview.productionWritesBlocked).toBe(true);
+  expect(currentReview.accessReviewedBy).toBe(verified.user.id);
+  expect(Date.parse(currentReview.accessReviewedAt)).toBeGreaterThan(Date.parse(previous.accessReviewedAt));
   localStorage.setItem("amos_token", verified.token);
   localStorage.setItem("amos-role", "super-admin");
   localStorage.setItem("amos-workspace", "operational");

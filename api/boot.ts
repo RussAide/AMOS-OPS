@@ -4,6 +4,8 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { serve } from "@hono/node-server";
 import { initDatabase } from "./db-init";
 import { seedCypressLaunchTrainingMatrix } from "./launch/staging-launch-matrix";
+import { createPrimeDelegationGateway, initializeDelegatedAgents } from "./agents/prime-logistics-delegation";
+import { runLiveStagingDelegateAcceptance } from "./agents/prime-logistics-live-qa";
 import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
@@ -53,6 +55,15 @@ try {
     logger.info("launch.staging_training_matrix_seeded", {
       details: launchMatrixSeed,
     });
+  }
+  if (env.isStaging) {
+    const agents = runWithDataScope("training", () =>
+      initializeDelegatedAgents({
+        primeKeyHash: process.env.AMOS_PRIME_COMMAND_KEY_SHA256,
+        logisticsKeyHash: process.env.AMOS_GAD_LOGISTICS_KEY_SHA256,
+      }),
+    );
+    logger.info("agents.staging_delegation_initialized", { details: agents });
   }
   logger.info("database.initialized");
 } catch (err) {
@@ -575,6 +586,11 @@ app.get("/uploads/:filename", async (c) => {
   return c.body(new Uint8Array(fileBuffer));
 });
 
+// Staging-only AMOS Prime delegation. Separate agent credentials never authenticate tRPC.
+if (env.isStaging && !env.isProduction) {
+  app.route("/api/delegation", createPrimeDelegationGateway());
+}
+
 // ─── tRPC API (lazy load to avoid env.ts at startup) ─────────
 app.use("/api/trpc/*", async (c) => {
   const blockedSyntheticProcedures = blockedProductionSyntheticProcedures(
@@ -653,6 +669,20 @@ serve({ fetch: app.fetch, port }, () => {
       health: `http://localhost:${port}/api/health`,
     },
   });
+  // Explicit Staging-only, once-per-immutable-candidate live HTTP acceptance.
+  // QA credentials are generated in server memory, never returned to callers.
+  if (env.isStaging && !env.isProduction &&
+      process.env.AMOS_PRIME_LIVE_QA_RUN_ONCE === "true") {
+    void runLiveStagingDelegateAcceptance(port, publicRuntimeConfig.buildId)
+      .then((result) => {
+        logger.info("agents.staging_live_acceptance", { details: result });
+      })
+      .catch((error) => {
+        logger.error("agents.staging_live_acceptance_unhandled", {
+          details: { error: error instanceof Error ? error.message : "Unknown error" },
+        });
+      });
+  }
 });
 
 export default app;

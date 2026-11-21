@@ -578,7 +578,7 @@ function filterNode(
   role: string,
   runtimeMode: SidebarRuntimeMode,
 ): SidebarNavNode | null {
-  if (!modeAllows(node.modes, runtimeMode)) return null;
+  if (node.type !== "status" && !modeAllows(node.modes, runtimeMode)) return null;
 
   if (node.type === "link") {
     const routePath = node.href.split("?")[0];

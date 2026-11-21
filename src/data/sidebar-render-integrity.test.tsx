@@ -97,7 +97,7 @@ describe("production sidebar render integrity", () => {
         </TRPCProvider>,
       );
 
-      expect(markup).toContain(`>${link.label}</span>`);
+      expect(markup).toContain(`>${link.label.replace(/&/g, "&amp;")}</span>`);
       expect(markup).toContain('aria-current="page"');
       expect(markup).not.toContain("Page not found");
       expect(markup).not.toContain("Access denied");
