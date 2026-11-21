@@ -12,7 +12,7 @@
 import { randomUUID } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { Hono } from "hono";
-import { z } from "zod";
+
 import { env } from "../lib/env";
 import { loadRuntimeReleaseIdentity } from "../release-identity";
 import { sqlite, runWithDataScope } from "../queries/connection";
