@@ -5,6 +5,7 @@ import { serve } from "@hono/node-server";
 import { initDatabase } from "./db-init";
 import { seedCypressLaunchTrainingMatrix } from "./launch/staging-launch-matrix";
 import { applyControlledCypressLaunchAtStartup } from "./launch/production-launch-cutover";
+import { applyControlledCypressLaunchAtStartup } from "./launch/production-launch-cutover";
 import { createPrimeDelegationGateway, initializeDelegatedAgents } from "./agents/prime-logistics-delegation";
 import { createGithubOidcLogisticsBridge } from "./agents/github-oidc-logistics";
 import { runLiveStagingDelegateAcceptance } from "./agents/prime-logistics-live-qa";
@@ -86,6 +87,17 @@ if (env.isProduction && !releaseIdentity.verified) {
   throw new Error(
     `RELEASE_IDENTITY_UNVERIFIED: ${releaseIdentity.reason ?? "immutable release manifest is unavailable"}`,
   );
+}
+if (env.isProduction) {
+  // Exact approved release, source-pinned registry and verified backup are
+  // required before any operational launch task is imported. No startup
+  // import takes place without its own final Owner approval reference.
+  const cypressLaunch = applyControlledCypressLaunchAtStartup(releaseIdentity);
+  if (cypressLaunch.status === "IMPORTED") {
+    logger.info("launch.production_controlled_matrix_imported", {
+      details: cypressLaunch,
+    });
+  }
 }
 // Only an explicitly authorized, exact-source Production cutover imports the
 // SharePoint-controlled Cypress matrix. The normal Staging and Production
