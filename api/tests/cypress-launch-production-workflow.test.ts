@@ -42,7 +42,7 @@ function caller(role: string, userId = "user-1") {
   return m1Router.createCaller({
     req: new Request("https://amos-ops.com/api/trpc"),
     resHeaders: new Headers(),
-    user: {id:userId,email:userId+"@example.invalid",role},
+    user: {id:userId,email:userId+"@example.invalid",role,firstName:"Synthetic",lastName:"Reviewer"},
   });
 }
 
