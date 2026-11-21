@@ -41,6 +41,18 @@ interface EscalatedTask {
   escalationReason: string;
 }
 
+/**
+ * Explicit priority ordering is mandatory for launch tasks. Lexical ordering
+ * placed "high" after "low" and "medium", hiding urgent launch work.
+ */
+const prioritizedWorkQueueOrder =
+  " ORDER BY CASE priority WHEN 'urgent' THEN 0 " +
+  "WHEN 'high' THEN 1 WHEN 'medium' THEN 2 " +
+  "WHEN 'low' THEN 3 ELSE 4 END, " +
+  "CASE WHEN entity_type = 'adolbi_cypress_launch_2026' THEN 0 ELSE 1 END, " +
+  "CASE WHEN entity_type = 'adolbi_cypress_launch_2026' THEN task_title ELSE '' END, " +
+  "due_date ASC";
+
 export const m1Router = createRouter({
   // ─── M1.1: Onboarding Progress ───────────────────────────
   getOnboardingProgress: authedQuery
@@ -282,7 +294,7 @@ export const m1Router = createRouter({
       if (input?.assignedTo) { sql += " AND assigned_to = ?"; params.push(input.assignedTo); }
       if (input?.status) { sql += " AND status = ?"; params.push(input.status); }
       else { sql += " AND status IN ('pending', 'in-progress')"; }
-      sql += " ORDER BY priority DESC, due_date ASC";
+      sql += prioritizedWorkQueueOrder;
       return sqlite.prepare(sql).all(...params) ?? [];
     }),
 
@@ -525,7 +537,7 @@ export const m1Router = createRouter({
       if (input?.assignedTo) { taskSql += " AND assigned_to = ?"; params.push(input.assignedTo); }
       if (input?.status) { taskSql += " AND status = ?"; params.push(input.status); }
       else { taskSql += " AND status IN ('pending', 'in-progress')"; }
-      taskSql += " ORDER BY priority DESC, due_date ASC";
+      taskSql += prioritizedWorkQueueOrder;
 
       const tasks = (sqlite.prepare(taskSql).all(...params) ?? []) as WorkTaskRow[];
 
