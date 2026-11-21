@@ -5,6 +5,7 @@ import { serve } from "@hono/node-server";
 import { initDatabase } from "./db-init";
 import { seedCypressLaunchTrainingMatrix } from "./launch/staging-launch-matrix";
 import { createPrimeDelegationGateway, initializeDelegatedAgents } from "./agents/prime-logistics-delegation";
+import { createGithubOidcLogisticsBridge } from "./agents/github-oidc-logistics";
 import { runLiveStagingDelegateAcceptance } from "./agents/prime-logistics-live-qa";
 import { randomUUID } from "crypto";
 import fs from "fs";
@@ -589,6 +590,8 @@ app.get("/uploads/:filename", async (c) => {
 // Staging-only AMOS Prime delegation. Separate agent credentials never authenticate tRPC.
 if (env.isStaging && !env.isProduction) {
   app.route("/api/delegation", createPrimeDelegationGateway());
+  // Independent short-lived workload identity: synthetic Staging QA only.
+  app.route("/api/delegation/gh-oidc", createGithubOidcLogisticsBridge());
 }
 
 // ─── tRPC API (lazy load to avoid env.ts at startup) ─────────
