@@ -44,6 +44,7 @@ const primeKey = "P".repeat(48);
 const logisticsKey = "L".repeat(48);
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 const coordinatorId = "11111111-1111-4111-8111-111111111111";
+const managerId = "33333333-3333-4333-8333-333333333333";
 
 function loadMigration(db: Database.Database, filename: string) {
   const source = readFileSync(path.join(process.cwd(), "db/migrations", filename), "utf8");
@@ -60,13 +61,15 @@ function setup() {
   db.exec("CREATE TABLE work_queue (priority TEXT, status TEXT, entity_type TEXT, entity_id TEXT, task_title TEXT, evidence_required INTEGER, evidence_uploaded INTEGER, due_date TEXT)");
   db.prepare("INSERT INTO users VALUES (?, 'logistics-coordinator', 1, 'training')")
     .run(coordinatorId);
+  db.prepare("INSERT INTO users VALUES (?, 'logistics-manager', 1, 'training')")
+    .run(managerId);
   db.prepare("INSERT INTO work_queue (priority, status, entity_type) VALUES ('urgent', 'pending', 'adolbi_cypress_launch_2026')").run();
   fixture.db = db;
   initializeDelegatedAgents({ primeKeyHash: digest(primeKey), logisticsKeyHash: digest(logisticsKey) });
   return db;
 }
 function makeRequest(division: "gro" | "bhc" = "gro") {
-  return createLogisticsRequest({
+  const request = createLogisticsRequest({
     originDivision: division,
     requesterUserId: "human-requester-1",
     requesterRole: "program-director",
@@ -75,6 +78,9 @@ function makeRequest(division: "gro" | "bhc" = "gro") {
     requirement: "Demonstrate controlled logistics workflow with synthetic records",
     priority: "priority",
   });
+  fixture.db!.prepare("UPDATE gad_logistics_requests SET logistics_manager_id = ? WHERE id = ?")
+    .run(managerId, request.id);
+  return getLogisticsRequest(request.id)!;
 }
 function header(key: string) {
   return { "x-amos-delegation-key": key };
@@ -174,6 +180,22 @@ describe("AMOS Prime / Adolbi GAD Logistics delegated Staging pilot", () => {
       action: "blocker", requestId: request.id, dependencyType: "new",
       dependencyOwner: "Vendor Desk", note: "No mutation after submission",
     })).status).toBe(409);
+  });
+
+  it("cannot assign any coordinator before a valid human Logistics Manager owns the request", async () => {
+    const app = createPrimeDelegationGateway();
+    const request = makeRequest();
+    fixture.db!.prepare("UPDATE gad_logistics_requests SET logistics_manager_id = NULL WHERE id = ?")
+      .run(request.id);
+    const denied = await postAction(app, logisticsKey, {
+      action: "assign", requestId: request.id, coordinatorId,
+    });
+    expect(denied.status).toBe(409);
+    expect((await denied.json()).error).toBe("HUMAN_MANAGER_OWNERSHIP_REQUIRED");
+    expect(getLogisticsRequest(request.id)?.logistics_coordinator_id).toBeNull();
+    expect(fixture.db!.prepare("SELECT COUNT(*) AS count FROM gad_agent_action_audit " +
+      "WHERE agent_id = ? AND action = 'assign' AND outcome = 'denied'").get(LOGISTICS_ID))
+      .toMatchObject({ count: 1 });
   });
 
   it("requires valid staff assignments and authorized SharePoint evidence", async () => {
