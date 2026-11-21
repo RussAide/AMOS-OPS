@@ -1,4 +1,4 @@
-import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { env } from "../lib/env";
@@ -54,7 +54,14 @@ export function initializeDelegatedAgents(settings: {
     "id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, action TEXT NOT NULL, " +
     "resource_id TEXT NOT NULL, outcome TEXT NOT NULL, detail TEXT NOT NULL, occurred_at TEXT NOT NULL);" +
     "CREATE INDEX IF NOT EXISTS idx_gad_agent_action_audit_actor " +
-    "ON gad_agent_action_audit(agent_id, occurred_at);"
+    "ON gad_agent_action_audit(agent_id, occurred_at);" +
+    "CREATE TABLE IF NOT EXISTS gad_agent_qa_credentials (" +
+    "id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, key_hash TEXT NOT NULL, " +
+    "active INTEGER NOT NULL CHECK (active IN (0,1)), expires_at TEXT NOT NULL, created_at TEXT NOT NULL);" +
+    "CREATE INDEX IF NOT EXISTS idx_gad_agent_qa_credentials_actor " +
+    "ON gad_agent_qa_credentials(agent_id, active, expires_at);" +
+    "CREATE TABLE IF NOT EXISTS gad_agent_scenario_runs (" +
+    "id TEXT PRIMARY KEY, status TEXT NOT NULL, results_json TEXT NOT NULL, started_at TEXT NOT NULL, finished_at TEXT);"
   );
   let created = 0, retained = 0;
   const specs: Array<[DelegateId, string, string | undefined]> = [
@@ -83,9 +90,50 @@ export function initializeDelegatedAgents(settings: {
 export function verifyDelegate(id: DelegateId, key?: string): boolean {
   requireTraining();
   const p = principal(id);
-  return Boolean(p && p.active === 1 && !p.revoked_at && key &&
-    key.length >= 32 && key.length <= 256 && constantEqual(p.key_hash, digest(key)));
+  if (!p || p.active !== 1 || p.revoked_at || !key ||
+      key.length < 32 || key.length > 256) return false;
+  const keyHash = digest(key);
+  if (constantEqual(p.key_hash, keyHash)) return true;
+  const qa = sqlite.prepare(
+    "SELECT active FROM gad_agent_qa_credentials " +
+    "WHERE agent_id = ? AND key_hash = ? AND active = 1 AND expires_at > ? LIMIT 1"
+  ).get(id, keyHash, new Date().toISOString()) as { active: number } | undefined;
+  return qa?.active === 1;
 }
+/**
+ * Five-minute, one-use live Staging acceptance credential. Key material stays
+ * in the server's memory; only its digest is stored in the TRAINING database.
+ * The credential is never exposed over any HTTP endpoint.
+ */
+export function issueStagingScenarioCredential(id: DelegateId): {
+  key: string;
+  credentialId: string;
+} {
+  requireTraining();
+  const row = principal(id);
+  if (!row || row.active !== 1 || row.revoked_at) {
+    throw new Error("QA_DELEGATE_REVOKED_OR_ABSENT");
+  }
+  const key = randomBytes(32).toString("base64url");
+  const credentialId = randomUUID();
+  const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
+  sqlite.prepare(
+    "INSERT INTO gad_agent_qa_credentials " +
+    "(id, agent_id, key_hash, active, expires_at, created_at) VALUES (?, ?, ?, 1, ?, ?)"
+  ).run(credentialId, id, digest(key), expiresAt, new Date().toISOString());
+  return { key, credentialId };
+}
+
+export function revokeStagingScenarioCredential(id: DelegateId, credentialId: string): boolean {
+  requireTraining();
+  const changed = sqlite.prepare(
+    "UPDATE gad_agent_qa_credentials SET active = 0 WHERE id = ? AND agent_id = ? AND active = 1"
+  ).run(credentialId, id).changes === 1;
+  audit(id, "qa_credential_revoke", credentialId,
+    changed ? "allowed" : "denied", "Temporary Staging credential only");
+  return changed;
+}
+
 export function revokeDelegate(id: DelegateId, human: IdentityUser): boolean {
   requireTraining();
   if (!["managing-director", "super-admin"].includes(human.role) ||
@@ -207,8 +255,30 @@ function safeCoordinationOverview() {
     "SELECT origin_division AS division, status, COUNT(*) AS count FROM " +
     "gad_logistics_requests GROUP BY origin_division, status"
   ).all();
-  audit(PRIME_ID, "coordination_overview", "cypress", "allowed");
-  return { actorId: PRIME_ID, trainingOnly: true, launch, logistics };
+  const providerActions = sqlite.prepare(
+    "SELECT entity_id AS id, task_title AS title, status, priority, " +
+    "evidence_required AS evidenceRequired, evidence_uploaded AS evidenceUploaded, due_date AS due " +
+    "FROM work_queue WHERE entity_type = 'adolbi_cypress_launch_2026' " +
+    "AND entity_id IN ('N01', 'N02', 'N03', 'N04') ORDER BY entity_id"
+  ).all() as Array<{ id: string; title: string; status: string; priority: string;
+    evidenceRequired: number; evidenceUploaded: number; due: string | null }>;
+  audit(PRIME_ID, "coordination_overview", "cypress", "allowed",
+    "N01-N04 readiness; authoritative provider source not yet connected");
+  return {
+    actorId: PRIME_ID, trainingOnly: true, launch, logistics,
+    providerNetworkReadiness: {
+      source: "AMOS-OPS controlled 40-action launch matrix",
+      actionIds: ["N01", "N02", "N03", "N04"],
+      actions: providerActions,
+      recordedActions: providerActions.length,
+      authoritativeProviderNetworkConnected: false,
+      placementCrmConnected: false,
+      verifiedProviders: null,
+      verifiedReferralCapacity: null,
+      referralGate: "HOLD",
+      nextAction: "Reconcile verified Provider Network and CRM sources before referral activation",
+    },
+  };
 }
 
 function rejectAccess(c: Context, id: DelegateId, action: string): Response | null {
