@@ -89,7 +89,7 @@ function postAction(app: ReturnType<typeof createPrimeDelegationGateway>, key: s
 describe("AMOS Prime / Adolbi GAD Logistics delegated Staging pilot", () => {
   beforeEach(setup);
   afterEach(() => {
-    fixture.db.close();
+    fixture.db?.close();
     fixture.db = null;
   });
 
@@ -161,7 +161,7 @@ describe("AMOS Prime / Adolbi GAD Logistics delegated Staging pilot", () => {
     const events = listLogisticsEvents(request.id);
     expect(events.filter((event) => event.actor_user_id === LOGISTICS_ID))
       .toHaveLength(5);
-    const audited = fixture.db.prepare(
+    const audited = fixture.db!.prepare(
       "SELECT action, agent_id, outcome FROM gad_agent_action_audit WHERE agent_id = ? ORDER BY occurred_at"
     ).all(LOGISTICS_ID) as Array<{ action: string; agent_id: string; outcome: string }>;
     const allowed = audited.filter((entry) => entry.outcome === "allowed");
@@ -213,7 +213,7 @@ describe("AMOS Prime / Adolbi GAD Logistics delegated Staging pilot", () => {
     expect(verifyDelegate(PRIME_ID, primeKey)).toBe(true);
     expect((await app.request("/prime/overview", { headers: header(primeKey) })).status)
       .toBe(200);
-    const audit = fixture.db.prepare(
+    const audit = fixture.db!.prepare(
       "SELECT agent_id, action, outcome FROM gad_agent_action_audit WHERE action = 'revoke'"
     ).get() as { agent_id: string; action: string; outcome: string };
     expect(audit.agent_id).toBe("eghosa-test-actor");
