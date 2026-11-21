@@ -851,6 +851,7 @@ export const m1Router = createRouter({
       if (!task) {
         throw new Error("Task not found");
       }
+      if (task.entity_type === CYPRESS_LAUNCH_ENTITY_TYPE) requireLaunchView(ctx.user.role);
 
       const previousLevel = task.escalation_level ?? 0;
       const resolvedNewLevel = input.newLevel ?? Math.min(previousLevel + 1, 3);
@@ -927,6 +928,7 @@ export const m1Router = createRouter({
         throw new Error("Task not found");
       }
 
+      if (task.entity_type === CYPRESS_LAUNCH_ENTITY_TYPE) requireLaunchView(ctx.user.role);
       const oldAssignee = task.assigned_to ?? null;
       const timestamp = new Date().toISOString();
 
