@@ -30,7 +30,7 @@ describe("sidebar route integrity", () => {
       .filter(
         (link) =>
           ![...routes].some((route) =>
-            matchesRegisteredRoute(link.href, route),
+            matchesRegisteredRoute(link.href.split("?")[0], route),
           ),
       )
       .map((link) => `${link.label}: ${link.href}`);

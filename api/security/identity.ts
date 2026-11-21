@@ -2003,7 +2003,26 @@ export function createIdentityService(
   };
 }
 
-export const identityService = createIdentityService(applicationDatabase);
+// Deferred until the first identity operation. Eager import-time construction
+// creates the users table before boot.ts can install the complete fresh schema,
+// which makes a new, empty database look partially initialized to DMS.1.
+// Existing database records and the identity service API remain unchanged.
+type DefaultIdentityService = ReturnType<typeof createIdentityService>;
+let initializedIdentityService: DefaultIdentityService | null = null;
+function getInitializedIdentityService(): DefaultIdentityService {
+  initializedIdentityService ??= createIdentityService(applicationDatabase);
+  return initializedIdentityService;
+}
+export const identityService: DefaultIdentityService = new Proxy(
+  {} as DefaultIdentityService,
+  {
+    get(_target, property) {
+      const service = getInitializedIdentityService();
+      const value: unknown = Reflect.get(service, property);
+      return typeof value === "function" ? value.bind(service) : value;
+    },
+  },
+);
 
 export function bearerTokenFromRequest(request: Request): string | null {
   const authorization = request.headers.get("authorization");

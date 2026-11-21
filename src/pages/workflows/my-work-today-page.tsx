@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { trpc } from "@/providers/trpc";
 import { PageLayout } from "@/components/shell/page-layout";
 import { WorkTaskFilters } from "@/components/workflows/work-task-filters";
@@ -136,6 +137,13 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
 
 function generateEvidenceItems(task: WorkTask): EvidenceItem[] {
   const items: EvidenceItem[] = [];
+  if (task.entity_type === "adolbi_cypress_launch_2026") {
+    return [{ id: task.id + "-sharepoint-review",
+      name: "Controlled SharePoint evidence and human approval reference",
+      required: true,
+      status: task.evidence_uploaded === 1 ? "complete" : "pending",
+    }];
+  }
   if (task.entity_type === "onboarding") {
     items.push(
       {
@@ -270,12 +278,14 @@ const MY_WORK_VIEW_COPY: Record<
 };
 
 export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
+  const location = useLocation();
+  const isCypressLaunch = new URLSearchParams(location.search).get("context") === "cypress-launch";
   const [filteredTasks, setFilteredTasks] = useState<EnrichedTask[] | null>(
     null,
   );
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [dialogState, setDialogState] = useState<{
-    type: "complete" | "reassign" | "escalate" | "comment" | null;
+    type: "complete" | "launch-review" | "reassign" | "escalate" | "comment" | null;
     taskId: string | null;
   }>({ type: null, taskId: null });
 
@@ -284,13 +294,30 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
   const [reassignee, setReassignee] = useState("");
   const [reason, setReason] = useState("");
   const [comment, setComment] = useState("");
+  const [launchEvidenceLink, setLaunchEvidenceLink] = useState("");
+  const [launchApprovalLink, setLaunchApprovalLink] = useState("");
 
   /* ─── tRPC Hooks ─── */
   const utils = trpc.useUtils();
-  const { data: rawTasks, isLoading, error } = trpc.m1.getWorkQueue.useQuery();
+  const {
+    data: standardTasks, isLoading: standardLoading, error: standardError,
+  } = trpc.m1.getWorkQueue.useQuery(undefined, { enabled: !isCypressLaunch });
+  const {
+    data: launchTasks, isLoading: launchLoading, error: launchError,
+  } = trpc.m1.getCypressLaunchQueue.useQuery(undefined, { enabled: isCypressLaunch });
+  const rawTasks = isCypressLaunch ? launchTasks : standardTasks;
+  const isLoading = isCypressLaunch ? launchLoading : standardLoading;
+  const error = isCypressLaunch ? launchError : standardError;
 
   const claimMutation = trpc.m1.claimWorkTask.useMutation({
     onSuccess: () => utils.m1.getWorkQueue.invalidate(),
+  });
+  const launchReviewMutation = trpc.m1.completeCypressLaunchTask.useMutation({
+    onSuccess: () => {
+      utils.m1.getCypressLaunchQueue.invalidate();
+      utils.m1.getWorkQueue.invalidate();
+      closeDialog();
+    },
   });
   const completeMutation = trpc.m1.completeWorkTask.useMutation({
     onSuccess: () => {
@@ -321,7 +348,12 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
   const enrichedTasks: EnrichedTask[] = useMemo(() => {
     if (!rawTasks) return [];
     const now = new Date();
-    return (rawTasks as WorkTask[]).map((t) => {
+    const scopedRows = isCypressLaunch
+      ? (rawTasks as WorkTask[]).filter(
+          (task) => task.entity_type === "adolbi_cypress_launch_2026",
+        )
+      : (rawTasks as WorkTask[]);
+    return scopedRows.map((t) => {
       const wfDef = WORKFLOW_DEFS[t.task_type] || {
         code: "WF-000",
         name: "General",
@@ -337,7 +369,7 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
         isOverdue,
       };
     });
-  }, [rawTasks]);
+  }, [rawTasks, isCypressLaunch]);
 
   const sectionTasks = useMemo(() => {
     const tasks = [...enrichedTasks];
@@ -374,16 +406,21 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
             new Date(left.due_date).getTime(),
         );
     }
-    return tasks.filter((task) => task.status !== "completed");
-  }, [enrichedTasks, view]);
+    return isCypressLaunch ? tasks : tasks.filter((task) => task.status !== "completed");
+  }, [enrichedTasks, view, isCypressLaunch]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setFilteredTasks(null), 0);
     return () => window.clearTimeout(timer);
-  }, [view]);
+  }, [view, isCypressLaunch]);
 
   const visibleTasks = filteredTasks ?? sectionTasks;
-  const viewCopy = MY_WORK_VIEW_COPY[view];
+  const viewCopy = isCypressLaunch
+    ? {
+        title: view === "attention" ? "Cypress Launch · Exceptions & Approvals" : "Cypress Launch · 40-Action Matrix",
+        description: "40 controlled launch actions in the existing work queue. Source IDs, due dates, human approvals and admission HOLD are preserved; Provider Network integration remains separate.",
+      }
+    : MY_WORK_VIEW_COPY[view];
 
   /* ─── Stats (computed from ALL tasks, not filtered) ─── */
   const overdueCount = enrichedTasks.filter((t) => t.isOverdue).length;
@@ -422,7 +459,7 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
 
   const openDialog = useCallback(
     (
-      type: "complete" | "reassign" | "escalate" | "comment",
+      type: "complete" | "launch-review" | "reassign" | "escalate" | "comment",
       taskId: string,
     ) => {
       setDialogState({ type, taskId });
@@ -430,6 +467,8 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
       setReassignee("");
       setReason("");
       setComment("");
+      setLaunchEvidenceLink("");
+      setLaunchApprovalLink("");
     },
     [],
   );
@@ -440,6 +479,8 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
     setReassignee("");
     setReason("");
     setComment("");
+    setLaunchEvidenceLink("");
+    setLaunchApprovalLink("");
   }, []);
 
   const handleClaim = (taskId: string) => claimMutation.mutate({ taskId });
@@ -457,6 +498,15 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
             },
           ]
         : undefined,
+    });
+  };
+  const handleLaunchReview = () => {
+    if (!dialogState.taskId) return;
+    launchReviewMutation.mutate({
+      taskId: dialogState.taskId,
+      evidenceReference: launchEvidenceLink.trim(),
+      approvalReference: launchApprovalLink.trim(),
+      reviewNote: reason.trim(),
     });
   };
   const handleReassign = () => {
@@ -730,7 +780,10 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
                           isExpanded={expandedTask === task.id}
                           onToggleExpand={() => toggleExpand(task.id)}
                           onClaim={() => handleClaim(task.id)}
-                          onComplete={() => openDialog("complete", task.id)}
+                          onComplete={() =>
+                            openDialog(task.entity_type === "adolbi_cypress_launch_2026" ?
+                              "launch-review" : "complete", task.id)
+                          }
                           onReassign={() => openDialog("reassign", task.id)}
                           onEscalate={() => openDialog("escalate", task.id)}
                           onComment={() => openDialog("comment", task.id)}
@@ -746,6 +799,62 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
         </div>
 
         {/* ─── Dialogs ─── */}
+
+        {/* Controlled launch evidence review: no ordinary file-upload shortcut. */}
+        <Dialog
+          open={dialogState.type === "launch-review"}
+          onOpenChange={(open) => !open && closeDialog()}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Launch action evidence review</DialogTitle>
+              <DialogDescription>
+                A designated human leadership reviewer must verify the underlying
+                evidence and any legally required qualified approval before closing.
+                First admission (Q04) remains on HOLD.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <div>
+                <Label>Controlled SharePoint evidence link</Label>
+                <Input type="url" className="mt-1" value={launchEvidenceLink}
+                  onChange={(e) => setLaunchEvidenceLink(e.target.value)}
+                  placeholder="https://adolbi.sharepoint.com/sites/CypressGRO/..."
+                />
+              </div>
+              <div>
+                <Label>Human approval / qualified review evidence link</Label>
+                <Input type="url" className="mt-1" value={launchApprovalLink}
+                  onChange={(e) => setLaunchApprovalLink(e.target.value)}
+                  placeholder="https://adolbi.sharepoint.com/sites/CypressGRO/..."
+                />
+              </div>
+              <div>
+                <Label>Review notes and approval boundary</Label>
+                <Textarea className="mt-1" value={reason} rows={3}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Identify the authorized reviewer, evidence checked and any mandatory qualified approval."
+                />
+              </div>
+              {launchReviewMutation.error && (
+                <p className="text-xs text-red-700" role="alert">
+                  {launchReviewMutation.error.message}
+                </p>
+              )}
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline" size="sm">Cancel</Button>
+              </DialogClose>
+              <Button size="sm" onClick={handleLaunchReview}
+                disabled={launchReviewMutation.isPending ||
+                  !launchEvidenceLink.trim() || !launchApprovalLink.trim() ||
+                  reason.trim().length < 15}>
+                {launchReviewMutation.isPending ? "Recording..." : "Record reviewed closeout"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Complete Dialog */}
         <Dialog
@@ -1229,16 +1338,23 @@ function TaskCard({
                   Claim
                 </Button>
               )}
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-[11px] h-8"
-                style={{ borderColor: "#059669", color: "#059669" }}
-                onClick={onComplete}
-              >
-                <CheckCircle2 size={10} className="mr-1" />
-                Complete
-              </Button>
+              {task.status !== "completed" && task.entity_id !== "Q04" && (
+                <Button
+                  size="sm" variant="outline" className="text-[11px] h-8"
+                  style={{ borderColor: "#059669", color: "#059669" }}
+                  onClick={onComplete}
+                >
+                  <CheckCircle2 size={10} className="mr-1" />
+                  {task.entity_type === "adolbi_cypress_launch_2026" ?
+                    "Leadership review" : "Complete"}
+                </Button>
+              )}
+              {task.entity_type === "adolbi_cypress_launch_2026" &&
+                task.entity_id === "Q04" && (
+                  <span className="text-xs font-semibold text-red-700">
+                    First admission HOLD — separate Owner decision required
+                  </span>
+                )}
               <Button
                 size="sm"
                 variant="outline"

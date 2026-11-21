@@ -20,9 +20,9 @@ type NavigationShape = string | { label: string; children: NavigationShape[] };
 
 function navigationShape(nodes: readonly SidebarNavNode[]): NavigationShape[] {
   return nodes.map((node) =>
-    node.type === "link"
-      ? node.label
-      : { label: node.label, children: navigationShape(node.children) },
+    node.type === "group"
+      ? { label: node.label, children: navigationShape(node.children) }
+      : node.label,
   );
 }
 
@@ -33,6 +33,7 @@ describe("department-grouped sidebar navigation", () => {
     expect(navigation.map((node) => node.label)).toEqual([
       "Home",
       "My Work",
+      "Cypress Launch Command",
       "Logistics Management & Coordination",
       "Behavioral Health Center",
       "General Residential Operations",
@@ -65,6 +66,20 @@ describe("department-grouped sidebar navigation", () => {
           "Items requiring attention",
           "Calendar and deadlines",
           "Recent activity",
+        ],
+      },
+      {
+        label: "Cypress Launch Command",
+        children: [
+          "Launch Matrix · 40 Actions",
+          "Recruitment & Hiring",
+          "Screening & Clearance",
+          "Staff Onboarding",
+          "Logistics Readiness",
+          "Provider Network",
+          "Referrals & Intake (existing)",
+          "Quality Evidence (existing)",
+          "Launch Exceptions & Approvals",
         ],
       },
       {
@@ -242,6 +257,27 @@ describe("department-grouped sidebar navigation", () => {
     );
   });
 
+  it("restricts Cypress Launch Command to enterprise leadership", () => {
+    for (const role of ["managing-director", "super-admin", "administrator"]) {
+      expect(groupLabels(getSidebarNavigation(role, "production"))).toContain("Cypress Launch Command");
+      expect(groupLabels(getSidebarNavigation(role, "demo"))).toContain("Cypress Launch Command");
+    }
+    for (const role of ["rcs-day", "hr-director", "logistics-coordinator"]) {
+      expect(groupLabels(getSidebarNavigation(role, "production"))).not.toContain("Cypress Launch Command");
+    }
+  });
+
+  it("keeps Provider Network non-clickable until its integration passes acceptance", () => {
+    const launch = getSidebarNavigation("managing-director", "production").find((node) => node.type === "group" && node.id === "cypress-launch");
+    expect(launch?.type).toBe("group");
+    if (launch?.type !== "group") return;
+    const provider = launch.children.find((node) => node.id === "cypress-launch-provider-network");
+    expect(provider?.type).toBe("status");
+    if (provider?.type !== "status") return;
+    expect(provider.detail).toContain("Integration pending");
+    expect(flattenSidebarLinks([launch]).some((node) => node.id === provider.id)).toBe(false);
+  });
+
   it("keeps system administration out of frontline navigation", () => {
     const navigation = getSidebarNavigation("rcs-day", "production");
     expect(navigation.map((node) => node.label)).not.toContain(
@@ -256,7 +292,7 @@ describe("department-grouped sidebar navigation", () => {
       );
       for (const link of links) {
         expect(
-          authorizeClientRoute(role, link.href).allowed,
+          authorizeClientRoute(role, link.href.split("?")[0]).allowed,
           `${role} should be authorized for ${link.href}`,
         ).toBe(true);
       }

@@ -3,6 +3,11 @@ import { bodyLimit } from "hono/body-limit";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { serve } from "@hono/node-server";
 import { initDatabase } from "./db-init";
+import { seedCypressLaunchTrainingMatrix } from "./launch/staging-launch-matrix";
+import { applyControlledCypressLaunchAtStartup } from "./launch/production-launch-cutover";
+import { createPrimeDelegationGateway, initializeDelegatedAgents } from "./agents/prime-logistics-delegation";
+import { createGithubOidcLogisticsBridge } from "./agents/github-oidc-logistics";
+import { runLiveStagingDelegateAcceptance } from "./agents/prime-logistics-live-qa";
 import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
@@ -43,6 +48,25 @@ let databaseInitializationError: unknown;
 try {
   initDatabase();
   runWithDataScope("training", () => initDatabase({ trainingWorkspace: true }));
+  if (env.isStaging && process.env.ADOLBI_CYPRESS_LAUNCH_MATRIX_2026) {
+    const launchMatrixSeed = runWithDataScope("training", () =>
+      seedCypressLaunchTrainingMatrix(
+        process.env.ADOLBI_CYPRESS_LAUNCH_MATRIX_2026!,
+      ),
+    );
+    logger.info("launch.staging_training_matrix_seeded", {
+      details: launchMatrixSeed,
+    });
+  }
+  if (env.isStaging) {
+    const agents = runWithDataScope("training", () =>
+      initializeDelegatedAgents({
+        primeKeyHash: process.env.AMOS_PRIME_COMMAND_KEY_SHA256,
+        logisticsKeyHash: process.env.AMOS_GAD_LOGISTICS_KEY_SHA256,
+      }),
+    );
+    logger.info("agents.staging_delegation_initialized", { details: agents });
+  }
   logger.info("database.initialized");
 } catch (err) {
   databaseInitializationError = err;
@@ -62,6 +86,17 @@ if (env.isProduction && !releaseIdentity.verified) {
   throw new Error(
     `RELEASE_IDENTITY_UNVERIFIED: ${releaseIdentity.reason ?? "immutable release manifest is unavailable"}`,
   );
+}
+// Only an explicitly authorized, exact-source Production cutover imports the
+// SharePoint-controlled Cypress matrix. The normal Staging and Production
+// startup paths remain unchanged, including existing accounts and work data.
+const cypressLaunchCutover = await runWithDataScope("operational", () =>
+  applyControlledCypressLaunchAtStartup(releaseIdentity),
+);
+if (cypressLaunchCutover.status === "IMPORTED") {
+  logger.info("launch.production_matrix_imported", {
+    details: cypressLaunchCutover,
+  });
 }
 const runtimeReleaseEnvironment = releaseIdentity.verified
   ? {
@@ -564,6 +599,13 @@ app.get("/uploads/:filename", async (c) => {
   return c.body(new Uint8Array(fileBuffer));
 });
 
+// Staging-only AMOS Prime delegation. Separate agent credentials never authenticate tRPC.
+if (env.isStaging && !env.isProduction) {
+  app.route("/api/delegation", createPrimeDelegationGateway());
+  // Independent short-lived workload identity: synthetic Staging QA only.
+  app.route("/api/delegation/gh-oidc", createGithubOidcLogisticsBridge());
+}
+
 // ─── tRPC API (lazy load to avoid env.ts at startup) ─────────
 app.use("/api/trpc/*", async (c) => {
   const blockedSyntheticProcedures = blockedProductionSyntheticProcedures(
@@ -642,6 +684,20 @@ serve({ fetch: app.fetch, port }, () => {
       health: `http://localhost:${port}/api/health`,
     },
   });
+  // Explicit Staging-only, once-per-immutable-candidate live HTTP acceptance.
+  // QA credentials are generated in server memory, never returned to callers.
+  if (env.isStaging && !env.isProduction &&
+      process.env.AMOS_PRIME_LIVE_QA_RUN_ONCE === "true") {
+    void runLiveStagingDelegateAcceptance(port, publicRuntimeConfig.buildId)
+      .then((result) => {
+        logger.info("agents.staging_live_acceptance", { details: result });
+      })
+      .catch((error) => {
+        logger.error("agents.staging_live_acceptance_unhandled", {
+          details: { error: error instanceof Error ? error.message : "Unknown error" },
+        });
+      });
+  }
 });
 
 export default app;

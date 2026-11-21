@@ -1,0 +1,23 @@
+name: AMOS-OPS Staging Independent GAD Agent Acceptance
+
+on:
+  push:
+    branches:
+      - staging/amos-g3-oidc-agent-20261121
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  independent-logistics-agent:
+    name: Short-lived GitHub OIDC identity to Staging GAD Logistics
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.14.0"
+      - name: Independently authenticate, execute, deny and clean up synthetic Staging work
+        run: node scripts/amos-gad-independent-agent.mjs

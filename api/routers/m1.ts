@@ -3,6 +3,8 @@ import { createRouter, authedQuery, adminQuery, auditLog } from "../middleware";
 import { sqlite } from "../queries/connection";
 import { randomUUID } from "crypto";
 import { assertSyntheticScenarioRuntime, env } from "../lib/env";
+import { CYPRESS_LAUNCH_ENTITY_TYPE, CYPRESS_LAUNCH_PREFIX } from "../launch/production-launch-matrix";
+import { TRPCError } from "@trpc/server";
 
 // ─── M1: First Vertical Slice Router ───────────────────────
 
@@ -24,6 +26,8 @@ interface WorkTaskRow {
   escalation_level: number | null;
   assigned_by: string | null;
   assigned_to: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
 }
 interface WorkflowGroup {
   workflowId: string;
@@ -39,6 +43,71 @@ interface EscalatedTask {
   dueDate: string | null;
   assignedTo: string | null;
   escalationReason: string;
+}
+
+/**
+ * Explicit priority ordering is mandatory for launch tasks. Lexical ordering
+ * placed "high" after "low" and "medium", hiding urgent launch work.
+ */
+const prioritizedWorkQueueOrder =
+  " ORDER BY CASE priority WHEN 'urgent' THEN 0 " +
+  "WHEN 'high' THEN 1 WHEN 'medium' THEN 2 " +
+  "WHEN 'low' THEN 3 ELSE 4 END, " +
+  "CASE WHEN entity_type = 'adolbi_cypress_launch_2026' THEN 0 ELSE 1 END, " +
+  "CASE WHEN entity_type = 'adolbi_cypress_launch_2026' THEN task_title ELSE '' END, " +
+  "due_date ASC";
+
+const cypressLaunchReviewRoles = new Set([
+  "managing-director", "super-admin",
+]);
+const cypressLaunchViewRoles = new Set([
+  ...cypressLaunchReviewRoles, "administrator",
+]);
+
+function requireLaunchView(role: string): void {
+  if (!cypressLaunchViewRoles.has(role)) {
+    throw new TRPCError({code:"FORBIDDEN",message:"Cypress Launch Command requires enterprise leadership access."});
+  }
+}
+function requireLaunchReview(role: string): void {
+  if (!cypressLaunchReviewRoles.has(role)) {
+    throw new TRPCError({code:"FORBIDDEN",message:"Cypress launch completion requires a designated human leadership reviewer."});
+  }
+}
+function assertLaunchTaskAccess(task: WorkTaskRow, user: {
+  id: string; email: string; role: string;
+}): void {
+  if (task.entity_type !== CYPRESS_LAUNCH_ENTITY_TYPE) return;
+  if (cypressLaunchViewRoles.has(user.role) ||
+      task.assigned_to === user.email || task.assigned_to === user.id) return;
+  throw new TRPCError({code:"FORBIDDEN",
+    message:"Launch action access requires leadership or an explicit assigned task."});
+}
+function limitLaunchWorkQueueForRole(
+  sql: string, params: string[], user: {id:string;email:string;role:string}
+): string {
+  if (cypressLaunchViewRoles.has(user.role)) return sql;
+  params.push(CYPRESS_LAUNCH_ENTITY_TYPE, user.id, user.email);
+  return sql + " AND (entity_type IS NULL OR entity_type != ? OR assigned_to IN (?, ?))";
+}
+function assertNotUngovernedLaunchClose(task: WorkTaskRow, nextStatus: string): void {
+  if (task.entity_type === CYPRESS_LAUNCH_ENTITY_TYPE && nextStatus === "completed") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: task.entity_id === "Q04" ?
+        "First admission remains on HOLD and requires separate Owner and qualified approval." :
+        "Complete this launch action through the leadership evidence-review procedure.",
+    });
+  }
+}
+function requireControlledSharePointReference(value: string): void {
+  let url: URL;
+  try { url = new URL(value); }
+  catch { throw new TRPCError({code:"BAD_REQUEST",message:"A controlled SharePoint evidence link is required."}); }
+  if (url.protocol !== "https:" || url.hostname !== "adolbi.sharepoint.com" ||
+      !url.pathname.startsWith("/sites/CypressGRO/")) {
+    throw new TRPCError({code:"BAD_REQUEST",message:"Evidence must reference the controlled Cypress GRO SharePoint repository."});
+  }
 }
 
 export const m1Router = createRouter({
@@ -276,14 +345,81 @@ export const m1Router = createRouter({
   // ─── M1.8: My Work Today ─────────────────────────────────
   getWorkQueue: authedQuery
     .input(z.object({ assignedTo: z.string().optional(), status: z.string().optional() }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       let sql = "SELECT * FROM work_queue WHERE 1=1";
       const params: string[] = [];
+      sql = limitLaunchWorkQueueForRole(sql, params, ctx.user);
       if (input?.assignedTo) { sql += " AND assigned_to = ?"; params.push(input.assignedTo); }
       if (input?.status) { sql += " AND status = ?"; params.push(input.status); }
       else { sql += " AND status IN ('pending', 'in-progress')"; }
-      sql += " ORDER BY priority DESC, due_date ASC";
+      sql += prioritizedWorkQueueOrder;
       return sqlite.prepare(sql).all(...params) ?? [];
+    }),
+
+  getCypressLaunchQueue: authedQuery.query(({ ctx }) => {
+    requireLaunchView(ctx.user.role);
+    return sqlite.prepare(
+      "SELECT * FROM work_queue WHERE entity_type = ? " +
+      "ORDER BY CAST(SUBSTR(task_title, 5, 2) AS INTEGER) ASC, id ASC"
+    ).all(CYPRESS_LAUNCH_ENTITY_TYPE);
+  }),
+
+  completeCypressLaunchTask: authedQuery
+    .input(z.object({
+      taskId: z.string().regex(/^ADL-LAUNCH-2026-[GCWSBNOFTQ]0[1-4]$/),
+      evidenceReference: z.string().url().max(1200),
+      approvalReference: z.string().url().max(1200),
+      reviewNote: z.string().trim().min(15).max(1200),
+    }))
+    .mutation(({ ctx, input }) => {
+      requireLaunchReview(ctx.user.role);
+      requireControlledSharePointReference(input.evidenceReference);
+      requireControlledSharePointReference(input.approvalReference);
+      const task = sqlite.prepare(
+        "SELECT * FROM work_queue WHERE id = ?"
+      ).get(input.taskId) as WorkTaskRow | undefined;
+      if (!task || task.entity_type !== CYPRESS_LAUNCH_ENTITY_TYPE ||
+          task.id !== CYPRESS_LAUNCH_PREFIX + task.entity_id) {
+        throw new TRPCError({code:"NOT_FOUND",message:"Controlled launch action not found."});
+      }
+      if (task.entity_id === "Q04") {
+        throw new TRPCError({
+          code:"FORBIDDEN",
+          message:"First admission remains on HOLD. Separate qualified approval and Owner admission decision are required.",
+        });
+      }
+      if (task.status === "completed") {
+        return {success:true, alreadyCompleted:true, taskId:task.id};
+      }
+      const actor = ctx.user.email;
+      sqlite.transaction(() => {
+        const addEvidence = sqlite.prepare(
+          "INSERT INTO task_evidence " +
+          "(id, task_id, file_name, file_path, evidence_type, uploaded_by, uploaded_at) " +
+          "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))"
+        );
+        addEvidence.run(randomUUID(), task.id, "Cypress launch action evidence",
+          input.evidenceReference, "launch-action-evidence", actor);
+        addEvidence.run(randomUUID(), task.id, "Human approval and qualified review reference",
+          input.approvalReference, "launch-action-review", actor);
+        const result = sqlite.prepare(
+          "UPDATE work_queue SET status = 'completed', completed_at = datetime('now'), " +
+          "completed_by = ?, evidence_uploaded = 1 WHERE id = ? AND status != 'completed'"
+        ).run(actor, task.id);
+        if (result.changes !== 1) throw new Error("CYPRESS_LAUNCH_CONCURRENT_REVIEW");
+        sqlite.prepare(
+          "INSERT INTO workflow_audit_log " +
+          "(id, instance_id, action, actor, details, created_at) " +
+          "VALUES (?, ?, 'cypress-launch:human-evidence-review', ?, ?, datetime('now'))"
+        ).run(randomUUID(), task.id, actor,
+          JSON.stringify({reviewNote:input.reviewNote,
+            evidenceReference:input.evidenceReference,
+            approvalReference:input.approvalReference,
+            externalApprovalMustBeVerifiedByQualifiedHuman:true}));
+      })();
+      auditLog({action:"m1:completeCypressLaunchTask",actor,
+        resource:"task:"+task.id,details:"Human reviewed controlled SharePoint evidence; Q04 remains HOLD."});
+      return {success:true, alreadyCompleted:false, taskId:task.id};
     }),
 
   createWorkTask: authedQuery
@@ -300,6 +436,11 @@ export const m1Router = createRouter({
       dueDate: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      if (input.entityType === CYPRESS_LAUNCH_ENTITY_TYPE ||
+          input.entityId?.startsWith(CYPRESS_LAUNCH_PREFIX)) {
+        throw new TRPCError({code:"FORBIDDEN",
+          message:"Controlled launch actions are imported only from the authoritative registry."});
+      }
       const actor = ctx.user?.email ?? "unknown";
       const id = randomUUID();
       sqlite.prepare(
@@ -325,6 +466,7 @@ export const m1Router = createRouter({
       if (!task) {
         throw new Error("Task not found");
       }
+      assertLaunchTaskAccess(task, ctx.user);
       if (task.status === "completed") {
         throw new Error("Completed tasks cannot be claimed");
       }
@@ -358,13 +500,12 @@ export const m1Router = createRouter({
     .mutation(async ({ ctx, input }) => {
       const actor = ctx.user.email;
       const task = sqlite.prepare(
-        "SELECT id FROM work_queue WHERE id = ?"
-      ).get(input.taskId) as IdRow | undefined;
-
+        "SELECT * FROM work_queue WHERE id = ?"
+      ).get(input.taskId) as WorkTaskRow | undefined;
       if (!task) {
         throw new Error("Task not found");
       }
-
+      assertLaunchTaskAccess(task, ctx.user);
       const id = randomUUID();
       const createdAt = new Date().toISOString();
       sqlite.prepare(
@@ -395,6 +536,8 @@ export const m1Router = createRouter({
       if (!task) {
         throw new Error("Task not found");
       }
+      assertLaunchTaskAccess(task, ctx.user);
+      assertNotUngovernedLaunchClose(task, "completed");
 
       // ─── D003-03: Evidence gate validation ─────────────────
       if (task.workflow_id) {
@@ -457,6 +600,14 @@ export const m1Router = createRouter({
     .mutation(async ({ ctx, input }) => {
       const actor = ctx.user?.email ?? "unknown";
 
+      // Controlled launch actions require a human-approved evidence review.
+      const task = sqlite.prepare(
+        "SELECT * FROM work_queue WHERE id = ?"
+      ).get(input.taskId) as WorkTaskRow | undefined;
+      if (!task) throw new TRPCError({code:"NOT_FOUND", message:"Task not found"});
+      assertLaunchTaskAccess(task, ctx.user);
+      assertNotUngovernedLaunchClose(task, input.toStatus);
+
       // Evidence gate check
       if (input.toStatus === "completed" && !input.evidenceProvided) {
         throw new Error("Evidence required before completing this task");
@@ -482,7 +633,7 @@ export const m1Router = createRouter({
 
   getWorkQueueGrouped: authedQuery
     .input(z.object({ assignedTo: z.string().optional(), status: z.string().optional() }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       // Ensure default workflows exist
       const defaultWorkflows = [
         { workflow_id: "WF-001", workflow_name: "Referral Intake", category: "GRO" },
@@ -522,10 +673,11 @@ export const m1Router = createRouter({
       // Build task query
       let taskSql = "SELECT * FROM work_queue WHERE 1=1";
       const params: string[] = [];
+      taskSql = limitLaunchWorkQueueForRole(taskSql, params, ctx.user);
       if (input?.assignedTo) { taskSql += " AND assigned_to = ?"; params.push(input.assignedTo); }
       if (input?.status) { taskSql += " AND status = ?"; params.push(input.status); }
       else { taskSql += " AND status IN ('pending', 'in-progress')"; }
-      taskSql += " ORDER BY priority DESC, due_date ASC";
+      taskSql += prioritizedWorkQueueOrder;
 
       const tasks = (sqlite.prepare(taskSql).all(...params) ?? []) as WorkTaskRow[];
 
@@ -699,6 +851,7 @@ export const m1Router = createRouter({
       if (!task) {
         throw new Error("Task not found");
       }
+      if (task.entity_type === CYPRESS_LAUNCH_ENTITY_TYPE) requireLaunchView(ctx.user.role);
 
       const previousLevel = task.escalation_level ?? 0;
       const resolvedNewLevel = input.newLevel ?? Math.min(previousLevel + 1, 3);
@@ -775,6 +928,7 @@ export const m1Router = createRouter({
         throw new Error("Task not found");
       }
 
+      if (task.entity_type === CYPRESS_LAUNCH_ENTITY_TYPE) requireLaunchView(ctx.user.role);
       const oldAssignee = task.assigned_to ?? null;
       const timestamp = new Date().toISOString();
 
