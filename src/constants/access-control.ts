@@ -619,6 +619,7 @@ export const PROCEDURE_ROOT_ACCESS: Readonly<
   Record<string, ProcedureAccessProfile>
 > = {
   auth: { domain: "self-service" },
+  cypressQaReferral: { domain: "self-service" },
   dashboard: { domain: "dashboard" },
   analytics: { domain: "reports" },
   mgma: { domain: "reports" },

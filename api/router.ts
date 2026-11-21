@@ -1,9 +1,12 @@
+import { TRPCError } from "@trpc/server";
 import {
   adminQuery,
   anonymousQuery,
   createRouter,
   publicQuery,
+  roleQuery,
 } from "./middleware";
+import { readCypressQaReferral } from "./launch/cypress-qa-referral";
 import { documentsRouter } from "./routers/documents";
 import { personaRouter } from "./routers/persona";
 import { hrRouter } from "./routers/hr";
@@ -143,6 +146,15 @@ const entraRouter = createRouter({
 export const appRouter = createRouter({
   ping: anonymousQuery.query(() => ({ ok: true, ts: Date.now() })),
   auth: authRouter,
+  cypressQaReferral: createRouter({
+    read: roleQuery(["managing-director", "super-admin"]).query(async () => {
+      const result = await readCypressQaReferral();
+      if (result.status === "disabled") {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      return result;
+    }),
+  }),
   hr: hrRouter,
   bhc: clinicalRouter,
   revenue: revenueRouter,
