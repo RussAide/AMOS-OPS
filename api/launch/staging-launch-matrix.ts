@@ -208,7 +208,7 @@ export function seedCypressLaunchTrainingMatrix(
           existing.entity_id !== action.id)) {
         throw new Error("CYPRESS_LAUNCH_TASK_ID_CONFLICT");
       }
-      const title = "[" + action.priority + "] " + action.id + " — " +
+      const title = "[" + action.priority + "-" + String(action.rank).padStart(2, "0") + "] " + action.id + " — " +
         (action.id === "Q04" ? "[FIRST ADMISSION HOLD] " : "") +
         action.title;
       const description = descriptionFor(action);
