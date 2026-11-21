@@ -61,7 +61,7 @@ afterEach(cleanup);
 
 function LocationProbe() {
   const location = useLocation();
-  return <output data-testid="current-path">{location.pathname}</output>;
+  return <output data-testid="current-path">{location.pathname + location.search}</output>;
 }
 
 async function expandGroups(
