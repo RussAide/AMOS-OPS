@@ -155,7 +155,10 @@ async function inspectRunningMode(kind, reviewPassword, reviewPasswordHash) {
           AMOS_ENVIRONMENT_ID: "amos-ops-demo-built-smoke",
           CREDENTIAL_NAMESPACE: "amos-ops/demo/built-smoke",
           DATABASE_PATH: path.join(temporaryRoot, "data", "demo", "amos-ops.db"),
+          TRAINING_DATABASE_PATH: path.join(temporaryRoot, "data", "demo", "training", "amos-ops-training.db"),
           UPLOAD_PATH: path.join(temporaryRoot, "uploads", "demo"),
+          TRAINING_UPLOAD_PATH: path.join(temporaryRoot, "uploads", "demo", "training"),
+          BACKUP_PATH: path.join(temporaryRoot, "backups", "demo"),
         }
       : {
           ...common,
@@ -170,7 +173,10 @@ async function inspectRunningMode(kind, reviewPassword, reviewPasswordHash) {
             "staging",
             "amos-ops.db",
           ),
+          TRAINING_DATABASE_PATH: path.join(temporaryRoot, "data", "staging", "training", "amos-ops-training.db"),
           UPLOAD_PATH: path.join(temporaryRoot, "uploads", "staging"),
+          TRAINING_UPLOAD_PATH: path.join(temporaryRoot, "uploads", "staging", "training"),
+          BACKUP_PATH: path.join(temporaryRoot, "backups", "staging"),
           AMOS_FINAL_GATE_OWNER_EMAIL: "owner@amos-ops.invalid",
           AMOS_FINAL_GATE_CANDIDATE_ID: CANDIDATE_ID,
           AMOS_SOURCE_DIGEST: SOURCE_DIGEST,
