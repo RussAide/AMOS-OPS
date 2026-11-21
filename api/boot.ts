@@ -102,7 +102,7 @@ if (env.isProduction) {
 // Only an explicitly authorized, exact-source Production cutover imports the
 // SharePoint-controlled Cypress matrix. The normal Staging and Production
 // startup paths remain unchanged, including existing accounts and work data.
-const cypressLaunchCutover = runWithDataScope("operational", () =>
+const cypressLaunchCutover = await runWithDataScope("operational", () =>
   applyControlledCypressLaunchAtStartup(releaseIdentity),
 );
 if (cypressLaunchCutover.status === "IMPORTED") {
