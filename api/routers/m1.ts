@@ -74,6 +74,22 @@ function requireLaunchReview(role: string): void {
     throw new TRPCError({code:"FORBIDDEN",message:"Cypress launch completion requires a designated human leadership reviewer."});
   }
 }
+function assertLaunchTaskAccess(task: WorkTaskRow, user: {
+  id: string; email: string; role: string;
+}): void {
+  if (task.entity_type !== CYPRESS_LAUNCH_ENTITY_TYPE) return;
+  if (cypressLaunchViewRoles.has(user.role) ||
+      task.assigned_to === user.email || task.assigned_to === user.id) return;
+  throw new TRPCError({code:"FORBIDDEN",
+    message:"Launch action access requires leadership or an explicit assigned task."});
+}
+function limitLaunchWorkQueueForRole(
+  sql: string, params: string[], user: {id:string;email:string;role:string}
+): string {
+  if (cypressLaunchViewRoles.has(user.role)) return sql;
+  params.push(CYPRESS_LAUNCH_ENTITY_TYPE, user.id, user.email);
+  return sql + " AND (entity_type IS NULL OR entity_type != ? OR assigned_to IN (?, ?))";
+}
 function assertNotUngovernedLaunchClose(task: WorkTaskRow, nextStatus: string): void {
   if (task.entity_type === CYPRESS_LAUNCH_ENTITY_TYPE && nextStatus === "completed") {
     throw new TRPCError({
@@ -329,9 +345,10 @@ export const m1Router = createRouter({
   // ─── M1.8: My Work Today ─────────────────────────────────
   getWorkQueue: authedQuery
     .input(z.object({ assignedTo: z.string().optional(), status: z.string().optional() }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       let sql = "SELECT * FROM work_queue WHERE 1=1";
       const params: string[] = [];
+      sql = limitLaunchWorkQueueForRole(sql, params, ctx.user);
       if (input?.assignedTo) { sql += " AND assigned_to = ?"; params.push(input.assignedTo); }
       if (input?.status) { sql += " AND status = ?"; params.push(input.status); }
       else { sql += " AND status IN ('pending', 'in-progress')"; }
@@ -419,6 +436,11 @@ export const m1Router = createRouter({
       dueDate: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      if (input.entityType === CYPRESS_LAUNCH_ENTITY_TYPE ||
+          input.entityId?.startsWith(CYPRESS_LAUNCH_PREFIX)) {
+        throw new TRPCError({code:"FORBIDDEN",
+          message:"Controlled launch actions are imported only from the authoritative registry."});
+      }
       const actor = ctx.user?.email ?? "unknown";
       const id = randomUUID();
       sqlite.prepare(
@@ -444,6 +466,7 @@ export const m1Router = createRouter({
       if (!task) {
         throw new Error("Task not found");
       }
+      assertLaunchTaskAccess(task, ctx.user);
       if (task.status === "completed") {
         throw new Error("Completed tasks cannot be claimed");
       }
@@ -477,13 +500,12 @@ export const m1Router = createRouter({
     .mutation(async ({ ctx, input }) => {
       const actor = ctx.user.email;
       const task = sqlite.prepare(
-        "SELECT id FROM work_queue WHERE id = ?"
-      ).get(input.taskId) as IdRow | undefined;
-
+        "SELECT * FROM work_queue WHERE id = ?"
+      ).get(input.taskId) as WorkTaskRow | undefined;
       if (!task) {
         throw new Error("Task not found");
       }
-
+      assertLaunchTaskAccess(task, ctx.user);
       const id = randomUUID();
       const createdAt = new Date().toISOString();
       sqlite.prepare(
@@ -514,6 +536,7 @@ export const m1Router = createRouter({
       if (!task) {
         throw new Error("Task not found");
       }
+      assertLaunchTaskAccess(task, ctx.user);
       assertNotUngovernedLaunchClose(task, "completed");
 
       // ─── D003-03: Evidence gate validation ─────────────────
@@ -577,14 +600,13 @@ export const m1Router = createRouter({
     .mutation(async ({ ctx, input }) => {
       const actor = ctx.user?.email ?? "unknown";
 
-      // Controlled launch actions require separate, human-reviewed SharePoint evidence.
-      if (input.toStatus === "completed") {
-        const task = sqlite.prepare(
-          "SELECT * FROM work_queue WHERE id = ?"
-        ).get(input.taskId) as WorkTaskRow | undefined;
-        if (!task) throw new TRPCError({code:"NOT_FOUND", message:"Task not found"});
-        assertNotUngovernedLaunchClose(task, input.toStatus);
-      }
+      // Controlled launch actions require a human-approved evidence review.
+      const task = sqlite.prepare(
+        "SELECT * FROM work_queue WHERE id = ?"
+      ).get(input.taskId) as WorkTaskRow | undefined;
+      if (!task) throw new TRPCError({code:"NOT_FOUND", message:"Task not found"});
+      assertLaunchTaskAccess(task, ctx.user);
+      assertNotUngovernedLaunchClose(task, input.toStatus);
 
       // Evidence gate check
       if (input.toStatus === "completed" && !input.evidenceProvided) {
@@ -611,7 +633,7 @@ export const m1Router = createRouter({
 
   getWorkQueueGrouped: authedQuery
     .input(z.object({ assignedTo: z.string().optional(), status: z.string().optional() }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       // Ensure default workflows exist
       const defaultWorkflows = [
         { workflow_id: "WF-001", workflow_name: "Referral Intake", category: "GRO" },
@@ -651,6 +673,7 @@ export const m1Router = createRouter({
       // Build task query
       let taskSql = "SELECT * FROM work_queue WHERE 1=1";
       const params: string[] = [];
+      taskSql = limitLaunchWorkQueueForRole(taskSql, params, ctx.user);
       if (input?.assignedTo) { taskSql += " AND assigned_to = ?"; params.push(input.assignedTo); }
       if (input?.status) { taskSql += " AND status = ?"; params.push(input.status); }
       else { taskSql += " AND status IN ('pending', 'in-progress')"; }
