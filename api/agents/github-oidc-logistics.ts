@@ -14,6 +14,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { Hono } from "hono";
 import { z } from "zod";
 import { env } from "../lib/env";
+import { loadRuntimeReleaseIdentity } from "../release-identity";
 import { sqlite, runWithDataScope } from "../queries/connection";
 import {
   createLogisticsRequest,
@@ -99,6 +100,10 @@ async function authenticate(header: string | undefined): Promise<AgentClaims | n
         !/^\d{5,20}$/.test(payload.run_id) ||
         typeof payload.sha !== "string" ||
         !/^[0-9a-f]{40}$/.test(payload.sha)) return null;
+    // The independent runner must execute the SAME immutable source identity
+    // as the live Staging service, not simply any future commit on the branch.
+    const release = loadRuntimeReleaseIdentity();
+    if (!release.verified || release.commitSha !== payload.sha) return null;
     const enabled = runWithDataScope("training", active);
     return enabled ? { runId: payload.run_id, sourceSha: payload.sha, actor: LOGISTICS_ID } : null;
   } catch {
