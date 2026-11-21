@@ -42,7 +42,7 @@ vi.mock("../security/identity", () => ({
   resolveRequestedDataScope: () => "training",
 }));
 
-import { appRouter } from "../router";
+// The root router imports M2 tables eagerly; defer import until the synthetic DB is initialized.
 import {
   getLogisticsRequest,
   listLogisticsEvents,
@@ -90,6 +90,7 @@ describe("G3 Logistics requester verification and human-only closeout", () => {
   });
 
   it("refuses agent and unrelated person sign-off, allows requester verify then manager close", async () => {
+    const { appRouter } = await import("../router");
     const requester = appRouter.createCaller(context("requester")).logistics;
     const other = appRouter.createCaller(context("other")).logistics;
     const manager = appRouter.createCaller(context("manager")).gad;
@@ -162,6 +163,7 @@ describe("G3 Logistics requester verification and human-only closeout", () => {
   });
 
   it("requester return-for-information reopens work and stops manager closure", async () => {
+    const { appRouter } = await import("../router");
     const requester = appRouter.createCaller(context("requester")).logistics;
     const manager = appRouter.createCaller(context("manager")).gad;
     const created = await requester.createRequest({
