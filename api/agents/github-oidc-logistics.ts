@@ -43,6 +43,7 @@ type FixtureRow = {
   run_id: string;
   request_id: string;
   coordinator_id: string;
+  manager_id: string;
   workplan_id: string;
 };
 
@@ -56,7 +57,7 @@ function prepareFixtureRegistry(): void {
   sqlite.exec(
     "CREATE TABLE IF NOT EXISTS gad_agent_external_qa_fixture (" +
     "run_id TEXT PRIMARY KEY NOT NULL, request_id TEXT NOT NULL, " +
-    "coordinator_id TEXT NOT NULL, workplan_id TEXT NOT NULL, " +
+    "coordinator_id TEXT NOT NULL, manager_id TEXT NOT NULL, workplan_id TEXT NOT NULL, " +
     "created_at TEXT NOT NULL);",
   );
 }
@@ -116,7 +117,7 @@ const evidence = "https://adolbi.sharepoint.com/sites/CypressGRO/Shared%20Docume
 function fixtureFor(runId: string): FixtureRow | undefined {
   prepareFixtureRegistry();
   return sqlite.prepare(
-    "SELECT run_id, request_id, coordinator_id, workplan_id FROM " +
+    "SELECT run_id, request_id, coordinator_id, manager_id, workplan_id FROM " +
     "gad_agent_external_qa_fixture WHERE run_id = ?",
   ).get(runId) as FixtureRow | undefined;
 }
@@ -125,6 +126,7 @@ function createFixture(runId: string): FixtureRow {
   const old = fixtureFor(runId);
   if (old) throw new Error("QA_FIXTURE_ALREADY_EXISTS");
   const coordinatorId = randomUUID();
+  const managerId = randomUUID();
   const now = new Date().toISOString();
   return sqlite.transaction(() => {
     sqlite.prepare(
@@ -134,6 +136,13 @@ function createFixture(runId: string): FixtureRow {
       "(?, ?, 'NOT_A_LOGIN', 'Synthetic', 'QA Only', 'logistics-coordinator', " +
       "'GAD', 1, 'training', ?, ?)",
     ).run(coordinatorId, "external-qa-" + coordinatorId + "@example.invalid", now, now);
+    sqlite.prepare(
+      "INSERT INTO users " +
+      "(id, email, password_hash, first_name, last_name, role, department, " +
+      "is_active, access_status, created_at, updated_at) VALUES " +
+      "(?, ?, 'NOT_A_LOGIN', 'Synthetic', 'QA Manager', 'logistics-manager', " +
+      "'GAD', 1, 'training', ?, ?)",
+    ).run(managerId, "external-qa-" + managerId + "@example.invalid", now, now);
     const request = createLogisticsRequest({
       originDivision: "gro",
       requesterUserId: "synthetic-external-qa-requester",
@@ -143,6 +152,11 @@ function createFixture(runId: string): FixtureRow {
       requirement: "Non-operational test of external authenticated agent workflow",
       priority: "priority",
     });
+    // Only synthetic QA: stage the manager prerequisite as an existing
+    // owner assignment, not an agent-granted managerial approval.
+    sqlite.prepare(
+      "UPDATE gad_logistics_requests SET logistics_manager_id = ? WHERE id = ?"
+    ).run(managerId, request.id);
     const workplan = createLogisticsWorkplanItem({
       requestId: request.id,
       ownerUserId: coordinatorId,
@@ -155,14 +169,15 @@ function createFixture(runId: string): FixtureRow {
     });
     sqlite.prepare(
       "INSERT INTO gad_agent_external_qa_fixture " +
-      "(run_id, request_id, coordinator_id, workplan_id, created_at) " +
-      "VALUES (?, ?, ?, ?, ?)",
-    ).run(runId, request.id, coordinatorId, workplan.id, now);
+      "(run_id, request_id, coordinator_id, manager_id, workplan_id, created_at) " +
+      "VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(runId, request.id, coordinatorId, managerId, workplan.id, now);
     audit("external_qa_setup", request.id, true, runId);
     return {
       run_id: runId,
       request_id: request.id,
       coordinator_id: coordinatorId,
+      manager_id: managerId,
       workplan_id: workplan.id,
     };
   })();
@@ -194,6 +209,9 @@ function cleanup(runId: string) {
     sqlite.prepare(
       "DELETE FROM users WHERE id = ? AND email LIKE 'external-qa-%@example.invalid'",
     ).run(fixture.coordinator_id);
+    sqlite.prepare(
+      "DELETE FROM users WHERE id = ? AND email LIKE 'external-qa-%@example.invalid'",
+    ).run(fixture.manager_id);
     sqlite.prepare("DELETE FROM gad_agent_external_qa_fixture WHERE run_id = ?")
       .run(runId);
     audit("external_qa_cleanup", fixture.request_id, true, runId);
