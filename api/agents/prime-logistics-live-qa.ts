@@ -34,6 +34,7 @@ type QaResult = {
 
 type Fixture = {
   coordinatorId: string;
+  managerId: string;
   requestId: string;
   supplyId: string;
   vendorId: string;
@@ -50,6 +51,7 @@ const registryEvidence =
 function makeFixture(): Fixture {
   const now = new Date().toISOString();
   const coordinatorId = randomUUID();
+  const managerId = randomUUID();
   sqlite.prepare(
     "INSERT INTO users " +
     "(id, email, password_hash, first_name, last_name, role, department, " +
@@ -57,6 +59,14 @@ function makeFixture(): Fixture {
     "VALUES (?, ?, ?, 'Synthetic', 'QA Coordinator', 'logistics-coordinator', " +
     "'GAD', 1, 'training', ?, ?)"
   ).run(coordinatorId, "qa-" + coordinatorId + "@example.invalid",
+    "NOT_A_REAL_CREDENTIAL", now, now);
+  sqlite.prepare(
+    "INSERT INTO users " +
+    "(id, email, password_hash, first_name, last_name, role, department, " +
+    "is_active, access_status, created_at, updated_at) " +
+    "VALUES (?, ?, ?, 'Synthetic', 'QA Manager', 'logistics-manager', " +
+    "'GAD', 1, 'training', ?, ?)"
+  ).run(managerId, "qa-" + managerId + "@example.invalid",
     "NOT_A_REAL_CREDENTIAL", now, now);
   const base = {
     requesterUserId: "synthetic-qa-requester",
@@ -76,6 +86,9 @@ function makeFixture(): Fixture {
     ...base, originDivision: "gro", serviceType: "equipment",
     title: "SYNTHETIC QA: vendor generator schedule",
   });
+  sqlite.prepare(
+    "UPDATE gad_logistics_requests SET logistics_manager_id = ? WHERE id IN (?, ?, ?)"
+  ).run(managerId, repair.id, supply.id, vendor.id);
   const workplan = createLogisticsWorkplanItem({
     requestId: repair.id, ownerUserId: coordinatorId,
     ownerRole: "logistics-coordinator",
@@ -84,7 +97,7 @@ function makeFixture(): Fixture {
     plannedFor: "2026-11-24", createdBy: "synthetic-qa-runner",
   });
   return {
-    coordinatorId, requestId: repair.id, supplyId: supply.id,
+    coordinatorId, managerId, requestId: repair.id, supplyId: supply.id,
     vendorId: vendor.id, workplanId: workplan.id,
   };
 }
@@ -100,6 +113,9 @@ function purgeFixture(fixture: Fixture): void {
     sqlite.prepare(
       "DELETE FROM users WHERE id = ? AND email LIKE 'qa-%@example.invalid'"
     ).run(fixture.coordinatorId);
+    sqlite.prepare(
+      "DELETE FROM users WHERE id = ? AND email LIKE 'qa-%@example.invalid'"
+    ).run(fixture.managerId);
   })();
 }
 

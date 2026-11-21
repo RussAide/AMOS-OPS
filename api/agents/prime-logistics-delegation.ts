@@ -211,7 +211,7 @@ export function revokeDelegate(id: DelegateId, human: IdentityUser): boolean {
   return changed;
 }
 
-const inputSchema = z.discriminatedUnion("action", [
+export const delegatedActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("assign"), requestId: z.string().uuid(), coordinatorId: z.string().uuid() }),
   z.object({ action: z.literal("schedule"), requestId: z.string().uuid(),
     workplanItemId: z.string().uuid(), plannedFor: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -224,7 +224,7 @@ const inputSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("submit"), requestId: z.string().uuid(),
     evidenceReference: z.string().url().max(1000), note: z.string().min(3).max(400) }),
 ]);
-export type DelegatedAction = z.infer<typeof inputSchema>;
+export type DelegatedAction = z.infer<typeof delegatedActionSchema>;
 class DelegationError extends Error {
   constructor(readonly code: string, readonly status: 400 | 404 | 409 | 422 = 422) {
     super(code);
@@ -258,6 +258,18 @@ export function executeDelegatedAction(input: DelegatedAction) {
     if (!staff || staff.role !== "logistics-coordinator" ||
         staff.is_active !== 1 || !["cleared", "training"].includes(staff.access_status)) {
       throw new DelegationError("ACTIVE_COORDINATOR_REQUIRED");
+    }
+    if (!request.logistics_manager_id) {
+      throw new DelegationError("HUMAN_MANAGER_OWNERSHIP_REQUIRED", 409);
+    }
+    const manager = sqlite.prepare(
+      "SELECT role, is_active, access_status FROM users WHERE id = ?",
+    ).get(request.logistics_manager_id) as
+      | { role: string; is_active: number; access_status: string }
+      | undefined;
+    if (!manager || !["logistics-manager", "managing-director"].includes(manager.role) ||
+        manager.is_active !== 1 || !["training", "cleared"].includes(manager.access_status)) {
+      throw new DelegationError("ACTIVE_LOGISTICS_MANAGER_REQUIRED", 409);
     }
     result = updateLogisticsRequest({
       id: request.id,
@@ -382,7 +394,7 @@ export function createPrimeDelegationGateway(): Hono {
   app.post("/logistics/action", async (c) => {
     const denied = rejectAccess(c, LOGISTICS_ID, "action");
     if (denied) return denied;
-    const parsed = inputSchema.safeParse(await c.req.json().catch(() => null));
+    const parsed = delegatedActionSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "INVALID_ACTION" }, 400);
     try {
       return c.json(runWithDataScope("training", () =>
