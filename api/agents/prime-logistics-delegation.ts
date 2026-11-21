@@ -8,7 +8,7 @@ import {
   listLogisticsRequests, listLogisticsWorkplanItems, updateLogisticsRequest,
   updateLogisticsWorkplanItem,
 } from "../services/gad-logistics";
-import { resolveIdentityUser, type IdentityUser } from "../security/identity";
+import { bearerTokenFromRequest, identityService, type IdentityUser } from "../security/identity";
 
 export const PRIME_ID = "AMOS-PRIME-COMMAND";
 export const LOGISTICS_ID = "AMOS-PRIME-LOGISTICS";
@@ -265,7 +265,8 @@ export function createPrimeDelegationGateway(): Hono {
   });
   app.post("/human/revoke", async (c) => {
     if (!env.isStaging || env.isProduction) return c.json({ error: "STAGING_ONLY" }, 404);
-    const human = resolveIdentityUser(c.req.raw);
+    const sessionToken = bearerTokenFromRequest(c.req.raw);
+    const human = sessionToken ? identityService.getSession(sessionToken) : null;
     if (!human) return c.json({ error: "HUMAN_SESSION_REQUIRED" }, 401);
     const parsed = z.object({ agentId: z.enum([PRIME_ID, LOGISTICS_ID]) })
       .safeParse(await c.req.json().catch(() => null));
