@@ -1,4 +1,6 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { env } from "../lib/env";
@@ -40,12 +42,72 @@ function principal(id: DelegateId): DelegateRow | undefined {
     .get(id) as DelegateRow | undefined;
 }
 
+/**
+ * The operational environment received the existing GAD R1/R2 migrations.
+ * Staging TRAINING is a distinct DB, which may be bootstrapped without those
+ * module-owned tables. Apply ONLY the already versioned GAD Logistics schema,
+ * never a shared/core migration, and fail on partial or foreign-key errors.
+ */
+export function ensureStagingTrainingLogisticsSchema(): {
+  r1Applied: boolean;
+  r2Applied: boolean;
+  requests: number;
+  workplans: number;
+} {
+  requireTraining();
+  const exists = (table: string): boolean => Boolean(
+    sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?")
+      .get(table),
+  );
+  const hasRequests = exists("gad_logistics_requests");
+  const hasEvents = exists("gad_logistics_events");
+  const hasWorkplans = exists("gad_logistics_workplan_items");
+  if (hasRequests !== hasEvents || (hasWorkplans && !hasRequests)) {
+    throw new Error("GAD_TRAINING_MODULE_SCHEMA_PARTIAL");
+  }
+  const r1 = !hasRequests;
+  const r2 = !hasWorkplans;
+  if (r1 || r2) {
+    sqlite.transaction(() => {
+      for (const name of [
+        ...(r1 ? ["0011_gad_logistics_r1.sql"] : []),
+        ...(r2 ? ["0012_gad_logistics_r2_workplans.sql"] : []),
+      ]) {
+        const source = fs.readFileSync(
+          path.join(process.cwd(), "db", "migrations", name),
+          "utf8",
+        );
+        for (const statement of source.split("--> statement-breakpoint")) {
+          if (statement.trim()) sqlite.exec(statement);
+        }
+      }
+    })();
+  }
+  for (const table of [
+    "gad_logistics_requests",
+    "gad_logistics_events",
+    "gad_logistics_workplan_items",
+  ]) {
+    if (!exists(table)) throw new Error("GAD_TRAINING_MISSING_TABLE:" + table);
+  }
+  const violations = sqlite.prepare("PRAGMA foreign_key_check").all();
+  if (violations.length) throw new Error("GAD_TRAINING_FOREIGN_KEY_VIOLATION");
+  const requests = (sqlite.prepare(
+    "SELECT COUNT(*) AS count FROM gad_logistics_requests"
+  ).get() as { count: number }).count;
+  const workplans = (sqlite.prepare(
+    "SELECT COUNT(*) AS count FROM gad_logistics_workplan_items"
+  ).get() as { count: number }).count;
+  return { r1Applied: r1, r2Applied: r2, requests, workplans };
+}
+
 /** Idempotent module-owned identity registry. Revocation survives restarts. */
 export function initializeDelegatedAgents(settings: {
   primeKeyHash?: string;
   logisticsKeyHash?: string;
 }): { created: number; retained: number } {
   requireTraining();
+  ensureStagingTrainingLogisticsSchema();
   sqlite.exec(
     "CREATE TABLE IF NOT EXISTS gad_agent_delegated_identities (" +
     "agent_id TEXT PRIMARY KEY, scope TEXT NOT NULL, key_hash TEXT NOT NULL, " +
