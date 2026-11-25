@@ -51,3 +51,23 @@ export function isCorsExemptPublicAssetPath(pathname: string): boolean {
     pathname === "/release-manifest.json"
   );
 }
+
+/**
+ * Privacy-preserving diagnostic classification for rejected CORS requests.
+ * Log only the category, never the raw Origin, credentials or session values.
+ * This is observability only; it does not add any trusted origins.
+ */
+export function classifyDeniedCorsOrigin(
+  requestOrigin: string | undefined,
+): "missing" | "opaque" | "invalid" | "staging-first-party" | "tinyfish-third-party" | "other-third-party" {
+  if (!requestOrigin) return "missing";
+  if (requestOrigin.trim() === "null") return "opaque";
+  const origin = normalizedOrigin(requestOrigin);
+  if (!origin) return "invalid";
+  const host = new URL(origin).hostname.toLowerCase();
+  if (host === "amos-ops-staging.up.railway.app") return "staging-first-party";
+  if (host === "agent.tinyfish.ai" || host.endsWith(".tinyfish.ai")) {
+    return "tinyfish-third-party";
+  }
+  return "other-third-party";
+}
