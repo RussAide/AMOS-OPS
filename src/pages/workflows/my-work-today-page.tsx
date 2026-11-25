@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useLocation } from "react-router-dom";
+import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/providers/trpc";
 import { PageLayout } from "@/components/shell/page-layout";
 import { WorkTaskFilters } from "@/components/workflows/work-task-filters";
@@ -36,7 +37,6 @@ import {
   UserCog,
   AlertOctagon,
   MessageSquare,
-  Upload,
   CheckSquare,
   Square,
   ChevronDown,
@@ -289,8 +289,9 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
     taskId: string | null;
   }>({ type: null, taskId: null });
 
-  // Form states
-  const [file, setFile] = useState<File | null>(null);
+  // A selected local file is NOT an upload. Record an existing, controlled evidence URL.
+  const [evidenceLink, setEvidenceLink] = useState("");
+  const [evidenceType, setEvidenceType] = useState("form");
   const [reassignee, setReassignee] = useState("");
   const [reason, setReason] = useState("");
   const [comment, setComment] = useState("");
@@ -298,6 +299,25 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
   const [launchApprovalLink, setLaunchApprovalLink] = useState("");
 
   /* ─── tRPC Hooks ─── */
+  const { user } = useAuth();
+  const canManageWork = ["super-admin", "managing-director", "administrator"].includes(user?.role ?? "");
+  const { data: staffAccounts = [] } = trpc.auth.listUsers.useQuery(undefined, {
+    enabled: canManageWork,
+  });
+  const eligibleAssignees = staffAccounts.filter(
+    (account) => account.isActive && account.accessStatus === "cleared",
+  );
+  const validEvidenceLink = (() => {
+    try {
+      const candidate = new URL(evidenceLink.trim());
+      return candidate.protocol === "https:" &&
+        candidate.hostname === "adolbi.sharepoint.com" &&
+        candidate.pathname.startsWith("/sites/") &&
+        candidate.pathname.split("/").filter(Boolean).length > 2;
+    } catch {
+      return false;
+    }
+  })();
   const utils = trpc.useUtils();
   const {
     data: standardTasks, isLoading: standardLoading, error: standardError,
@@ -475,7 +495,8 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
 
   const closeDialog = useCallback(() => {
     setDialogState({ type: null, taskId: null });
-    setFile(null);
+    setEvidenceLink("");
+    setEvidenceType("form");
     setReassignee("");
     setReason("");
     setComment("");
@@ -485,19 +506,17 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
 
   const handleClaim = (taskId: string) => claimMutation.mutate({ taskId });
   const handleComplete = () => {
-    if (!dialogState.taskId) return;
+    if (!dialogState.taskId || !validEvidenceLink) return;
+    const evidenceUrl = evidenceLink.trim();
+    const fileName = decodeURIComponent(new URL(evidenceUrl).pathname.split("/").pop() || "evidence");
     completeMutation.mutate({
       taskId: dialogState.taskId,
-      evidenceUploaded: Boolean(file),
-      evidence: file
-        ? [
-            {
-              fileName: file.name,
-              filePath: `demo://${encodeURIComponent(file.name)}`,
-              evidenceType: file.type || "application/octet-stream",
-            },
-          ]
-        : undefined,
+      evidenceUploaded: true,
+      evidence: [{
+        fileName,
+        filePath: evidenceUrl,
+        evidenceType,
+      }],
     });
   };
   const handleLaunchReview = () => {
@@ -510,7 +529,8 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
     });
   };
   const handleReassign = () => {
-    if (!dialogState.taskId || !reassignee) return;
+    if (!canManageWork || !dialogState.taskId ||
+      !eligibleAssignees.some((account) => account.id === reassignee)) return;
     reassignMutation.mutate({
       taskId: dialogState.taskId,
       newAssigneeId: reassignee,
@@ -788,6 +808,7 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
                           onEscalate={() => openDialog("escalate", task.id)}
                           onComment={() => openDialog("comment", task.id)}
                           isClaiming={claimMutation.isPending}
+                          canManageWork={canManageWork}
                         />
                       ))}
                     </div>
@@ -868,25 +889,40 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
                 Complete Task
               </DialogTitle>
               <DialogDescription>
-                Mark this task as complete with evidence upload.
+                Enter a link to evidence already saved in the controlled Adolbi SharePoint repository.
+                Selecting a local file here does not upload it. The evidence reference will be recorded with the task.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
               <div>
-                <Label className="text-[12px]">Evidence File</Label>
-                <div className="mt-1.5 flex items-center gap-2">
-                  <Input
-                    type="file"
-                    className="text-[12px]"
-                    onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  />
-                </div>
-                {file && (
-                  <p className="text-[11px] mt-1" style={{ color: "#059669" }}>
-                    <Upload size={10} className="inline mr-1" />
-                    {file.name} selected
+                <Label className="text-[12px]">Existing Adolbi SharePoint evidence link</Label>
+                <Input
+                  type="url"
+                  className="mt-1.5 text-[12px]"
+                  placeholder="https://adolbi.sharepoint.com/sites/..."
+                  value={evidenceLink}
+                  onChange={(e) => setEvidenceLink(e.target.value)}
+                />
+                {!validEvidenceLink && evidenceLink.trim() && (
+                  <p className="text-[11px] text-red-700 mt-1" role="alert">
+                    Enter a controlled Adolbi SharePoint document URL; no local file is uploaded here.
                   </p>
                 )}
+              </div>
+              <div>
+                <Label className="text-[12px]">Evidence category</Label>
+                <Select value={evidenceType} onValueChange={setEvidenceType}>
+                  <SelectTrigger className="mt-1.5"><SelectValue placeholder="Choose evidence type" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="form">Form / report</SelectItem>
+                    <SelectItem value="consent">Consent</SelectItem>
+                    <SelectItem value="notes">Notes</SelectItem>
+                    <SelectItem value="credential">Credential</SelectItem>
+                    <SelectItem value="checklist">Onboarding checklist</SelectItem>
+                    <SelectItem value="plan">Plan</SelectItem>
+                    <SelectItem value="statement">Statement</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label className="text-[12px]">Completion Notes</Label>
@@ -909,7 +945,7 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
                 className="text-[12px]"
                 style={{ backgroundColor: "#059669" }}
                 onClick={handleComplete}
-                disabled={completeMutation.isPending}
+                disabled={completeMutation.isPending || !validEvidenceLink}
               >
                 {completeMutation.isPending ? (
                   <Loader2 size={12} className="animate-spin mr-1" />
@@ -945,15 +981,19 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
                     <SelectValue placeholder="Select a team member..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="u1">Demo Executive</SelectItem>
-                    <SelectItem value="u2">Demo Clinical Director</SelectItem>
-                    <SelectItem value="u3">Demo Clinical Lead</SelectItem>
-                    <SelectItem value="u4">Demo Case Manager</SelectItem>
-                    <SelectItem value="u5">HR Director</SelectItem>
-                    <SelectItem value="u6">GRO Admin</SelectItem>
+                    {eligibleAssignees.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.firstName} {account.lastName} — {account.role}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+              {eligibleAssignees.length === 0 && (
+                <p className="text-[11px] text-amber-800">
+                  No active, cleared accounts are available. Staffing access must be cleared first.
+                </p>
+              )}
               <div>
                 <Label className="text-[12px]">Reason for Reassignment</Label>
                 <Textarea
@@ -975,7 +1015,7 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
                 className="text-[12px]"
                 style={{ backgroundColor: "#2563EB" }}
                 onClick={handleReassign}
-                disabled={!reassignee || reassignMutation.isPending}
+                disabled={!reassignee || !canManageWork || reassignMutation.isPending}
               >
                 {reassignMutation.isPending ? (
                   <Loader2 size={12} className="animate-spin mr-1" />
@@ -1104,6 +1144,7 @@ interface TaskCardProps {
   onEscalate: () => void;
   onComment: () => void;
   isClaiming: boolean;
+  canManageWork: boolean;
 }
 
 function TaskCard({
@@ -1116,6 +1157,7 @@ function TaskCard({
   onEscalate,
   onComment,
   isClaiming,
+  canManageWork,
 }: TaskCardProps) {
   const pc = PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium;
   const sc = STATUS_COLORS[task.status] || STATUS_COLORS.pending;
@@ -1338,7 +1380,8 @@ function TaskCard({
                   Claim
                 </Button>
               )}
-              {task.status !== "completed" && task.entity_id !== "Q04" && (
+              {task.status !== "completed" && task.entity_id !== "Q04" &&
+                (task.entity_type !== "adolbi_cypress_launch_2026" || canManageWork) && (
                 <Button
                   size="sm" variant="outline" className="text-[11px] h-8"
                   style={{ borderColor: "#059669", color: "#059669" }}
@@ -1355,7 +1398,7 @@ function TaskCard({
                     First admission HOLD — separate Owner decision required
                   </span>
                 )}
-              <Button
+              {canManageWork && <Button
                 size="sm"
                 variant="outline"
                 className="text-[11px] h-8"
@@ -1364,8 +1407,8 @@ function TaskCard({
               >
                 <UserCog size={10} className="mr-1" />
                 Reassign
-              </Button>
-              <Button
+              </Button>}
+              {canManageWork && <Button
                 size="sm"
                 variant="outline"
                 className="text-[11px] h-8"
@@ -1374,7 +1417,7 @@ function TaskCard({
               >
                 <AlertOctagon size={10} className="mr-1" />
                 Escalate
-              </Button>
+              </Button>}
               <Button
                 size="sm"
                 variant="outline"
