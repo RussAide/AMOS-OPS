@@ -7,6 +7,7 @@ import { CYPRESS_LAUNCH_ENTITY_TYPE, CYPRESS_LAUNCH_PREFIX } from "../launch/pro
 import { TRPCError } from "@trpc/server";
 import {
   assertWorkTaskAccess,
+  isExplicitlyAssigned,
   requireWorkQueueLeadership,
   scopeWorkQueueSql,
 } from "../work-queue/assignment-access";
@@ -460,8 +461,8 @@ export const m1Router = createRouter({
       if (task.status === "completed") {
         throw new Error("Completed tasks cannot be claimed");
       }
-      if (task.assigned_to && task.assigned_to !== actor && task.assigned_to !== ctx.user.id) {
-        throw new Error("Task is already assigned to another team member");
+      if (task.assigned_to && !isExplicitlyAssigned(task, ctx.user)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Task is assigned to another team member." });
       }
 
       sqlite.prepare(
@@ -836,6 +837,7 @@ export const m1Router = createRouter({
       newLevel: z.number().min(1).max(3).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      requireWorkQueueLeadership(ctx.user);
       const actor = ctx.user?.email ?? "unknown";
 
       const task = sqlite.prepare("SELECT * FROM work_queue WHERE id = ?").get(input.taskId) as WorkTaskRow | undefined;
@@ -913,6 +915,7 @@ export const m1Router = createRouter({
       reason: z.string(),
     }))
     .mutation(async ({ ctx, input }) => {
+      requireWorkQueueLeadership(ctx.user);
       const actor = ctx.user?.email ?? "unknown";
 
       const task = sqlite.prepare("SELECT * FROM work_queue WHERE id = ?").get(input.taskId) as WorkTaskRow | undefined;
