@@ -43,7 +43,7 @@ export function assertWorkTaskAccess(
   if (canOverseeWorkQueue(user) || isExplicitlyAssigned(task, user)) return;
   throw new TRPCError({
     code: "FORBIDDEN",
-    message: "This work item requires an explicit assignment or enterprise leadership oversight.",
+    message: "Task access requires leadership or an explicit assigned task.",
   });
 }
 
