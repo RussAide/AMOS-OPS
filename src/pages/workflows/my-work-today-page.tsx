@@ -480,7 +480,8 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
       taskId: string,
     ) => {
       setDialogState({ type, taskId });
-      setFile(null);
+      setEvidenceLink("");
+      setEvidenceType("form");
       setReassignee("");
       setReason("");
       setComment("");
