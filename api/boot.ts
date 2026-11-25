@@ -18,7 +18,7 @@ import {
   createStructuredLogger,
   OperationalMonitor,
 } from "./observability";
-import { evaluateCorsOrigin, isCorsExemptPublicAssetPath } from "./cors-policy";
+import { classifyDeniedCorsOrigin, evaluateCorsOrigin, isCorsExemptPublicAssetPath } from "./cors-policy";
 import { env } from "./lib/env";
 import { enforceDatabaseStartupPolicy } from "./startup-policy";
 import { createPublicRuntimeConfig } from "./runtime-mode";
@@ -266,6 +266,21 @@ app.use("*", async (c, next) => {
     env.allowedOrigins,
   );
   if (!decision.allowed) {
+    if (env.isStaging && c.req.path === "/api/trpc/auth.login") {
+      const fetchSite = c.req.header("sec-fetch-site");
+      logger.warn("qa.auth_login_origin_denied", {
+        correlationId: c.res.headers.get("x-correlation-id") ?? undefined,
+        details: {
+          originCategory: classifyDeniedCorsOrigin(c.req.header("origin")),
+          fetchSite: fetchSite === "same-origin" || fetchSite === "same-site" ||
+            fetchSite === "cross-site" || fetchSite === "none"
+              ? fetchSite
+              : "unknown",
+          method: c.req.method,
+          endpoint: "auth.login",
+        },
+      });
+    }
     return c.json({ error: "Origin is not allowed" }, 403);
   }
   if (decision.responseOrigin) {
