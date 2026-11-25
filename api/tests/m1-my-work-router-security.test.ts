@@ -94,10 +94,10 @@ afterEach(() => { fixture.db?.close(); fixture.db = null; });
 
 describe("M1.8 My Work actual route security with synthetic user identities", () => {
   it("scopes direct task lists to the authenticated assignee", async () => {
-    expect((await restricted().getWorkQueue()).map((t) => t.id).sort())
+    expect((await restricted().getWorkQueue() as Array<{ id: string }>).map((t) => t.id).sort())
       .toEqual(["work-own-email", "work-own-id"]);
     expect(await restricted().getWorkQueue({ assignedTo: "worker-b" })).toEqual([]);
-    expect((await restricted().getWorkQueue({ assignedTo: "worker-a" })).map((t) => t.id))
+    expect((await restricted().getWorkQueue({ assignedTo: "worker-a" }) as Array<{ id: string }>).map((t) => t.id))
       .toEqual(["work-own-id"]);
   });
 
@@ -153,7 +153,7 @@ describe("M1.8 My Work actual route security with synthetic user identities", ()
   });
 
   it("allows enterprise leadership to view, create and delegate tasks", async () => {
-    expect((await leadership().getWorkQueue()).map((t) => t.id)).toHaveLength(4);
+    expect((await leadership().getWorkQueue() as Array<{ id: string }>).map((t) => t.id)).toHaveLength(4);
     const created = await leadership().createWorkTask({
       taskTitle: "Approved Executive Office assignment",
       taskType: "general", assignedTo: "worker-a",
@@ -164,7 +164,7 @@ describe("M1.8 My Work actual route security with synthetic user identities", ()
       reason: "Approved synthetic leadership delegation",
     });
     expect(moved.success).toBe(true);
-    expect((await restricted().getWorkQueue()).map((t) => t.id).sort())
+    expect((await restricted().getWorkQueue() as Array<{ id: string }>).map((t) => t.id).sort())
       .toEqual(["work-other", "work-own-email", "work-own-id", created.id].sort());
   });
 
