@@ -60,7 +60,9 @@ function transportErrorResponse(
     status === 401
       ? "Authentication is required or the session has expired."
       : status === 403
-        ? "The current identity is not permitted to perform this action."
+        ? procedurePaths(requestPath).includes("auth.login")
+          ? "Sign-in request blocked before account verification. Open AMOS-OPS directly in a new browser tab; this error does not establish that your password is wrong."
+          : "The current identity is not permitted to perform this action."
         : kind === "timeout"
       ? "The service did not respond in time. Please retry."
       : kind === "offline"

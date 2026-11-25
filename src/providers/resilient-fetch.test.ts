@@ -115,6 +115,39 @@ describe("M1.1 resilient tRPC transport", () => {
     }
   });
 
+  it("explains a non-tRPC 403 on login as pre-auth request rejection, not an invalid identity", async () => {
+    const transport = createResilientFetch({
+      fetcher: vi.fn(async () =>
+        new Response(JSON.stringify({ error: "Origin is not allowed" }), {
+          status: 403,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+      mayFallback: () => false,
+      buildFallback: fallbackResponse,
+    });
+    const response = await transport("https://amos-ops-staging.up.railway.app/api/trpc/auth.login");
+    expect(response.status).toBe(403);
+    const content = JSON.stringify(await response.json());
+    expect(content).toContain("Sign-in request blocked before account verification.");
+    expect(content).not.toContain("current identity is not permitted");
+  });
+
+  it("preserves an authoritative tRPC login denial rather than replacing it with an origin diagnosis", async () => {
+    const message = "This account is not available for the requested workspace.";
+    const transport = createResilientFetch({
+      fetcher: vi.fn(async () => new Response(
+        JSON.stringify([{error: { json: {message, data: {httpStatus: 403, code: "FORBIDDEN"}}}}]),
+        {status: 403, headers: {"content-type": "application/json"}},
+      )),
+      mayFallback: () => false,
+      buildFallback: fallbackResponse,
+    });
+    const response = await transport("https://amos-ops-staging.up.railway.app/api/trpc/auth.login");
+    expect(response.status).toBe(403);
+    expect(JSON.stringify(await response.json())).toContain(message);
+  });
+
   it("normalizes malformed unauthorized responses without losing 401 semantics", async () => {
     const transport = createResilientFetch({
       fetcher: vi.fn(async () =>

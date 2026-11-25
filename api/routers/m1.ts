@@ -5,6 +5,12 @@ import { randomUUID } from "crypto";
 import { assertSyntheticScenarioRuntime, env } from "../lib/env";
 import { CYPRESS_LAUNCH_ENTITY_TYPE, CYPRESS_LAUNCH_PREFIX } from "../launch/production-launch-matrix";
 import { TRPCError } from "@trpc/server";
+import {
+  assertWorkTaskAccess,
+  isExplicitlyAssigned,
+  requireWorkQueueLeadership,
+  scopeWorkQueueSql,
+} from "../work-queue/assignment-access";
 
 // ─── M1: First Vertical Slice Router ───────────────────────
 
@@ -73,22 +79,6 @@ function requireLaunchReview(role: string): void {
   if (!cypressLaunchReviewRoles.has(role)) {
     throw new TRPCError({code:"FORBIDDEN",message:"Cypress launch completion requires a designated human leadership reviewer."});
   }
-}
-function assertLaunchTaskAccess(task: WorkTaskRow, user: {
-  id: string; email: string; role: string;
-}): void {
-  if (task.entity_type !== CYPRESS_LAUNCH_ENTITY_TYPE) return;
-  if (cypressLaunchViewRoles.has(user.role) ||
-      task.assigned_to === user.email || task.assigned_to === user.id) return;
-  throw new TRPCError({code:"FORBIDDEN",
-    message:"Launch action access requires leadership or an explicit assigned task."});
-}
-function limitLaunchWorkQueueForRole(
-  sql: string, params: string[], user: {id:string;email:string;role:string}
-): string {
-  if (cypressLaunchViewRoles.has(user.role)) return sql;
-  params.push(CYPRESS_LAUNCH_ENTITY_TYPE, user.id, user.email);
-  return sql + " AND (entity_type IS NULL OR entity_type != ? OR assigned_to IN (?, ?))";
 }
 function assertNotUngovernedLaunchClose(task: WorkTaskRow, nextStatus: string): void {
   if (task.entity_type === CYPRESS_LAUNCH_ENTITY_TYPE && nextStatus === "completed") {
@@ -348,7 +338,7 @@ export const m1Router = createRouter({
     .query(async ({ input, ctx }) => {
       let sql = "SELECT * FROM work_queue WHERE 1=1";
       const params: string[] = [];
-      sql = limitLaunchWorkQueueForRole(sql, params, ctx.user);
+      sql = scopeWorkQueueSql(sql, params, ctx.user);
       if (input?.assignedTo) { sql += " AND assigned_to = ?"; params.push(input.assignedTo); }
       if (input?.status) { sql += " AND status = ?"; params.push(input.status); }
       else { sql += " AND status IN ('pending', 'in-progress')"; }
@@ -422,7 +412,7 @@ export const m1Router = createRouter({
       return {success:true, alreadyCompleted:false, taskId:task.id};
     }),
 
-  createWorkTask: authedQuery
+  createWorkTask: adminQuery
     .input(z.object({
       taskTitle: z.string(),
       taskType: z.string(),
@@ -436,6 +426,7 @@ export const m1Router = createRouter({
       dueDate: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      requireWorkQueueLeadership(ctx.user);
       if (input.entityType === CYPRESS_LAUNCH_ENTITY_TYPE ||
           input.entityId?.startsWith(CYPRESS_LAUNCH_PREFIX)) {
         throw new TRPCError({code:"FORBIDDEN",
@@ -466,12 +457,12 @@ export const m1Router = createRouter({
       if (!task) {
         throw new Error("Task not found");
       }
-      assertLaunchTaskAccess(task, ctx.user);
+      assertWorkTaskAccess(task, ctx.user);
       if (task.status === "completed") {
         throw new Error("Completed tasks cannot be claimed");
       }
-      if (task.assigned_to && task.assigned_to !== actor && task.assigned_to !== ctx.user.id) {
-        throw new Error("Task is already assigned to another team member");
+      if (task.assigned_to && !isExplicitlyAssigned(task, ctx.user)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Task is assigned to another team member." });
       }
 
       sqlite.prepare(
@@ -505,7 +496,7 @@ export const m1Router = createRouter({
       if (!task) {
         throw new Error("Task not found");
       }
-      assertLaunchTaskAccess(task, ctx.user);
+      assertWorkTaskAccess(task, ctx.user);
       const id = randomUUID();
       const createdAt = new Date().toISOString();
       sqlite.prepare(
@@ -536,7 +527,7 @@ export const m1Router = createRouter({
       if (!task) {
         throw new Error("Task not found");
       }
-      assertLaunchTaskAccess(task, ctx.user);
+      assertWorkTaskAccess(task, ctx.user);
       assertNotUngovernedLaunchClose(task, "completed");
 
       // ─── D003-03: Evidence gate validation ─────────────────
@@ -605,7 +596,7 @@ export const m1Router = createRouter({
         "SELECT * FROM work_queue WHERE id = ?"
       ).get(input.taskId) as WorkTaskRow | undefined;
       if (!task) throw new TRPCError({code:"NOT_FOUND", message:"Task not found"});
-      assertLaunchTaskAccess(task, ctx.user);
+      assertWorkTaskAccess(task, ctx.user);
       assertNotUngovernedLaunchClose(task, input.toStatus);
 
       // Evidence gate check
@@ -673,7 +664,7 @@ export const m1Router = createRouter({
       // Build task query
       let taskSql = "SELECT * FROM work_queue WHERE 1=1";
       const params: string[] = [];
-      taskSql = limitLaunchWorkQueueForRole(taskSql, params, ctx.user);
+      taskSql = scopeWorkQueueSql(taskSql, params, ctx.user);
       if (input?.assignedTo) { taskSql += " AND assigned_to = ?"; params.push(input.assignedTo); }
       if (input?.status) { taskSql += " AND status = ?"; params.push(input.status); }
       else { taskSql += " AND status IN ('pending', 'in-progress')"; }
@@ -773,7 +764,8 @@ export const m1Router = createRouter({
   // ═══ D003-04: Escalation Timer ═══════════════════════════
   // ═══════════════════════════════════════════════════════════
 
-  checkEscalation: authedQuery.query(async () => {
+  checkEscalation: adminQuery.query(async ({ ctx }) => {
+    requireWorkQueueLeadership(ctx.user);
     const now = new Date().toISOString();
 
     // Find all overdue non-completed tasks
@@ -845,12 +837,14 @@ export const m1Router = createRouter({
       newLevel: z.number().min(1).max(3).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      requireWorkQueueLeadership(ctx.user);
       const actor = ctx.user?.email ?? "unknown";
 
       const task = sqlite.prepare("SELECT * FROM work_queue WHERE id = ?").get(input.taskId) as WorkTaskRow | undefined;
       if (!task) {
         throw new Error("Task not found");
       }
+      assertWorkTaskAccess(task, ctx.user);
       if (task.entity_type === CYPRESS_LAUNCH_ENTITY_TYPE) requireLaunchView(ctx.user.role);
 
       const previousLevel = task.escalation_level ?? 0;
@@ -921,12 +915,14 @@ export const m1Router = createRouter({
       reason: z.string(),
     }))
     .mutation(async ({ ctx, input }) => {
+      requireWorkQueueLeadership(ctx.user);
       const actor = ctx.user?.email ?? "unknown";
 
       const task = sqlite.prepare("SELECT * FROM work_queue WHERE id = ?").get(input.taskId) as WorkTaskRow | undefined;
       if (!task) {
         throw new Error("Task not found");
       }
+      assertWorkTaskAccess(task, ctx.user);
 
       if (task.entity_type === CYPRESS_LAUNCH_ENTITY_TYPE) requireLaunchView(ctx.user.role);
       const oldAssignee = task.assigned_to ?? null;

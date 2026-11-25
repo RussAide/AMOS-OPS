@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifyDeniedCorsOrigin,
   evaluateCorsOrigin,
   isCorsExemptPublicAssetPath,
 } from "../cors-policy";
@@ -50,6 +51,16 @@ describe("M1.1 authenticated CORS boundary", () => {
     ]) {
       expect(isCorsExemptPublicAssetPath(pathname)).toBe(false);
     }
+  });
+
+  it("classifies denied origins without leaking caller-controlled header values", () => {
+    expect(classifyDeniedCorsOrigin(undefined)).toBe("missing");
+    expect(classifyDeniedCorsOrigin("null")).toBe("opaque");
+    expect(classifyDeniedCorsOrigin("not a URL")).toBe("invalid");
+    expect(classifyDeniedCorsOrigin("https://amos-ops-staging.up.railway.app")).toBe("staging-first-party");
+    expect(classifyDeniedCorsOrigin("https://agent.tinyfish.ai")).toBe("tinyfish-third-party");
+    expect(classifyDeniedCorsOrigin("https://agent.tinyfish.ai.evil.invalid")).toBe("other-third-party");
+    expect(classifyDeniedCorsOrigin("https://elsewhere.invalid")).toBe("other-third-party");
   });
 
   it("denies wildcard, lookalike, malformed, and unknown origins", () => {

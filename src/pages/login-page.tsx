@@ -586,6 +586,24 @@ export function LoginPage() {
                 </div>
               )}
 
+              {runtimeConfig.appEnvironment === "staging" &&
+                error.startsWith("Sign-in request blocked before account verification") && (
+                  <div className="mb-3 rounded-lg border border-white/10 p-3 text-[11px] leading-relaxed text-white/80">
+                    <p className="mb-2">
+                      Staging rejected this browser request before verifying your identity.
+                      Do not retry your password in the embedded window.
+                    </p>
+                    <a
+                      href={`${window.location.origin}/login`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex min-h-10 items-center rounded-lg border border-teal-300/40 px-3 py-2 font-semibold text-teal-200 underline underline-offset-2"
+                    >
+                      Open direct Staging sign-in in a separate tab
+                    </a>
+                  </div>
+                )}
+
               {notice && (
                 <div
                   className="flex items-center gap-2 p-2.5 rounded-lg mb-3 text-[11px]"
