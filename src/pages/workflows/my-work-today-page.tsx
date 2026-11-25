@@ -150,7 +150,7 @@ function generateEvidenceItems(task: WorkTask): EvidenceItem[] {
         id: `${task.id}-ev1`,
         name: "Background Check Clearance",
         required: true,
-        status: "complete",
+        status: "pending",
       },
       {
         id: `${task.id}-ev2`,
@@ -183,7 +183,7 @@ function generateEvidenceItems(task: WorkTask): EvidenceItem[] {
         id: `${task.id}-ev1`,
         name: "Current License/Cert Copy",
         required: true,
-        status: task.status === "in-progress" ? "complete" : "pending",
+        status: "pending",
       },
       {
         id: `${task.id}-ev2`,
@@ -204,7 +204,7 @@ function generateEvidenceItems(task: WorkTask): EvidenceItem[] {
         id: `${task.id}-ev1`,
         name: "Supporting Documents",
         required: true,
-        status: "complete",
+        status: "pending",
       },
       {
         id: `${task.id}-ev2`,
@@ -225,10 +225,7 @@ function generateEvidenceItems(task: WorkTask): EvidenceItem[] {
         id: `${task.id}-ev1`,
         name: "Primary Documentation",
         required: true,
-        status:
-          task.evidence_required > 0 && task.status === "in-progress"
-            ? "complete"
-            : "pending",
+        status: "pending",
       },
       {
         id: `${task.id}-ev2`,
@@ -508,7 +505,7 @@ export function MyWorkTodayPage({ view = "today" }: MyWorkTodayPageProps) {
   const handleComplete = () => {
     if (!dialogState.taskId || !validEvidenceLink) return;
     const evidenceUrl = evidenceLink.trim();
-    const fileName = decodeURIComponent(new URL(evidenceUrl).pathname.split("/").pop() || "evidence");
+    const fileName = new URL(evidenceUrl).pathname.split("/").pop() || "evidence";
     completeMutation.mutate({
       taskId: dialogState.taskId,
       evidenceUploaded: true,
@@ -1297,6 +1294,10 @@ function TaskCard({
                 borderColor: "var(--card-border)",
               }}
             >
+              <p className="mb-2 text-[10px] leading-relaxed text-slate-600">
+                The checklist lists expected evidence. Background clearance, credentials and
+                approvals are not marked complete from task status alone; they require a verified record.
+              </p>
               <h4
                 className="text-[11px] font-semibold mb-2 flex items-center gap-1.5"
                 style={{ color: "var(--topbar-title)" }}
