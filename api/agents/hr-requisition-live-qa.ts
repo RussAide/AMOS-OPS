@@ -6,8 +6,10 @@ import { identityService } from "../security/identity";
 import { encryptTotpSecret, generateTotpSecret, totpCodeForTest } from "../security/totp";
 
 type QaStep = "create temporary HR identity" | "password and MFA sign-in" |
-  "save and reopen" | "reject duplicate" | "edit and reopen" | "verify Training isolation" |
-  "revoke session" | "remove synthetic requisition";
+  "save and reopen" | "reject duplicate" | "edit and reopen" |
+  "link and reopen application" | "reject incomplete application review" |
+  "save and reopen application review" | "verify Training isolation" |
+  "revoke session" | "remove synthetic fixtures";
 
 export async function runStagingHrRequisitionQa(port: number, candidate: string) {
   const stagingOrigin = "https://amos-ops-staging.up.railway.app";
@@ -26,6 +28,16 @@ export async function runStagingHrRequisitionQa(port: number, candidate: string)
 
   const id = randomUUID();
   const reference = `CYP-QA-REQ-${id}`;
+  const applicationReference = `CYP-QA-APP-${id}`;
+  const sourceReference = "QA-POSTING";
+  const review = {
+    qualificationOutcome: "met",
+    qualificationReference: "QA-QUALIFICATIONS",
+    screeningReference: "QA-SCREENING",
+    interviewReference: "QA-INTERVIEW",
+    referencesReference: "QA-REFERENCES",
+    disposition: "recommended",
+  };
   const email = `requisition-qa-${id}@example.invalid`;
   const password = randomBytes(32).toString("base64url") + "!Qa4";
   const secret = generateTotpSecret();
@@ -123,18 +135,50 @@ export async function runStagingHrRequisitionQa(port: number, candidate: string)
     }, token);
     if (updated.status !== 200 || !rowMatches(updated.data, 2) || !await reopened(2)) throw new Error();
 
+    const reopenedApplication = async (expected: Record<string, string | number>) => {
+      const response = await request("hr.listApplications", undefined, token);
+      if (response.status !== 200 || !Array.isArray(response.data)) return false;
+      const matches = response.data.filter(row => row?.reference === applicationReference);
+      return matches.length === 1 && matches[0].requisitionReference === reference &&
+        matches[0].sourceReference === sourceReference &&
+        Object.entries(expected).every(([key, value]) => matches[0][key] === value);
+    };
+
+    step = "link and reopen application";
+    const application = { reference: applicationReference, requisitionReference: reference, sourceReference };
+    const linked = await request("hr.createApplication", application, token);
+    if (linked.status !== 200 || !await reopenedApplication({ revision: 1, disposition: "pending" })) throw new Error();
+    const duplicateApplication = await request("hr.createApplication", application, token);
+    if (duplicateApplication.errorCode !== "CONFLICT") throw new Error();
+
+    step = "reject incomplete application review";
+    const reviewUpdate = { reference: applicationReference, revision: 1, review };
+    const incomplete = await request("hr.updateApplicationReview", {
+      ...reviewUpdate, review: { ...review, interviewReference: null },
+    }, token);
+    if (incomplete.errorCode !== "BAD_REQUEST" ||
+        !await reopenedApplication({ revision: 1, disposition: "pending" })) throw new Error();
+
+    step = "save and reopen application review";
+    const reviewed = await request("hr.updateApplicationReview", reviewUpdate, token);
+    if (reviewed.status !== 200 || !await reopenedApplication({ revision: 2, ...review })) throw new Error();
+
     step = "verify Training isolation";
-    if (operationalSqlite.prepare("SELECT 1 FROM hr_requisitions WHERE reference = ?").get(reference)) {
+    if (operationalSqlite.prepare("SELECT 1 FROM hr_requisitions WHERE reference = ?").get(reference) ||
+        operationalSqlite.prepare("SELECT 1 FROM hr_applications WHERE reference = ?").get(applicationReference)) {
       throw new Error();
     }
-    if (!runWithDataScope("training", () =>
-      (sqlite.prepare("SELECT count(*) AS size FROM audit_logs WHERE entity_type = 'hr_requisition' AND entity_id = ? AND performed_by = ?")
-        .get(reference, id) as { size: number }).size === 2,
-    )) throw new Error();
+    if (!runWithDataScope("training", () => {
+      const audit = sqlite.prepare(
+        "SELECT count(*) AS size FROM audit_logs WHERE entity_type = ? AND entity_id = ? AND performed_by = ?",
+      );
+      const count = (kind: string, ref: string) => (audit.get(kind, ref, id) as { size: number }).size;
+      return count("hr_requisition", reference) === 2 && count("hr_application", applicationReference) === 2;
+    })) throw new Error();
 
     step = "revoke session";
     identityService.revokeAllSessions(id, "staging_hr_qa_finished");
-    const afterRevoke = await request("hr.listRequisitions", undefined, token);
+    const afterRevoke = await request("hr.listApplications", undefined, token);
     if (afterRevoke.status !== 401) throw new Error();
     completed = true;
   } catch {
@@ -154,14 +198,19 @@ export async function runStagingHrRequisitionQa(port: number, candidate: string)
       }
     }
     try {
-      runWithDataScope("training", () => {
+      runWithDataScope("training", () => sqlite.transaction(() => {
+        sqlite.prepare("DELETE FROM hr_applications WHERE reference = ? AND requisition_reference = ?")
+          .run(applicationReference, reference);
         sqlite.prepare("DELETE FROM hr_requisitions WHERE reference = ?").run(reference);
-        fixtureRemoved = !sqlite.prepare("SELECT 1 FROM hr_requisitions WHERE reference = ?").get(reference);
-      });
+        fixtureRemoved =
+          !sqlite.prepare("SELECT 1 FROM hr_applications WHERE reference = ?").get(applicationReference) &&
+          !sqlite.prepare("SELECT 1 FROM hr_requisitions WHERE reference = ?").get(reference);
+      })());
     } catch {
-      failure ??= "remove synthetic requisition";
+      failure ??= "remove synthetic fixtures";
     }
   }
   return { candidate, passed: completed && !failure && sessionsClosed && fixtureRemoved,
-    ...(failure ? { failure } : {}), sessionsClosed, fixtureRemoved };
+    workflow: "requisition-and-application-screening",
+    ...(failure ? { failure } : {}), identityDeactivated: sessionsClosed, fixtureRemoved };
 }
