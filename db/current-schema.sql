@@ -1149,6 +1149,21 @@ CREATE TABLE `generated_documents` (
 	`completed_at` text
 );
 
+CREATE TABLE `hr_applications` (
+	`reference` text COLLATE NOCASE PRIMARY KEY NOT NULL,
+	`requisition_reference` text NOT NULL,
+	`source_reference` text NOT NULL,
+	`qualification_outcome` text DEFAULT 'pending' NOT NULL,
+	`qualification_reference` text,
+	`screening_reference` text,
+	`interview_reference` text,
+	`references_reference` text,
+	`disposition` text DEFAULT 'pending' NOT NULL,
+	`revision` integer DEFAULT 1 NOT NULL,
+	FOREIGN KEY (`requisition_reference`) REFERENCES `hr_requisitions`(`reference`) ON UPDATE no action ON DELETE restrict
+);
+
+CREATE INDEX `idx_hr_applications_requisition` ON `hr_applications` (`requisition_reference`);
 CREATE TABLE `hr_people` (
 	`id` text PRIMARY KEY NOT NULL,
 	`first_name` text NOT NULL,

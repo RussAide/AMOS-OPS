@@ -11,7 +11,10 @@ import {
 } from "../data-lifecycle";
 import { assertPathConfined } from "../security/path-confinement";
 
-const migration = "0013_hr_requisitions.sql";
+const workforceMigrations = [
+  { file: "0013_hr_requisitions.sql", table: "hr_requisitions" },
+  { file: "0014_hr_applications.sql", table: "hr_applications" },
+] as const;
 const auditColumns = [
   "id", "entity_type", "entity_id", "action", "performed_by", "performed_at", "old_values", "new_values",
 ];
@@ -37,8 +40,12 @@ function assertHealthy(db: Database) {
 }
 
 function assertApplied(db: Database, folder: string) {
-  if (planMigrations(db, folder)[0]?.state !== "applied" ||
-      !db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'hr_requisitions'").get()) {
+  const plan = planMigrations(db, folder);
+  const table = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?");
+  if (!workforceMigrations.every(item =>
+    plan.some(entry => entry.name === item.file && entry.state === "applied") &&
+    table.get(item.table),
+  )) {
     throw new Error("HR_REQUISITION_STAGING_MIGRATION_VERIFICATION_FAILED");
   }
 }
@@ -46,11 +53,13 @@ function assertApplied(db: Database, folder: string) {
 export async function runHrRequisitionStagingMigration(storage: StagingRequisitionStorage) {
   const checkpointRoot = path.resolve(storage.backupPath);
   fs.mkdirSync(checkpointRoot, { recursive: true });
-  const scratch = fs.mkdtempSync(path.join(checkpointRoot, ".requisition-0013-"));
+  const scratch = fs.mkdtempSync(path.join(checkpointRoot, ".hr-workforce-"));
   const folder = path.join(scratch, "migration");
   try {
     fs.mkdirSync(folder);
-    fs.copyFileSync(path.resolve("db/migrations", migration), path.join(folder, migration));
+    for (const migration of workforceMigrations) {
+      fs.copyFileSync(path.resolve("db/migrations", migration.file), path.join(folder, migration.file));
+    }
     const stores = [
       { scope: "operational", file: storage.databasePath },
       { scope: "training", file: storage.trainingDatabasePath },
@@ -65,7 +74,8 @@ export async function runHrRequisitionStagingMigration(storage: StagingRequisiti
       let alreadyApplied: boolean;
       try {
         assertHealthy(readonly);
-        alreadyApplied = planMigrations(readonly, folder)[0]?.state === "applied";
+        const plan = planMigrations(readonly, folder);
+        alreadyApplied = plan.length === workforceMigrations.length && plan.every(entry => entry.state === "applied");
         if (alreadyApplied) assertApplied(readonly, folder);
       } finally {
         readonly.close();
@@ -76,7 +86,7 @@ export async function runHrRequisitionStagingMigration(storage: StagingRequisiti
       }
 
       // Create private checkpoint files and rehearse recovery before changing the source database.
-      const checkpointDirectory = path.join(checkpointRoot, `requisition-0013-${scope}-${randomUUID()}`);
+      const checkpointDirectory = path.join(checkpointRoot, `hr-workforce-${scope}-${randomUUID()}`);
       assertPathConfined(checkpointRoot, checkpointDirectory);
       fs.mkdirSync(checkpointDirectory, { mode: 0o700 });
       const checkpoint = path.join(checkpointDirectory, "before.db");

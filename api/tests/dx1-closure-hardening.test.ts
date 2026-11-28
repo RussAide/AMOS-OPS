@@ -179,12 +179,13 @@ describe("DX.1 independent-review hardening", () => {
     const files = inventory.collectDx1SourceFiles(process.cwd());
     const coverage = inventory.verifyDx1DatabaseSourceCoverage(files);
 
-    expect(coverage.databaseSourceFileCount).toBe(26);
-    expect(coverage.databaseMigrationFileCount).toBe(16);
+    expect(coverage.databaseSourceFileCount).toBe(27);
+    expect(coverage.databaseMigrationFileCount).toBe(17);
     expect(coverage.databaseFiles).toContain("db/schema.ts");
     expect(coverage.databaseFiles).toContain("db/current-schema.sql");
     expect(coverage.databaseFiles).toContain("db/relations.ts");
     expect(coverage.databaseFiles).toContain("db/migrations/0013_hr_requisitions.sql");
+    expect(coverage.databaseFiles).toContain("db/migrations/0014_hr_applications.sql");
     expect(coverage.databaseFiles).toContain(
       "db/migrations/0010_m41c_clinical_intelligence_fabric.sql",
     );

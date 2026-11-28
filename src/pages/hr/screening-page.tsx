@@ -1,278 +1,224 @@
-import React, { useState } from "react";
+import { useState, type FormEvent } from "react";
+import { Button } from "@/components/ui/button";
 import {
-  Search,
-  Filter,
-  ClipboardCheck,
-  Clock,
-  CheckCircle,
-  AlertTriangle,
-  ChevronDown,
-  UserCheck,
-  ShieldCheck,
-  Phone,
-} from "lucide-react";
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { authorizeAccess, procedureAccessResource } from "@/constants/access-control";
+import { useAuth } from "@/hooks/use-auth";
+import { trpc } from "@/providers/trpc";
 
-interface Applicant {
-  id: number;
-  name: string;
-  position: string;
-  appliedDate: string;
-  screenStatus: string;
-  backgroundCheck: string;
-  references: string;
-}
+const qualifications = { pending: "Pending", met: "Met", not_met: "Not met" } as const;
+const dispositions = {
+  pending: "Pending review",
+  recommended: "Recommended",
+  not_recommended: "Not recommended",
+  withdrawn: "Withdrawn",
+} as const;
 
-const demoApplicants: Applicant[] = [
-  {
-    id: 1,
-    name: "Michael Torres",
-    position: "Youth Care Worker",
-    appliedDate: "2026-06-18",
-    screenStatus: "Pending Review",
-    backgroundCheck: "Not Started",
-    references: "Pending",
-  },
-  {
-    id: 2,
-    name: "Jennifer Walsh",
-    position: "Case Manager",
-    appliedDate: "2026-06-22",
-    screenStatus: "Under Review",
-    backgroundCheck: "In Progress",
-    references: "Pending",
-  },
-  {
-    id: 3,
-    name: "Robert Singh",
-    position: "RN Charge Nurse",
-    appliedDate: "2026-06-12",
-    screenStatus: "Cleared",
-    backgroundCheck: "Cleared",
-    references: "Verified",
-  },
-  {
-    id: 4,
-    name: "Amanda Brooks",
-    position: "Youth Care Worker",
-    appliedDate: "2026-06-28",
-    screenStatus: "Pending Review",
-    backgroundCheck: "Not Started",
-    references: "Pending",
-  },
-  {
-    id: 5,
-    name: "Kevin Park",
-    position: "Facilities Technician",
-    appliedDate: "2026-06-26",
-    screenStatus: "Flagged",
-    backgroundCheck: "Alert",
-    references: "Pending",
-  },
-  {
-    id: 6,
-    name: "Laura Nguyen",
-    position: "Case Manager",
-    appliedDate: "2026-06-19",
-    screenStatus: "Cleared",
-    backgroundCheck: "Cleared",
-    references: "Verified",
-  },
-];
+const evidenceFields = [
+  ["qualificationReference", "Minimum qualifications review reference"],
+  ["screeningReference", "Screening worksheet reference"],
+  ["interviewReference", "Interview scorecard reference"],
+  ["referencesReference", "Reference-check record"],
+] as const;
 
-const kpiData = [
-  { label: "Pending Review", value: "6", icon: Clock, color: "#245C5A" },
-  { label: "Background Check", value: "3", icon: ShieldCheck, color: "#7EC8CA" },
-  { label: "Reference Check", value: "2", icon: Phone, color: "#245C5A" },
-  { label: "Cleared", value: "4", icon: CheckCircle, color: "#7EC8CA" },
-];
+type Review = {
+  qualificationOutcome: keyof typeof qualifications;
+  disposition: keyof typeof dispositions;
+} & Record<(typeof evidenceFields)[number][0], string>;
 
-const statusOptions = ["All", "Pending Review", "Under Review", "Cleared", "Flagged"];
-
-const ScreeningPage: React.FC = () => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
-
-  const filtered = demoApplicants.filter((a) => {
-    const matchesSearch =
-      a.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      a.position.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "All" || a.screenStatus === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  const getScreenBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      "Pending Review": "bg-amber-50 text-amber-700 border-amber-200",
-      "Under Review": "bg-blue-50 text-blue-700 border-blue-200",
-      Cleared: "bg-emerald-50 text-emerald-700 border-emerald-200",
-      Flagged: "bg-red-50 text-red-700 border-red-200",
-    };
-    return styles[status] || "bg-gray-100 text-gray-600 border-gray-200";
-  };
-
-  const getBgCheckBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      "Not Started": "bg-gray-100 text-gray-500 border-gray-200",
-      "In Progress": "bg-blue-50 text-blue-700 border-blue-200",
-      Cleared: "bg-emerald-50 text-emerald-700 border-emerald-200",
-      Alert: "bg-red-50 text-red-700 border-red-200",
-    };
-    return styles[status] || styles["Not Started"];
-  };
-
-  const getReferenceBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      Pending: "bg-gray-100 text-gray-500 border-gray-200",
-      "In Progress": "bg-blue-50 text-blue-700 border-blue-200",
-      Verified: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    };
-    return styles[status] || styles.Pending;
-  };
-
-  return (
-    <div className="min-h-screen bg-[#f5f7f7] p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1a3a38]">Applicant Screening</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Review and screen applicants through background checks, reference verification, and eligibility review.
-        </p>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {kpiData.map((kpi) => (
-          <div
-            key={kpi.label}
-            className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex items-center gap-4"
-          >
-            <div
-              className="w-12 h-12 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: `${kpi.color}15` }}
-            >
-              <kpi.icon size={24} style={{ color: kpi.color }} />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-[#1a3a38]">{kpi.value}</p>
-              <p className="text-xs text-gray-500">{kpi.label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Toolbar */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4 flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <div className="flex gap-3 w-full sm:w-auto">
-          <div className="relative flex-1 sm:flex-none">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search applicants or positions..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7EC8CA] focus:border-transparent w-full sm:w-72"
-            />
-          </div>
-          <div className="relative">
-            <button
-              onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#7EC8CA]"
-            >
-              <Filter size={16} />
-              {statusFilter === "All" ? "Screen Status" : statusFilter}
-              <ChevronDown size={14} />
-            </button>
-            {showStatusDropdown && (
-              <div className="absolute top-full left-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                {statusOptions.map((opt) => (
-                  <button
-                    key={opt}
-                    onClick={() => {
-                      setStatusFilter(opt);
-                      setShowStatusDropdown(false);
-                    }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg ${
-                      statusFilter === opt ? "bg-[#245C5A] text-white hover:bg-[#245C5A]" : "text-gray-700"
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="flex gap-3 w-full sm:w-auto">
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-white font-medium hover:opacity-90" style={{ backgroundColor: "#245C5A" }}>
-            <ClipboardCheck size={16} />
-            Run Batch Screen
-          </button>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-[#245C5A] text-white">
-                <th className="text-left px-4 py-3 font-semibold">Applicant</th>
-                <th className="text-left px-4 py-3 font-semibold">Position</th>
-                <th className="text-left px-4 py-3 font-semibold">Applied Date</th>
-                <th className="text-left px-4 py-3 font-semibold">Screen Status</th>
-                <th className="text-left px-4 py-3 font-semibold">Background Check</th>
-                <th className="text-left px-4 py-3 font-semibold">References</th>
-                <th className="text-left px-4 py-3 font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => (
-                <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-[#1a3a38]">{row.name}</td>
-                  <td className="px-4 py-3 text-gray-600">{row.position}</td>
-                  <td className="px-4 py-3 text-gray-600">{row.appliedDate}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getScreenBadge(row.screenStatus)}`}>
-                      {row.screenStatus}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getBgCheckBadge(row.backgroundCheck)}`}>
-                      {row.backgroundCheck === "Alert" && <AlertTriangle size={10} className="inline mr-1" />}
-                      {row.backgroundCheck}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getReferenceBadge(row.references)}`}>
-                      {row.references}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium text-white hover:opacity-90" style={{ backgroundColor: "#245C5A" }}>
-                      <UserCheck size={14} />
-                      Screen
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                    No applicants found matching your criteria.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="px-4 py-3 border-t border-gray-200 text-xs text-gray-500 flex justify-between items-center">
-          <span>Showing {filtered.length} of {demoApplicants.length} applicants</span>
-          <span>Last updated: {new Date().toLocaleString()}</span>
-        </div>
-      </div>
-    </div>
-  );
+const blankReview: Review = {
+  qualificationOutcome: "pending",
+  disposition: "pending",
+  qualificationReference: "",
+  screeningReference: "",
+  interviewReference: "",
+  referencesReference: "",
 };
 
-export default ScreeningPage;
+type Draft = {
+  reference: string;
+  requisitionReference: string;
+  sourceReference: string;
+  review: Review;
+  revision?: number;
+};
+
+const initialDraft: Draft = { reference: "", requisitionReference: "", sourceReference: "", review: blankReview };
+
+const selectStyle = "mt-1 h-10 w-full rounded-md border bg-background px-2 text-sm disabled:opacity-60";
+
+function optionalReference(value: string) {
+  return value.trim() || null;
+}
+
+export default function ScreeningPage() {
+  const { user } = useAuth();
+  const utils = trpc.useUtils();
+  const applications = trpc.hr.listApplications.useQuery();
+  const requisitions = trpc.hr.listRequisitions.useQuery();
+  const create = trpc.hr.createApplication.useMutation();
+  const update = trpc.hr.updateApplicationReview.useMutation();
+  const [search, setSearch] = useState("");
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+
+  function canWrite(procedure: "createApplication" | "updateApplicationReview") {
+    const resource = procedureAccessResource(`hr.${procedure}`, "mutation");
+    return !!user && !!resource && authorizeAccess({
+      userId: user.id, role: user.role, department: user.department ?? undefined,
+    }, resource).allowed;
+  }
+
+  const canCreate = canWrite("createApplication");
+  const canUpdate = canWrite("updateApplicationReview");
+  const pending = create.isPending || update.isPending;
+  const positions = new Map(requisitions.data?.map(row => [row.reference, row.position]));
+  const rows = applications.data?.filter(row => {
+    const matches = [row.reference, row.requisitionReference, positions.get(row.requisitionReference) ?? ""];
+    return matches.some(value => value.toLowerCase().includes(search.trim().toLowerCase()));
+  }) ?? [];
+
+  function openDraft(value: Draft) {
+    setNotice("");
+    setError("");
+    setDraft(value);
+  }
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!draft || pending) return;
+    setError("");
+    try {
+      const { reference, requisitionReference, sourceReference, review, revision } = draft;
+      const saved = revision === undefined
+        ? await create.mutateAsync({ reference, requisitionReference, sourceReference })
+        : await update.mutateAsync({ reference, revision, review: {
+          qualificationOutcome: review.qualificationOutcome,
+          disposition: review.disposition,
+          qualificationReference: optionalReference(review.qualificationReference),
+          screeningReference: optionalReference(review.screeningReference),
+          interviewReference: optionalReference(review.interviewReference),
+          referencesReference: optionalReference(review.referencesReference),
+        } });
+      setSearch(saved.reference);
+      setNotice(`Saved application ${saved.reference}.`);
+      setDraft(null);
+      await utils.hr.listApplications.invalidate();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to save the application.");
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-[#f5f7f7] p-4 sm:p-6">
+      <h1 className="text-2xl font-bold text-[#1a3a38]">Applicant Screening</h1>
+      <p className="mt-1 text-sm text-slate-600">Link applications to approved requisitions and record the screening disposition. Keep supporting documents in the restricted workforce record.</p>
+      <section className="mt-5 rounded-lg border bg-white p-4" aria-label="Applications">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <Label htmlFor="application-search">Find applications</Label>
+            <Input className="mt-1 sm:w-72" id="application-search" value={search}
+              onChange={event => setSearch(event.target.value)} />
+          </div>
+          {canCreate && <Button disabled={!requisitions.data?.length} onClick={() => openDraft(initialDraft)}>Record application</Button>}
+        </div>
+        {canCreate && requisitions.isSuccess && !requisitions.data.length &&
+          <p className="mt-3 text-sm text-slate-600">Record an approved requisition in Recruitment before adding an application.</p>}
+        {notice && <p role="status" className="mt-3 text-sm text-[#245C5A]">{notice}</p>}
+        {applications.isLoading && <p role="status" className="mt-4">Loading applications…</p>}
+        {(applications.isError || requisitions.isError) && <div className="mt-4">
+          <p role="alert">Unable to load applications or approved requisitions.</p>
+          <Button variant="outline" onClick={() => { void applications.refetch(); void requisitions.refetch(); }}>Retry</Button>
+        </div>}
+        {applications.isSuccess && <div className="mt-4">
+          <p className="mb-3 text-sm text-slate-600">Showing {rows.length} of {applications.data.length} applications</p>
+          {rows.length > 0 ? <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-[#245C5A] text-white"><tr>
+                <th scope="col" className="p-3">Application reference</th>
+                <th scope="col" className="p-3">Requisition</th>
+                <th scope="col" className="p-3">Qualifications</th>
+                <th scope="col" className="p-3">Screening disposition</th>
+                <th scope="col" className="p-3">Actions</th>
+              </tr></thead>
+              <tbody>{rows.map(row => <tr key={row.reference} className="border-b">
+                <td className="p-3">{row.reference}</td>
+                <td className="p-3">{row.requisitionReference}{positions.has(row.requisitionReference) && <span className="block text-xs text-slate-600">{positions.get(row.requisitionReference)}</span>}</td>
+                <td className="p-3">{qualifications[row.qualificationOutcome]}</td>
+                <td className="p-3">{dispositions[row.disposition]}</td>
+                <td className="p-3">
+                  <Button variant="outline" aria-label={`${canUpdate ? "Review" : "View"} ${row.reference}`}
+                    onClick={() => openDraft({ ...row, review: {
+                      qualificationOutcome: row.qualificationOutcome,
+                      disposition: row.disposition,
+                      qualificationReference: row.qualificationReference ?? "",
+                      screeningReference: row.screeningReference ?? "",
+                      interviewReference: row.interviewReference ?? "",
+                      referencesReference: row.referencesReference ?? "",
+                    } })}>{canUpdate ? "Review" : "View"}</Button>
+                </td>
+              </tr>)}</tbody>
+            </table>
+          </div> : <p className="text-sm text-slate-600">No applications match.</p>}
+        </div>}
+      </section>
+      <Dialog open={draft !== null} onOpenChange={open => { if (!open && !pending) setDraft(null); }}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{draft?.revision === undefined ? "Record application" : "Application review"}</DialogTitle>
+            <DialogDescription>Enter record references. Use the approved hiring decision process before issuing an offer.</DialogDescription>
+          </DialogHeader>
+          {draft && <form className="grid gap-3" onSubmit={event => void save(event)}>
+            <div><Label htmlFor="application-reference">Application reference</Label>
+              <Input id="application-reference" required maxLength={120} value={draft.reference}
+                readOnly={draft.revision !== undefined} disabled={pending}
+                onChange={event => setDraft({ ...draft, reference: event.target.value })} />
+            </div>
+            <div><Label htmlFor="application-requisition">Approved requisition</Label>
+              {draft.revision !== undefined ? <Input id="application-requisition" readOnly value={draft.requisitionReference} /> :
+                <select id="application-requisition" className={selectStyle} required disabled={pending} value={draft.requisitionReference}
+                  onChange={event => setDraft({ ...draft, requisitionReference: event.target.value })}>
+                  <option value="">Select a requisition</option>
+                  {requisitions.data?.map(row => <option key={row.reference} value={row.reference}>{row.reference} · {row.position}</option>)}
+                </select>}
+            </div>
+            <div><Label htmlFor="application-source">Posting or recruitment source reference</Label>
+              <Input id="application-source" required maxLength={2048} value={draft.sourceReference}
+                readOnly={draft.revision !== undefined} disabled={pending}
+                onChange={event => setDraft({ ...draft, sourceReference: event.target.value })} />
+            </div>
+            {draft.revision !== undefined && <>
+              <div><Label htmlFor="qualification-outcome">Minimum qualifications outcome</Label>
+                <select id="qualification-outcome" className={selectStyle} value={draft.review.qualificationOutcome} disabled={pending || !canUpdate}
+                  onChange={event => setDraft({ ...draft, review: { ...draft.review, qualificationOutcome: event.target.value as Review["qualificationOutcome"] } })}>
+                  {Object.entries(qualifications).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </div>
+              {evidenceFields.map(([key, label]) => <div key={key}>
+                <Label htmlFor={key}>{label}</Label>
+                <Input id={key} maxLength={2048} value={draft.review[key]} readOnly={!canUpdate} disabled={pending}
+                  onChange={event => setDraft({ ...draft, review: { ...draft.review, [key]: event.target.value } })} />
+              </div>)}
+              <div><Label htmlFor="application-disposition">Screening disposition</Label>
+                <select id="application-disposition" className={selectStyle} value={draft.review.disposition} disabled={pending || !canUpdate}
+                  onChange={event => setDraft({ ...draft, review: { ...draft.review, disposition: event.target.value as Review["disposition"] } })}>
+                  {Object.entries(dispositions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </div>
+            </>}
+            {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled={pending} onClick={() => setDraft(null)}>Close</Button>
+              {(draft.revision === undefined ? canCreate : canUpdate) &&
+                <Button type="submit" disabled={pending}>{pending ? "Saving…" : "Save application"}</Button>}
+            </DialogFooter>
+          </form>}
+        </DialogContent>
+      </Dialog>
+    </main>
+  );
+}

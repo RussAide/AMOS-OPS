@@ -36,6 +36,7 @@ function requireDatabase() {
 }
 
 const migration = fs.readFileSync("db/migrations/0013_hr_requisitions.sql", "utf8");
+const applicationMigration = fs.readFileSync("db/migrations/0014_hr_applications.sql", "utf8");
 const originalSchema = fs.readFileSync("db/migrations/0000_concerned_kronos.sql", "utf8");
 const auditSchema = originalSchema.match(/CREATE TABLE `audit_logs` \([\s\S]*?\n\);/)?.[0] ?? "";
 const reference = "CYP-QA-REQ-01";
@@ -58,7 +59,8 @@ async function caller(role = "hr-director") {
 describe("Cypress requisition workflow", () => {
   beforeEach(() => {
     fixture.db = new Database(":memory:");
-    fixture.db.exec(auditSchema + migration);
+    fixture.db.pragma("foreign_keys = ON");
+    fixture.db.exec(auditSchema + migration + applicationMigration);
   });
 
   afterEach(() => {
@@ -117,6 +119,59 @@ describe("Cypress requisition workflow", () => {
       reference, revision: 1, fields: { ...fields, approvedHeadcount: 5 },
     })).rejects.toThrow();
     expect(await hr.listRequisitions()).toEqual([{ reference, ...fields, revision: 1 }]);
+  });
+
+  it("links a single application to an approved requisition and reopens its screening evidence", async () => {
+    const hr = await caller();
+    const application = { reference: "CYP-QA-APP-01", requisitionReference: reference, sourceReference: "POSTING-QA-01" };
+    await expect(hr.createApplication(application)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await hr.createRequisition({ reference, fields });
+    const created = await hr.createApplication({ ...application, requisitionReference: reference.toLowerCase() });
+    expect(created).toMatchObject({ ...application, disposition: "pending", revision: 1 });
+    await expect(hr.createApplication({ ...application, reference: application.reference.toLowerCase() }))
+      .rejects.toMatchObject({ code: "CONFLICT" });
+
+    const review = {
+      qualificationOutcome: "met" as const, qualificationReference: "QUAL-01",
+      screeningReference: "SCREEN-01", interviewReference: "INTERVIEW-01",
+      referencesReference: "REFERENCES-01", disposition: "recommended" as const,
+    };
+    const change = { reference: application.reference, revision: created.revision, review };
+    await expect(hr.updateApplicationReview({ ...change, review: { ...review, interviewReference: null } }))
+      .rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const saved = await hr.updateApplicationReview(change);
+    expect(saved).toMatchObject({ ...application, ...review, revision: 2 });
+    expect(await (await caller()).listApplications()).toEqual([saved]);
+    await expect(hr.updateApplicationReview(change)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(requireDatabase().prepare(
+      "SELECT action, performed_by FROM audit_logs WHERE entity_type = 'hr_application' ORDER BY rowid",
+    ).all()).toEqual([{ action: "create", performed_by: "hr-director" }, { action: "update", performed_by: "hr-director" }]);
+    expect(requireDatabase().prepare("SELECT COUNT(*) AS count FROM hr_applications").get()).toEqual({ count: 1 });
+    expect(requireDatabase().pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("keeps screening references restricted and rolls application writes back if audit fails", async () => {
+    const hr = await caller();
+    await hr.createRequisition({ reference, fields });
+    const excluded = await caller("youth-care-worker");
+    const input = { reference: "CYP-QA-APP-02", requisitionReference: reference, sourceReference: "POSTING-QA-01" };
+    const review = {
+      qualificationOutcome: "not_met" as const, qualificationReference: "QUAL-02",
+      screeningReference: null, interviewReference: null, referencesReference: null,
+      disposition: "not_recommended" as const,
+    };
+    await expect(excluded.listApplications()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(excluded.createApplication(input)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(excluded.updateApplicationReview({ reference: input.reference, revision: 1, review }))
+      .rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const created = await hr.createApplication(input);
+    requireDatabase().exec(
+      "CREATE TRIGGER fail_application_audit BEFORE INSERT ON audit_logs WHEN NEW.entity_type='hr_application' BEGIN SELECT RAISE(ABORT, 'QA audit failure'); END",
+    );
+    await expect(hr.createApplication({ ...input, reference: "CYP-QA-APP-03" })).rejects.toThrow();
+    await expect(hr.updateApplicationReview({ reference: created.reference, revision: created.revision, review })).rejects.toThrow();
+    expect(await hr.listApplications()).toEqual([created]);
   });
 
   it("applies the migration once and restores the pre-migration data to a separate database", async () => {

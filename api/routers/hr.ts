@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createRouter, authedQuery, auditLog } from "../middleware";
 import { getDb } from "../queries/connection";
-import { auditLogs, hrPeople, hrRequisitions, moduleStatuses, statusTransitions } from "@db/schema";
+import { auditLogs, hrApplications, hrPeople, hrRequisitions, moduleStatuses, statusTransitions } from "@db/schema";
 import { eq, desc, and, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { triggerWorkflow } from "../lib/workflow";
@@ -15,6 +15,32 @@ const requisitionFields = z.object({
   supervisor: requisitionText,
   hiringOwner: requisitionText,
   approvedHeadcount: z.number().int().min(1).max(999),
+});
+
+const evidenceReference = z.string().trim().min(1).max(2048);
+const applicationReview = z.object({
+  qualificationOutcome: z.enum(["pending", "met", "not_met"]),
+  qualificationReference: evidenceReference.nullable(),
+  screeningReference: evidenceReference.nullable(),
+  interviewReference: evidenceReference.nullable(),
+  referencesReference: evidenceReference.nullable(),
+  disposition: z.enum(["pending", "recommended", "not_recommended", "withdrawn"]),
+}).superRefine((review, context) => {
+  if (review.qualificationOutcome !== "pending" && !review.qualificationReference) {
+    context.addIssue({
+      code: "custom", path: ["qualificationReference"],
+      message: "Add the minimum qualifications review record before recording its outcome.",
+    });
+  }
+  if (review.disposition === "recommended" && (
+    review.qualificationOutcome !== "met" || !review.qualificationReference ||
+    !review.screeningReference || !review.interviewReference || !review.referencesReference
+  )) {
+    context.addIssue({
+      code: "custom", path: ["disposition"],
+      message: "A recommendation requires the qualifications, screening, interview, and reference-check records.",
+    });
+  }
 });
 
 export const hrRouter = createRouter({
@@ -83,6 +109,61 @@ export const hrRouter = createRouter({
         return requisition;
       });
     }),
+
+  listApplications: authedQuery.query(() => {
+    return getDb().select().from(hrApplications).orderBy(asc(hrApplications.reference)).all();
+  }),
+
+  createApplication: authedQuery
+    .input(z.object({
+      reference: requisitionReference,
+      requisitionReference,
+      sourceReference: evidenceReference,
+    }))
+    .mutation(({ ctx, input }) => getDb().transaction((tx) => {
+      const requisition = tx.select({ reference: hrRequisitions.reference })
+        .from(hrRequisitions).where(eq(hrRequisitions.reference, input.requisitionReference)).get();
+      if (!requisition) throw new TRPCError({ code: "NOT_FOUND", message: "Approved requisition not found." });
+
+      const application = tx.insert(hrApplications)
+        .values({ ...input, requisitionReference: requisition.reference })
+        .onConflictDoNothing({ target: hrApplications.reference }).returning().get();
+      if (!application) throw new TRPCError({ code: "CONFLICT", message: "This application reference already exists." });
+
+      tx.insert(auditLogs).values({
+        id: randomUUID(), entityType: "hr_application", entityId: application.reference,
+        action: "create", performedBy: ctx.user.id,
+        newValues: JSON.stringify({ revision: application.revision, disposition: application.disposition }),
+      }).run();
+      return application;
+    })),
+
+  updateApplicationReview: authedQuery
+    .input(z.object({
+      reference: requisitionReference,
+      revision: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER - 1),
+      review: applicationReview,
+    }))
+    .mutation(({ ctx, input }) => getDb().transaction((tx) => {
+      const previous = tx.select().from(hrApplications).where(eq(hrApplications.reference, input.reference)).get();
+      if (!previous) throw new TRPCError({ code: "NOT_FOUND", message: "Application not found." });
+
+      const application = tx.update(hrApplications)
+        .set({ ...input.review, revision: input.revision + 1 })
+        .where(and(eq(hrApplications.reference, previous.reference), eq(hrApplications.revision, input.revision)))
+        .returning().get();
+      if (!application) {
+        throw new TRPCError({ code: "CONFLICT", message: "This application changed since you opened it. Reopen the saved record." });
+      }
+
+      tx.insert(auditLogs).values({
+        id: randomUUID(), entityType: "hr_application", entityId: application.reference,
+        action: "update", performedBy: ctx.user.id,
+        oldValues: JSON.stringify({ revision: previous.revision, disposition: previous.disposition }),
+        newValues: JSON.stringify({ revision: application.revision, disposition: application.disposition }),
+      }).run();
+      return application;
+    })),
 
   // ─── People CRUD ───────────────────────────────────────────
 

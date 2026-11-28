@@ -2,7 +2,7 @@
 // SQLite with Drizzle ORM
 
 import { sql } from "drizzle-orm";
-import { check, customType, sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { check, customType, index, sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 
 // ─── Users & Authentication ──────────────────────────────────
 
@@ -226,6 +226,22 @@ export const hrRequisitions = sqliteTable("hr_requisitions", {
   revision: integer("revision").notNull().default(1),
 }, (table) => [
   check("hr_requisitions_headcount", sql`typeof(${table.approvedHeadcount}) = 'integer' AND ${table.approvedHeadcount} BETWEEN 1 AND 999`),
+]);
+
+export const hrApplications = sqliteTable("hr_applications", {
+  reference: caseInsensitiveText("reference").primaryKey().notNull(),
+  requisitionReference: text("requisition_reference").notNull()
+    .references(() => hrRequisitions.reference, { onDelete: "restrict" }),
+  sourceReference: text("source_reference").notNull(),
+  qualificationOutcome: text("qualification_outcome", { enum: ["pending", "met", "not_met"] }).notNull().default("pending"),
+  qualificationReference: text("qualification_reference"),
+  screeningReference: text("screening_reference"),
+  interviewReference: text("interview_reference"),
+  referencesReference: text("references_reference"),
+  disposition: text("disposition", { enum: ["pending", "recommended", "not_recommended", "withdrawn"] }).notNull().default("pending"),
+  revision: integer("revision").notNull().default(1),
+}, (table) => [
+  index("idx_hr_applications_requisition").on(table.requisitionReference),
 ]);
 
 // ─── Module Statuses ─────────────────────────────────────────
