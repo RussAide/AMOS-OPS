@@ -116,4 +116,12 @@ process.stdout.write(
   `GAD_LOGISTICS_R2_MIGRATION_RESULT=${JSON.stringify(logisticsR2Migration)}\n`,
 );
 
+if (env.isStaging) {
+  const { runHrRequisitionStagingMigration } = await import(
+    "./release-controls/hr-requisition-staging-migration"
+  );
+  const results = await runHrRequisitionStagingMigration(env);
+  process.stdout.write(`HR_REQUISITION_STAGING_MIGRATION_RESULT=${JSON.stringify(results)}\n`);
+}
+
 await import("./boot");
