@@ -699,6 +699,16 @@ serve({ fetch: app.fetch, port }, () => {
       health: `http://localhost:${port}/api/health`,
     },
   });
+  if (env.isStaging && process.env.AMOS_HR_REQUISITION_QA_CANDIDATE === publicRuntimeConfig.buildId) {
+    void import("./agents/hr-requisition-live-qa")
+      .then(({ runStagingHrRequisitionQa }) =>
+        runStagingHrRequisitionQa(port, publicRuntimeConfig.buildId))
+      .then((result) => {
+        if (result) logger.info("hr.staging_requisition_acceptance", { details: result });
+      })
+      .catch(() => logger.error("hr.staging_requisition_acceptance_unhandled"));
+  }
+
   // Explicit Staging-only, once-per-immutable-candidate live HTTP acceptance.
   // QA credentials are generated in server memory, never returned to callers.
   if (env.isStaging && !env.isProduction &&
