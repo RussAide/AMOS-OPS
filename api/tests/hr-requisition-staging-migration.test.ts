@@ -13,6 +13,7 @@ function prepareExistingDatabase(file: string) {
   const db = new Database(file);
   try {
     db.exec(auditSchema);
+    db.exec("CREATE TABLE hr_people (id TEXT PRIMARY KEY)");
     db.exec("CREATE TABLE existing_records (id TEXT PRIMARY KEY)");
     db.exec("INSERT INTO existing_records VALUES ('existing')");
   } finally {
@@ -50,9 +51,11 @@ describe("Staging requisition migration", () => {
         expect(db.prepare("SELECT name FROM _amos_migrations ORDER BY name").all()).toEqual([
           { name: "0013_hr_requisitions.sql" },
           { name: "0014_hr_applications.sql" },
+          { name: "0015_hr_offers.sql" },
         ]);
         expect(db.prepare("SELECT id FROM existing_records").get()).toEqual({ id: "existing" });
         expect(db.prepare("SELECT count(*) AS size FROM hr_requisitions").get()).toEqual({ size: 0 });
+        expect(db.prepare("SELECT count(*) AS size FROM hr_offers").get()).toEqual({ size: 0 });
       } finally {
         db.close();
       }
@@ -78,18 +81,20 @@ describe("Staging requisition migration", () => {
     expect(fs.readdirSync(storage.backupPath)).toEqual(backupDirs);
   });
 
-  it("preserves an already migrated requisition when upgrading to application records", async () => {
+  it("preserves screening records and verifies a restorable checkpoint before adding offers", async () => {
     prepareExistingDatabase(storage.databasePath);
     prepareExistingDatabase(storage.trainingDatabasePath);
     const db = new Database(storage.databasePath);
     try {
-      const migration = "0013_hr_requisitions.sql";
-      const source = fs.readFileSync(path.join("db/migrations", migration), "utf8");
-      db.exec(source);
       db.exec("CREATE TABLE _amos_migrations (name TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TEXT NOT NULL)");
-      db.prepare("INSERT INTO _amos_migrations VALUES (?, ?, ?)").run(migration,
-        createHash("sha256").update(source).digest("hex"), new Date().toISOString());
+      for (const migration of ["0013_hr_requisitions.sql", "0014_hr_applications.sql"]) {
+        const source = fs.readFileSync(path.join("db/migrations", migration), "utf8");
+        db.exec(source);
+        db.prepare("INSERT INTO _amos_migrations VALUES (?, ?, ?)").run(migration,
+          createHash("sha256").update(source).digest("hex"), new Date().toISOString());
+      }
       db.exec("INSERT INTO hr_requisitions VALUES ('QA-APP-REQ', 'QA position', 'GRO', 'QA supervisor', 'QA owner', 2, 1)");
+      db.exec("INSERT INTO hr_applications (reference, requisition_reference, source_reference) VALUES ('QA-APP', 'QA-APP-REQ', 'QA posting')");
     } finally {
       db.close();
     }
@@ -102,8 +107,12 @@ describe("Staging requisition migration", () => {
     try {
       expect(migrated.prepare("SELECT reference FROM hr_requisitions").get()).toEqual({ reference: "QA-APP-REQ" });
       expect(prior.prepare("SELECT reference FROM hr_requisitions").get()).toEqual({ reference: "QA-APP-REQ" });
-      expect(prior.prepare("SELECT name FROM sqlite_master WHERE name = 'hr_applications'").get()).toBeUndefined();
-      expect(migrated.prepare("SELECT name FROM sqlite_master WHERE name = 'hr_applications'").get()).toBeTruthy();
+      for (const store of [migrated, prior]) {
+        expect(store.prepare("SELECT reference, requisition_reference FROM hr_applications").get())
+          .toEqual({ reference: "QA-APP", requisition_reference: "QA-APP-REQ" });
+      }
+      expect(prior.prepare("SELECT name FROM sqlite_master WHERE name = 'hr_offers'").get()).toBeUndefined();
+      expect(migrated.prepare("SELECT count(*) AS size FROM hr_offers").get()).toEqual({ size: 0 });
     } finally {
       prior.close();
       migrated.close();

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createRouter, authedQuery, auditLog } from "../middleware";
 import { getDb } from "../queries/connection";
-import { auditLogs, hrApplications, hrPeople, hrRequisitions, moduleStatuses, statusTransitions } from "@db/schema";
+import { auditLogs, hrApplications, hrOffers, hrPeople, hrRequisitions, moduleStatuses, statusTransitions } from "@db/schema";
 import { eq, desc, and, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { triggerWorkflow } from "../lib/workflow";
@@ -42,6 +42,19 @@ const applicationReview = z.object({
     });
   }
 });
+
+function auditOffer(
+  db: Pick<ReturnType<typeof getDb>, "insert">,
+  offer: typeof hrOffers.$inferSelect,
+  actor: string,
+  action: string,
+) {
+  db.insert(auditLogs).values({
+    id: randomUUID(), entityType: "hr_offer", entityId: offer.applicationReference,
+    action, performedBy: actor,
+    newValues: JSON.stringify({ revision: offer.revision, status: offer.status, packetStatus: offer.packetStatus }),
+  }).run();
+}
 
 export const hrRouter = createRouter({
   listRequisitions: authedQuery.query(() => {
@@ -165,6 +178,109 @@ export const hrRouter = createRouter({
       return application;
     })),
 
+  listOffers: authedQuery.query(() =>
+    getDb().select().from(hrOffers).orderBy(asc(hrOffers.offerReference)).all(),
+  ),
+
+  createOffer: authedQuery
+    .input(z.object({
+      applicationReference: requisitionReference,
+      offerReference: requisitionReference,
+      selectionReference: evidenceReference,
+    }))
+    .mutation(({ ctx, input }) => getDb().transaction((tx) => {
+      const application = tx.select().from(hrApplications)
+        .where(eq(hrApplications.reference, input.applicationReference)).get();
+      if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Application not found." });
+      if (application.disposition !== "recommended") {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "A recommended application and approved selection record are required before recording an offer." });
+      }
+
+      const offer = tx.insert(hrOffers)
+        .values({ ...input, applicationReference: application.reference })
+        .onConflictDoNothing().returning().get();
+      if (!offer) throw new TRPCError({ code: "CONFLICT", message: "This application or offer reference is already linked to an offer." });
+      auditOffer(tx, offer, ctx.user.id, "create");
+      return offer;
+    })),
+
+  recordOfferResponse: authedQuery
+    .input(z.object({
+      applicationReference: requisitionReference,
+      revision: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER - 1),
+      response: z.discriminatedUnion("status", [
+        z.object({ status: z.literal("declined"), evidence: evidenceReference }),
+        z.object({
+          status: z.literal("accepted"),
+          evidence: evidenceReference,
+          firstName: requisitionText,
+          lastName: requisitionText,
+        }),
+      ]),
+    }))
+    .mutation(({ ctx, input }) => getDb().transaction((tx) => {
+      const offer = tx.select().from(hrOffers)
+        .where(eq(hrOffers.applicationReference, input.applicationReference)).get();
+      if (!offer) throw new TRPCError({ code: "NOT_FOUND", message: "Offer not found." });
+      const { response } = input;
+      if (offer.status !== "pending") {
+        if (offer.status === response.status && offer.responseReference === response.evidence) return offer;
+        throw new TRPCError({ code: "CONFLICT", message: "This offer already has a recorded response." });
+      }
+      if (offer.revision !== input.revision) {
+        throw new TRPCError({ code: "CONFLICT", message: "This offer changed. Reopen it before recording the response." });
+      }
+
+      let personId: string | null = null;
+      if (response.status === "accepted") {
+        const source = tx.select({
+          disposition: hrApplications.disposition, position: hrRequisitions.position,
+          department: hrRequisitions.department, supervisor: hrRequisitions.supervisor,
+        }).from(hrApplications).innerJoin(hrRequisitions, eq(hrApplications.requisitionReference, hrRequisitions.reference))
+          .where(eq(hrApplications.reference, offer.applicationReference)).get();
+        if (source?.disposition !== "recommended") {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "The linked application must still be recommended to record acceptance." });
+        }
+        personId = randomUUID();
+        tx.insert(hrPeople).values({
+          id: personId, firstName: response.firstName, lastName: response.lastName,
+          role: source.position, department: source.department, supervisor: source.supervisor,
+          lane: "activation", isEmployee: false,
+        }).run();
+      }
+
+      const updated = tx.update(hrOffers).set({
+        status: response.status, responseReference: response.evidence, personId,
+        revision: offer.revision + 1,
+      }).where(eq(hrOffers.applicationReference, offer.applicationReference)).returning().get();
+      if (!updated) throw new TRPCError({ code: "CONFLICT", message: "Unable to save the response. Reopen the offer and try again." });
+      auditOffer(tx, updated, ctx.user.id, response.status);
+      return updated;
+    }, { behavior: "immediate" })),
+
+  updateOfferPacket: authedQuery
+    .input(z.object({
+      applicationReference: requisitionReference,
+      revision: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER - 1),
+      packetReference: evidenceReference,
+      fileChecklistReference: evidenceReference,
+      packetStatus: z.enum(["incomplete", "ready_for_review"]),
+    }))
+    .mutation(({ ctx, input }) => getDb().transaction((tx) => {
+      const { applicationReference, revision, ...packet } = input;
+      const offer = tx.select().from(hrOffers).where(eq(hrOffers.applicationReference, applicationReference)).get();
+      if (!offer) throw new TRPCError({ code: "NOT_FOUND", message: "Offer not found." });
+      if (offer.status !== "accepted") {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Record offer acceptance before updating the personnel packet." });
+      }
+      const updated = tx.update(hrOffers).set({ ...packet, revision: revision + 1 })
+        .where(and(eq(hrOffers.applicationReference, applicationReference), eq(hrOffers.revision, revision)))
+        .returning().get();
+      if (!updated) throw new TRPCError({ code: "CONFLICT", message: "This offer changed. Reopen it before updating the packet." });
+      auditOffer(tx, updated, ctx.user.id, "update_packet");
+      return updated;
+    })),
+
   // ─── People CRUD ───────────────────────────────────────────
 
   listPeople: authedQuery.query(async () => {
@@ -276,10 +392,19 @@ export const hrRouter = createRouter({
       const db = getDb();
       const actor = ctx.user?.email ?? "unknown";
 
-      // Delete related records first
-      await db.delete(moduleStatuses).where(eq(moduleStatuses.personId, input.id));
-      await db.delete(statusTransitions).where(eq(statusTransitions.personId, input.id));
-      await db.delete(hrPeople).where(eq(hrPeople.id, input.id));
+      try {
+        db.transaction((tx) => {
+          tx.delete(moduleStatuses).where(eq(moduleStatuses.personId, input.id)).run();
+          tx.delete(statusTransitions).where(eq(statusTransitions.personId, input.id)).run();
+          tx.delete(hrPeople).where(eq(hrPeople.id, input.id)).run();
+        });
+      } catch (cause) {
+        if (cause && typeof cause === "object" && "code" in cause &&
+            (cause.code === "SQLITE_CONSTRAINT_FOREIGNKEY" || cause.code === "SQLITE_CONSTRAINT_TRIGGER")) {
+          throw new TRPCError({ code: "CONFLICT", message: "This personnel record is linked to an existing record and cannot be deleted." });
+        }
+        throw cause;
+      }
 
       auditLog({
         action: "hr:deletePerson",

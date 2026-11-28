@@ -2,7 +2,7 @@
 // SQLite with Drizzle ORM
 
 import { sql } from "drizzle-orm";
-import { check, customType, index, sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { check, customType, index, sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // ─── Users & Authentication ──────────────────────────────────
 
@@ -242,6 +242,28 @@ export const hrApplications = sqliteTable("hr_applications", {
   revision: integer("revision").notNull().default(1),
 }, (table) => [
   index("idx_hr_applications_requisition").on(table.requisitionReference),
+]);
+
+export const hrOffers = sqliteTable("hr_offers", {
+  applicationReference: caseInsensitiveText("application_reference").primaryKey().notNull()
+    .references(() => hrApplications.reference, { onDelete: "restrict" }),
+  offerReference: caseInsensitiveText("offer_reference").notNull(),
+  selectionReference: text("selection_reference").notNull(),
+  status: text("status", { enum: ["pending", "accepted", "declined"] }).notNull().default("pending"),
+  responseReference: text("response_reference"),
+  personId: text("person_id").references(() => hrPeople.id, { onDelete: "restrict" }),
+  packetReference: text("packet_reference"),
+  fileChecklistReference: text("file_checklist_reference"),
+  packetStatus: text("packet_status", { enum: ["pending", "incomplete", "ready_for_review"] }).notNull().default("pending"),
+  revision: integer("revision").notNull().default(1),
+}, (table) => [
+  uniqueIndex("hr_offers_offer_reference_unique").on(table.offerReference),
+  uniqueIndex("hr_offers_person_id_unique").on(table.personId),
+  check("hr_offers_response_state", sql`
+    (${table.status} = 'pending' AND ${table.responseReference} IS NULL AND ${table.personId} IS NULL) OR
+    (${table.status} = 'declined' AND ${table.responseReference} IS NOT NULL AND ${table.personId} IS NULL) OR
+    (${table.status} = 'accepted' AND ${table.responseReference} IS NOT NULL AND ${table.personId} IS NOT NULL)
+  `),
 ]);
 
 // ─── Module Statuses ─────────────────────────────────────────

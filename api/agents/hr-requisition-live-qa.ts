@@ -8,7 +8,9 @@ import { encryptTotpSecret, generateTotpSecret, totpCodeForTest } from "../secur
 type QaStep = "create temporary HR identity" | "password and MFA sign-in" |
   "save and reopen" | "reject duplicate" | "edit and reopen" |
   "link and reopen application" | "reject incomplete application review" |
-  "save and reopen application review" | "verify Training isolation" |
+  "save and reopen application review" | "record issued offer" |
+  "accept and verify one personnel record" | "save and reopen personnel packet" |
+  "verify Training isolation" |
   "revoke session" | "remove synthetic fixtures";
 
 export async function runStagingHrRequisitionQa(port: number, candidate: string) {
@@ -29,6 +31,7 @@ export async function runStagingHrRequisitionQa(port: number, candidate: string)
   const id = randomUUID();
   const reference = `CYP-QA-REQ-${id}`;
   const applicationReference = `CYP-QA-APP-${id}`;
+  const offerReference = `CYP-QA-OFFER-${id}`;
   const sourceReference = "QA-POSTING";
   const review = {
     qualificationOutcome: "met",
@@ -55,20 +58,23 @@ export async function runStagingHrRequisitionQa(port: number, candidate: string)
   let sessionsClosed = false;
   let fixtureRemoved = false;
 
-  async function request(procedure: string, input?: object, token?: string): Promise<{
+  async function request(procedure: string, input?: object, token?: string, method = input ? "POST" : "GET"): Promise<{
     status: number;
     data?: unknown;
     errorCode?: string;
   }> {
-    const response = await fetch(`http://127.0.0.1:${port}/api/trpc/${procedure}`, {
-      method: input ? "POST" : "GET",
+    const url = new URL(`http://127.0.0.1:${port}/api/trpc/${procedure}`);
+    if (input && method === "GET") url.searchParams.set("input", JSON.stringify({ json: input }));
+    const bodyInput = input && method === "POST" ? { body: JSON.stringify({ json: input }) } : {};
+    const response = await fetch(url, {
+      method,
       headers: {
         Origin: stagingOrigin,
         "x-amos-workspace": "training",
-        ...(input ? { "content-type": "application/json" } : {}),
+        ...(method === "POST" ? { "content-type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      ...(input ? { body: JSON.stringify({ json: input }) } : {}),
+      ...bodyInput,
       signal: AbortSignal.timeout(7_000),
     });
     const body = await response.json() as {
@@ -163,9 +169,48 @@ export async function runStagingHrRequisitionQa(port: number, candidate: string)
     const reviewed = await request("hr.updateApplicationReview", reviewUpdate, token);
     if (reviewed.status !== 200 || !await reopenedApplication({ revision: 2, ...review })) throw new Error();
 
+    step = "record issued offer";
+    const offer = { applicationReference, offerReference, selectionReference: "QA-APPROVED-SELECTION" };
+    const pending = await request("hr.createOffer", offer, token);
+    const pendingRow = pending.data as { status?: string; personId?: string | null } | undefined;
+    if (pending.status !== 200 || pendingRow?.status !== "pending" || pendingRow.personId !== null) throw new Error();
+    const duplicateOffer = await request("hr.createOffer", offer, token);
+    if (duplicateOffer.errorCode !== "CONFLICT") throw new Error();
+
+    step = "accept and verify one personnel record";
+    const acceptance = {
+      applicationReference, revision: 1,
+      response: { status: "accepted", evidence: "QA-SIGNED-ACCEPTANCE", firstName: "Synthetic", lastName: "Offer QA" },
+    };
+    const accepted = await request("hr.recordOfferResponse", acceptance, token);
+    const acceptedRow = accepted.data as { status?: string; personId?: string; revision?: number } | undefined;
+    const personId = acceptedRow?.personId;
+    if (accepted.status !== 200 || acceptedRow?.status !== "accepted" || !personId || acceptedRow.revision !== 2) throw new Error();
+    const retry = await request("hr.recordOfferResponse", acceptance, token);
+    if (retry.status !== 200 || (retry.data as { personId?: string } | undefined)?.personId !== personId) throw new Error();
+    const person = await request("hr.getPerson", { id: personId }, token, "GET");
+    const personRow = person.data as Record<string, unknown> | undefined;
+    if (person.status !== 200 || personRow?.id !== personId || personRow.role !== fields.position ||
+        personRow.supervisor !== fields.supervisor || personRow.department !== fields.department ||
+        personRow.lane !== "activation" || personRow.isEmployee !== false) throw new Error();
+
+    step = "save and reopen personnel packet";
+    const packet = {
+      packetReference: "QA-PACKET-INDEX", fileChecklistReference: "QA-PERSONNEL-FILE-CHECKLIST", packetStatus: "ready_for_review",
+    };
+    const savedPacket = await request("hr.updateOfferPacket", { applicationReference, revision: 2, ...packet }, token);
+    const listedOffers = await request("hr.listOffers", undefined, token);
+    const matches = Array.isArray(listedOffers.data)
+      ? listedOffers.data.filter(row => row?.applicationReference === applicationReference) : [];
+    if (savedPacket.status !== 200 || listedOffers.status !== 200 || matches.length !== 1 ||
+        !Object.entries({ ...offer, ...packet, personId, revision: 3, status: "accepted" })
+          .every(([key, value]) => matches[0][key] === value)) throw new Error();
+
     step = "verify Training isolation";
     if (operationalSqlite.prepare("SELECT 1 FROM hr_requisitions WHERE reference = ?").get(reference) ||
-        operationalSqlite.prepare("SELECT 1 FROM hr_applications WHERE reference = ?").get(applicationReference)) {
+        operationalSqlite.prepare("SELECT 1 FROM hr_applications WHERE reference = ?").get(applicationReference) ||
+        operationalSqlite.prepare("SELECT 1 FROM hr_offers WHERE application_reference = ?").get(applicationReference) ||
+        operationalSqlite.prepare("SELECT 1 FROM hr_people WHERE id = ?").get(personId)) {
       throw new Error();
     }
     if (!runWithDataScope("training", () => {
@@ -173,12 +218,13 @@ export async function runStagingHrRequisitionQa(port: number, candidate: string)
         "SELECT count(*) AS size FROM audit_logs WHERE entity_type = ? AND entity_id = ? AND performed_by = ?",
       );
       const count = (kind: string, ref: string) => (audit.get(kind, ref, id) as { size: number }).size;
-      return count("hr_requisition", reference) === 2 && count("hr_application", applicationReference) === 2;
+      return count("hr_requisition", reference) === 2 && count("hr_application", applicationReference) === 2 &&
+        count("hr_offer", applicationReference) === 3;
     })) throw new Error();
 
     step = "revoke session";
     identityService.revokeAllSessions(id, "staging_hr_qa_finished");
-    const afterRevoke = await request("hr.listApplications", undefined, token);
+    const afterRevoke = await request("hr.getPerson", { id: personId }, token, "GET");
     if (afterRevoke.status !== 401) throw new Error();
     completed = true;
   } catch {
@@ -199,10 +245,16 @@ export async function runStagingHrRequisitionQa(port: number, candidate: string)
     }
     try {
       runWithDataScope("training", () => sqlite.transaction(() => {
+        const removed = sqlite.prepare(
+          "DELETE FROM hr_offers WHERE application_reference = ? AND offer_reference = ? RETURNING person_id",
+        ).get(applicationReference, offerReference) as { person_id: string | null } | undefined;
+        if (removed?.person_id) sqlite.prepare("DELETE FROM hr_people WHERE id = ?").run(removed.person_id);
         sqlite.prepare("DELETE FROM hr_applications WHERE reference = ? AND requisition_reference = ?")
           .run(applicationReference, reference);
         sqlite.prepare("DELETE FROM hr_requisitions WHERE reference = ?").run(reference);
         fixtureRemoved =
+          (!removed?.person_id || !sqlite.prepare("SELECT 1 FROM hr_people WHERE id = ?").get(removed.person_id)) &&
+          !sqlite.prepare("SELECT 1 FROM hr_offers WHERE application_reference = ?").get(applicationReference) &&
           !sqlite.prepare("SELECT 1 FROM hr_applications WHERE reference = ?").get(applicationReference) &&
           !sqlite.prepare("SELECT 1 FROM hr_requisitions WHERE reference = ?").get(reference);
       })());
@@ -211,6 +263,6 @@ export async function runStagingHrRequisitionQa(port: number, candidate: string)
     }
   }
   return { candidate, passed: completed && !failure && sessionsClosed && fixtureRemoved,
-    workflow: "requisition-and-application-screening",
+    workflow: "requisition-screening-offer-and-personnel",
     ...(failure ? { failure } : {}), identityDeactivated: sessionsClosed, fixtureRemoved };
 }

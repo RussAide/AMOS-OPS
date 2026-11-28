@@ -1164,6 +1164,28 @@ CREATE TABLE `hr_applications` (
 );
 
 CREATE INDEX `idx_hr_applications_requisition` ON `hr_applications` (`requisition_reference`);
+CREATE TABLE `hr_offers` (
+	`application_reference` text COLLATE NOCASE PRIMARY KEY NOT NULL,
+	`offer_reference` text COLLATE NOCASE NOT NULL,
+	`selection_reference` text NOT NULL,
+	`status` text DEFAULT 'pending' NOT NULL,
+	`response_reference` text,
+	`person_id` text,
+	`packet_reference` text,
+	`file_checklist_reference` text,
+	`packet_status` text DEFAULT 'pending' NOT NULL,
+	`revision` integer DEFAULT 1 NOT NULL,
+	FOREIGN KEY (`application_reference`) REFERENCES `hr_applications`(`reference`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`person_id`) REFERENCES `hr_people`(`id`) ON UPDATE no action ON DELETE restrict,
+	CONSTRAINT "hr_offers_response_state" CHECK(
+    ("hr_offers"."status" = 'pending' AND "hr_offers"."response_reference" IS NULL AND "hr_offers"."person_id" IS NULL) OR
+    ("hr_offers"."status" = 'declined' AND "hr_offers"."response_reference" IS NOT NULL AND "hr_offers"."person_id" IS NULL) OR
+    ("hr_offers"."status" = 'accepted' AND "hr_offers"."response_reference" IS NOT NULL AND "hr_offers"."person_id" IS NOT NULL)
+  )
+);
+
+CREATE UNIQUE INDEX `hr_offers_offer_reference_unique` ON `hr_offers` (`offer_reference`);
+CREATE UNIQUE INDEX `hr_offers_person_id_unique` ON `hr_offers` (`person_id`);
 CREATE TABLE `hr_people` (
 	`id` text PRIMARY KEY NOT NULL,
 	`first_name` text NOT NULL,

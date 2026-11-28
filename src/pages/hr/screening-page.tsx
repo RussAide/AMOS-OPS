@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -117,6 +118,7 @@ export default function ScreeningPage() {
     <main className="min-h-screen bg-[#f5f7f7] p-4 sm:p-6">
       <h1 className="text-2xl font-bold text-[#1a3a38]">Applicant Screening</h1>
       <p className="mt-1 text-sm text-slate-600">Link applications to approved requisitions and record the screening disposition. Keep supporting documents in the restricted workforce record.</p>
+      <Link to="/hr/offers" className="mt-2 inline-flex text-sm font-medium text-[#245C5A] underline">Open Offers &amp; Pre-Employment</Link>
       <section className="mt-5 rounded-lg border bg-white p-4" aria-label="Applications">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>

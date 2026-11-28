@@ -1,248 +1,208 @@
-import React, { useState } from "react";
+import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "../../../api/router";
+import { Button } from "@/components/ui/button";
 import {
-  Search,
-  Filter,
-  FileText,
-  CheckCircle,
-  XCircle,
-  MessageSquare,
-  ChevronDown,
-  DollarSign,
-  Send,
-  Eye,
-} from "lucide-react";
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { authorizeAccess, procedureAccessResource } from "@/constants/access-control";
+import { useAuth } from "@/hooks/use-auth";
+import { trpc } from "@/providers/trpc";
 
-interface Offer {
-  id: number;
-  candidate: string;
-  position: string;
-  offerDate: string;
-  salary: string;
-  status: string;
-  startDate: string;
+type Offer = inferRouterOutputs<AppRouter>["hr"]["listOffers"][number];
+const offerStatuses = { pending: "Awaiting response", accepted: "Accepted", declined: "Declined" };
+const packetStatuses = { pending: "Pending", incomplete: "Incomplete", ready_for_review: "Ready for review" };
+const selectStyle = "mt-1 h-10 w-full rounded-md border bg-background px-2 text-sm";
+type Editor = { kind: "new" } | { kind: "existing"; offer: Offer };
+
+function OfferField({ name, label, value, maxLength = 2048 }: {
+  name: string; label: string; value?: string; maxLength?: number;
+}) {
+  return <div>
+    <Label htmlFor={name}>{label}</Label>
+    <Input className="mt-1" id={name} name={name} defaultValue={value} maxLength={maxLength} required />
+  </div>;
 }
 
-const demoOffers: Offer[] = [
-  {
-    id: 1,
-    candidate: "Robert Singh",
-    position: "RN Charge Nurse",
-    offerDate: "2026-06-28",
-    salary: "$78,000 / yr",
-    status: "Pending",
-    startDate: "2026-07-20",
-  },
-  {
-    id: 2,
-    candidate: "Laura Nguyen",
-    position: "Case Manager",
-    offerDate: "2026-06-25",
-    salary: "$62,000 / yr",
-    status: "Accepted",
-    startDate: "2026-07-14",
-  },
-  {
-    id: 3,
-    candidate: "Daniel Rivera",
-    position: "Youth Care Worker",
-    offerDate: "2026-06-20",
-    salary: "$48,000 / yr",
-    status: "Accepted",
-    startDate: "2026-07-10",
-  },
-  {
-    id: 4,
-    candidate: "Stephanie Kim",
-    position: "Billing Specialist",
-    offerDate: "2026-06-18",
-    salary: "$55,000 / yr",
-    status: "Declined",
-    startDate: "—",
-  },
-  {
-    id: 5,
-    candidate: "Christopher Lee",
-    position: "Case Manager",
-    offerDate: "2026-06-29",
-    salary: "$65,000 / yr",
-    status: "Negotiating",
-    startDate: "TBD",
-  },
-];
+export default function OffersPage() {
+  const { user } = useAuth();
+  const utils = trpc.useUtils();
+  const offers = trpc.hr.listOffers.useQuery();
+  const applications = trpc.hr.listApplications.useQuery();
+  const create = trpc.hr.createOffer.useMutation();
+  const respond = trpc.hr.recordOfferResponse.useMutation();
+  const packet = trpc.hr.updateOfferPacket.useMutation();
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const [response, setResponse] = useState<"accepted" | "declined">("accepted");
+  const [search, setSearch] = useState("");
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
 
-const kpiData = [
-  { label: "Pending Offers", value: "2", icon: FileText, color: "#245C5A" },
-  { label: "Accepted", value: "3", icon: CheckCircle, color: "#7EC8CA" },
-  { label: "Declined", value: "1", icon: XCircle, color: "#245C5A" },
-  { label: "Negotiating", value: "1", icon: MessageSquare, color: "#7EC8CA" },
-];
+  function canWrite(procedure: "createOffer" | "recordOfferResponse" | "updateOfferPacket") {
+    const resource = procedureAccessResource(`hr.${procedure}`, "mutation");
+    return !!user && !!resource && authorizeAccess({
+      userId: user.id, role: user.role, department: user.department ?? undefined,
+    }, resource).allowed;
+  }
 
-const statusOptions = ["All", "Pending", "Accepted", "Declined", "Negotiating"];
+  const canCreate = canWrite("createOffer");
+  const canRespond = canWrite("recordOfferResponse");
+  const canUpdatePacket = canWrite("updateOfferPacket");
+  const busy = create.isPending || respond.isPending || packet.isPending;
+  const saved = editor?.kind === "existing" ? editor.offer : undefined;
+  const editingResponse = saved?.status === "pending" && canRespond;
+  const editingPacket = saved?.status === "accepted" && canUpdatePacket;
+  const allOffers = offers.data ?? [];
+  const linked = new Set(allOffers.map(row => row.applicationReference));
+  const available = applications.data?.filter(row => row.disposition === "recommended" && !linked.has(row.reference)) ?? [];
+  const term = search.trim().toLowerCase();
+  const visible = allOffers.filter(row =>
+    [row.applicationReference, row.offerReference].some(value => value.toLowerCase().includes(term)));
 
-const OffersPage: React.FC = () => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  function open(next: Editor) {
+    setEditor(next);
+    setResponse("accepted");
+    setError("");
+    setNotice("");
+  }
 
-  const filtered = demoOffers.filter((o) => {
-    const matchesSearch =
-      o.candidate.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      o.position.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "All" || o.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editor || busy) return;
+    const form = new FormData(event.currentTarget);
+    const value = (key: string) => String(form.get(key) ?? "").trim();
+    setError("");
+    try {
+      let updated: Offer;
+      if (editor.kind === "new") {
+        updated = await create.mutateAsync({
+          applicationReference: value("application"), offerReference: value("issued-offer"),
+          selectionReference: value("selection"),
+        });
+      } else {
+        const { applicationReference, revision } = editor.offer;
+        if (editingResponse) {
+          const evidence = value("response-evidence");
+          updated = await respond.mutateAsync({ applicationReference, revision, response: response === "accepted"
+            ? { status: "accepted", evidence, firstName: value("first-name"), lastName: value("last-name") }
+            : { status: "declined", evidence } });
+        } else if (editingPacket) {
+          updated = await packet.mutateAsync({ applicationReference, revision,
+            packetReference: value("packet-index"), fileChecklistReference: value("file-checklist"),
+            packetStatus: value("packet-status") === "ready_for_review" ? "ready_for_review" : "incomplete" });
+        } else {
+          return;
+        }
+      }
+      setSearch(updated.offerReference);
+      setNotice(`Saved offer ${updated.offerReference}.`);
+      setEditor(null);
+      await Promise.all([utils.hr.listOffers.invalidate(), utils.hr.listPeople.invalidate(), utils.hr.dashboard.invalidate()]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to save the offer.");
+    }
+  }
 
-  const getStatusBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      Pending: "bg-amber-50 text-amber-700 border-amber-200",
-      Accepted: "bg-emerald-50 text-emerald-700 border-emerald-200",
-      Declined: "bg-red-50 text-red-700 border-red-200",
-      Negotiating: "bg-blue-50 text-blue-700 border-blue-200",
-    };
-    return styles[status] || "bg-gray-100 text-gray-600 border-gray-200";
-  };
-
-  return (
-    <div className="min-h-screen bg-[#f5f7f7] p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1a3a38]">Offer Management</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Manage salary offers, track candidate responses, and monitor negotiation status.
-        </p>
+  return <main className="min-h-screen bg-[#f5f7f7] p-4 sm:p-6">
+    <h1 className="text-2xl font-bold text-[#1a3a38]">Offers &amp; Pre-Employment</h1>
+    <p className="mt-1 text-sm text-slate-600">Record issued offers, responses and personnel packet references. Keep signed documents in the restricted workforce record.</p>
+    <section className="mt-5 rounded-lg border bg-white p-4" aria-label="Offers">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div><Label htmlFor="offer-search">Find offers</Label>
+          <Input className="mt-1 sm:w-72" id="offer-search" value={search} onChange={event => setSearch(event.target.value)} />
+        </div>
+        {canCreate && <Button disabled={!offers.isSuccess || !available.length} onClick={() => open({ kind: "new" })}>Record issued offer</Button>}
       </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {kpiData.map((kpi) => (
-          <div
-            key={kpi.label}
-            className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex items-center gap-4"
-          >
-            <div
-              className="w-12 h-12 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: `${kpi.color}15` }}
-            >
-              <kpi.icon size={24} style={{ color: kpi.color }} />
+      {canCreate && offers.isSuccess && applications.isSuccess && !available.length &&
+        <p className="mt-3 text-sm text-slate-600">A recommended application without a recorded offer is needed to start.</p>}
+      {notice && <p role="status" className="mt-3 text-sm text-[#245C5A]">{notice}</p>}
+      {(offers.isLoading || applications.isLoading) && <p className="mt-3 text-sm" role="status">Loading offer records…</p>}
+      {(offers.isError || applications.isError) && <div className="mt-3">
+        <p role="alert">Unable to load offers or screened applications.</p>
+        <Button variant="outline" onClick={() => { void offers.refetch(); void applications.refetch(); }}>Retry</Button>
+      </div>}
+      {offers.isSuccess && <div className="mt-4">
+        <p className="mb-2 text-sm text-slate-600">Showing {visible.length} of {allOffers.length} offers</p>
+        {visible.length > 0 ? <div className="overflow-x-auto"><table className="w-full text-left text-sm">
+          <thead className="bg-[#245C5A] text-white"><tr>
+            {["Offer", "Application", "Response", "Personnel packet", "Actions"].map(label =>
+              <th key={label} scope="col" className="p-3">{label}</th>)}
+          </tr></thead>
+          <tbody>{visible.map(row => <tr key={row.applicationReference} className="border-b">
+            <td className="p-3">{row.offerReference}</td>
+            <td className="p-3">{row.applicationReference}</td>
+            <td className="p-3">{offerStatuses[row.status]}</td>
+            <td className="p-3">{row.status === "accepted" ? packetStatuses[row.packetStatus] : "—"}</td>
+            <td className="p-3"><Button variant="outline" aria-label={`Open ${row.offerReference}`} onClick={() => open({ kind: "existing", offer: row })}>Open</Button></td>
+          </tr>)}</tbody>
+        </table></div> : <p className="text-sm text-slate-600">No offers match.</p>}
+      </div>}
+    </section>
+    <Dialog open={editor !== null} onOpenChange={open => { if (!open && !busy) setEditor(null); }}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{saved ? saved.offerReference : "Record issued offer"}</DialogTitle>
+          <DialogDescription>Use the approved decision and offer records. Duty clearance follows the separate workforce review.</DialogDescription>
+        </DialogHeader>
+        {editor && <form className="grid gap-3" onSubmit={event => void submit(event)}>
+          {editor.kind === "new" ? <>
+            <div><Label htmlFor="application">Recommended application</Label>
+              <select className={selectStyle} id="application" name="application" required defaultValue="">
+                <option value="">Select an application</option>
+                {available.map(row => <option key={row.reference} value={row.reference}>{row.reference} · {row.requisitionReference}</option>)}
+              </select>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-[#1a3a38]">{kpi.value}</p>
-              <p className="text-xs text-gray-500">{kpi.label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Toolbar */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4 flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <div className="flex gap-3 w-full sm:w-auto">
-          <div className="relative flex-1 sm:flex-none">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search candidates or positions..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7EC8CA] focus:border-transparent w-full sm:w-72"
-            />
-          </div>
-          <div className="relative">
-            <button
-              onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#7EC8CA]"
-            >
-              <Filter size={16} />
-              {statusFilter === "All" ? "Status" : statusFilter}
-              <ChevronDown size={14} />
-            </button>
-            {showStatusDropdown && (
-              <div className="absolute top-full left-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                {statusOptions.map((opt) => (
-                  <button
-                    key={opt}
-                    onClick={() => {
-                      setStatusFilter(opt);
-                      setShowStatusDropdown(false);
-                    }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg ${
-                      statusFilter === opt ? "bg-[#245C5A] text-white hover:bg-[#245C5A]" : "text-gray-700"
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
+            <OfferField name="selection" label="Approved selection reference" />
+            <OfferField name="issued-offer" label="Issued offer reference" maxLength={120} />
+          </> : <>
+            <dl className="grid gap-1 break-words text-sm">
+              <div><dt className="inline font-semibold">Application </dt><dd className="inline">{editor.offer.applicationReference}</dd></div>
+              <div><dt className="inline font-semibold">Selection evidence </dt><dd className="inline">{editor.offer.selectionReference}</dd></div>
+              <div><dt className="inline font-semibold">Response </dt><dd className="inline">{offerStatuses[editor.offer.status]}</dd></div>
+              {editor.offer.responseReference && <div><dt className="inline font-semibold">Response evidence </dt><dd className="inline">{editor.offer.responseReference}</dd></div>}
+            </dl>
+            {editor.offer.personId && <Link className="text-sm font-medium text-[#245C5A] underline" to={`/hr/person/${encodeURIComponent(editor.offer.personId)}`}>Open personnel record</Link>}
+            {editingResponse && <>
+              <div><Label htmlFor="offer-response">Offer response</Label>
+                <select id="offer-response" className={selectStyle} value={response}
+                  onChange={event => setResponse(event.target.value === "declined" ? "declined" : "accepted")}>
+                  <option value="accepted">Accepted</option><option value="declined">Declined</option>
+                </select>
               </div>
-            )}
-          </div>
-        </div>
-        <div className="flex gap-3 w-full sm:w-auto">
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-white font-medium hover:opacity-90" style={{ backgroundColor: "#245C5A" }}>
-            <Send size={16} />
-            Extend Offer
-          </button>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-[#245C5A] text-white">
-                <th className="text-left px-4 py-3 font-semibold">Candidate</th>
-                <th className="text-left px-4 py-3 font-semibold">Position</th>
-                <th className="text-left px-4 py-3 font-semibold">Offer Date</th>
-                <th className="text-left px-4 py-3 font-semibold">Salary</th>
-                <th className="text-left px-4 py-3 font-semibold">Status</th>
-                <th className="text-left px-4 py-3 font-semibold">Start Date</th>
-                <th className="text-left px-4 py-3 font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => (
-                <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-[#1a3a38]">{row.candidate}</td>
-                  <td className="px-4 py-3 text-gray-600">{row.position}</td>
-                  <td className="px-4 py-3 text-gray-600">{row.offerDate}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1 font-medium text-[#1a3a38]">
-                      <DollarSign size={14} className="text-[#245C5A]" />
-                      {row.salary}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusBadge(row.status)}`}>
-                      {row.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{row.startDate}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      <button className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium text-white hover:opacity-90" style={{ backgroundColor: "#245C5A" }}>
-                        <Eye size={14} />
-                        View
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                    No offers found matching your criteria.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="px-4 py-3 border-t border-gray-200 text-xs text-gray-500 flex justify-between items-center">
-          <span>Showing {filtered.length} of {demoOffers.length} offers</span>
-          <span>Last updated: {new Date().toLocaleString()}</span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default OffersPage;
+              <OfferField name="response-evidence" label={response === "accepted" ? "Signed acceptance reference" : "Decline evidence reference"} />
+              {response === "accepted" && <div className="grid gap-3 sm:grid-cols-2">
+                <OfferField name="first-name" label="First name" maxLength={200} />
+                <OfferField name="last-name" label="Last name" maxLength={200} />
+              </div>}
+            </>}
+            {editingPacket && <>
+              <OfferField name="packet-index" label="Returned packet index reference" value={editor.offer.packetReference ?? ""} />
+              <OfferField name="file-checklist" label="Personnel file checklist reference" value={editor.offer.fileChecklistReference ?? ""} />
+              <div><Label htmlFor="packet-status">Packet status</Label>
+                <select id="packet-status" name="packet-status" className={selectStyle}
+                  defaultValue={editor.offer.packetStatus === "pending" ? "" : editor.offer.packetStatus} required>
+                  <option value="">Select a review status</option>
+                  <option value="incomplete">Incomplete</option><option value="ready_for_review">Ready for review</option>
+                </select>
+              </div>
+            </>}
+            {editor.offer.status === "accepted" && !editingPacket && <dl className="grid gap-1 break-words text-sm">
+              <div><dt className="inline font-semibold">Packet status </dt><dd className="inline">{packetStatuses[editor.offer.packetStatus]}</dd></div>
+              {editor.offer.packetReference && <div><dt className="inline font-semibold">Packet index </dt><dd className="inline">{editor.offer.packetReference}</dd></div>}
+              {editor.offer.fileChecklistReference && <div><dt className="inline font-semibold">File checklist </dt><dd className="inline">{editor.offer.fileChecklistReference}</dd></div>}
+            </dl>}
+          </>}
+          {error && <p className="text-sm text-red-700" role="alert">{error}</p>}
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={busy} onClick={() => setEditor(null)}>Close</Button>
+            {(editor.kind === "new" || editingResponse || editingPacket) &&
+              <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save offer"}</Button>}
+          </DialogFooter>
+        </form>}
+      </DialogContent>
+    </Dialog>
+  </main>;
+}

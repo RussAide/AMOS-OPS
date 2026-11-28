@@ -14,6 +14,7 @@ import { assertPathConfined } from "../security/path-confinement";
 const workforceMigrations = [
   { file: "0013_hr_requisitions.sql", table: "hr_requisitions" },
   { file: "0014_hr_applications.sql", table: "hr_applications" },
+  { file: "0015_hr_offers.sql", table: "hr_offers" },
 ] as const;
 const auditColumns = [
   "id", "entity_type", "entity_id", "action", "performed_by", "performed_at", "old_values", "new_values",
