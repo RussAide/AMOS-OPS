@@ -1,12 +1,89 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createRouter, authedQuery, auditLog } from "../middleware";
 import { getDb } from "../queries/connection";
-import { hrPeople, moduleStatuses, statusTransitions } from "@db/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { auditLogs, hrPeople, hrRequisitions, moduleStatuses, statusTransitions } from "@db/schema";
+import { eq, desc, and, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { triggerWorkflow } from "../lib/workflow";
 
+const requisitionReference = z.string().trim().min(1).max(120);
+const requisitionText = z.string().trim().min(1).max(200);
+const requisitionFields = z.object({
+  position: requisitionText,
+  department: requisitionText,
+  supervisor: requisitionText,
+  hiringOwner: requisitionText,
+  approvedHeadcount: z.number().int().min(1).max(999),
+});
+
 export const hrRouter = createRouter({
+  listRequisitions: authedQuery.query(() => {
+    return getDb().select().from(hrRequisitions).orderBy(asc(hrRequisitions.reference)).all();
+  }),
+
+  createRequisition: authedQuery
+    .input(z.object({ reference: requisitionReference, fields: requisitionFields }))
+    .mutation(({ ctx, input }) => {
+      return getDb().transaction((tx) => {
+        const requisition = tx.insert(hrRequisitions)
+          .values({ reference: input.reference, ...input.fields })
+          .onConflictDoNothing({ target: hrRequisitions.reference })
+          .returning().get();
+        if (!requisition) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "That approved reference already exists. Reopen the saved requisition to edit it.",
+          });
+        }
+        tx.insert(auditLogs).values({
+          id: randomUUID(),
+          entityType: "hr_requisition",
+          entityId: requisition.reference,
+          action: "create",
+          performedBy: ctx.user.id,
+          newValues: JSON.stringify({ revision: requisition.revision }),
+        }).run();
+        return requisition;
+      });
+    }),
+
+  updateRequisition: authedQuery
+    .input(z.object({
+      reference: requisitionReference,
+      revision: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER - 1),
+      fields: requisitionFields,
+    }))
+    .mutation(({ ctx, input }) => {
+      return getDb().transaction((tx) => {
+        const previous = tx.select().from(hrRequisitions)
+          .where(eq(hrRequisitions.reference, input.reference)).get();
+        if (!previous) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Requisition not found." });
+        }
+        const requisition = tx.update(hrRequisitions)
+          .set({ ...input.fields, revision: input.revision + 1 })
+          .where(and(eq(hrRequisitions.reference, previous.reference), eq(hrRequisitions.revision, input.revision)))
+          .returning().get();
+        if (!requisition) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "This requisition changed since you opened it. Reopen it before saving.",
+          });
+        }
+        tx.insert(auditLogs).values({
+          id: randomUUID(),
+          entityType: "hr_requisition",
+          entityId: previous.reference,
+          action: "update",
+          performedBy: ctx.user.id,
+          oldValues: JSON.stringify({ revision: previous.revision }),
+          newValues: JSON.stringify({ revision: requisition.revision }),
+        }).run();
+        return requisition;
+      });
+    }),
+
   // ─── People CRUD ───────────────────────────────────────────
 
   listPeople: authedQuery.query(async () => {

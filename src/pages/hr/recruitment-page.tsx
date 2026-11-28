@@ -1,253 +1,187 @@
-import React, { useState } from "react";
+import { useState, type FormEvent } from "react";
+import { Plus, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
-  Search,
-  Filter,
-  Plus,
-  Download,
-  UserPlus,
-  Briefcase,
-  Clock,
-  CheckCircle,
-  ChevronDown,
-} from "lucide-react";
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { authorizeAccess, procedureAccessResource } from "@/constants/access-control";
+import { useAuth } from "@/hooks/use-auth";
+import { trpc } from "@/providers/trpc";
 
-interface Requisition {
-  id: number;
+interface RequisitionDraft {
+  reference: string;
   position: string;
   department: string;
-  postedDate: string;
-  applicants: number;
-  status: string;
-  hiringManager: string;
+  supervisor: string;
+  hiringOwner: string;
+  approvedHeadcount: string;
+  revision?: number;
 }
 
-const demoRequisitions: Requisition[] = [
-  {
-    id: 1,
-    position: "Youth Care Worker",
-    department: "GRO",
-    postedDate: "2026-06-15",
-    applicants: 5,
-    status: "Active",
-    hiringManager: "Synthetic Staff 08",
-  },
-  {
-    id: 2,
-    position: "Case Manager",
-    department: "BHC",
-    postedDate: "2026-06-20",
-    applicants: 3,
-    status: "Active",
-    hiringManager: "David Chen",
-  },
-  {
-    id: 3,
-    position: "RN Charge Nurse",
-    department: "GRO",
-    postedDate: "2026-06-10",
-    applicants: 2,
-    status: "Interviewing",
-    hiringManager: "Lisa Thompson",
-  },
-  {
-    id: 4,
-    position: "Facilities Technician",
-    department: "GAD",
-    postedDate: "2026-06-25",
-    applicants: 1,
-    status: "Active",
-    hiringManager: "Synthetic Staff 09",
-  },
-  {
-    id: 5,
-    position: "Billing Specialist",
-    department: "EO",
-    postedDate: "2026-07-01",
-    applicants: 1,
-    status: "New",
-    hiringManager: "Maria Garcia",
-  },
-];
-
-const kpiData = [
-  { label: "Open Requisitions", value: "4", icon: Briefcase, color: "#245C5A" },
-  { label: "Applicants This Month", value: "12", icon: UserPlus, color: "#7EC8CA" },
-  { label: "Time to Fill (avg)", value: "18 days", icon: Clock, color: "#245C5A" },
-  { label: "Offer Acceptance Rate", value: "75%", icon: CheckCircle, color: "#7EC8CA" },
-];
-
-const statusOptions = ["All", "Active", "Interviewing", "New", "Closed"];
-
-const RecruitmentPage: React.FC = () => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
-
-  const filtered = demoRequisitions.filter((r) => {
-    const matchesSearch =
-      r.position.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.hiringManager.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "All" || r.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  const getStatusBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      Active: "bg-[#7EC8CA]/20 text-[#245C5A] border-[#7EC8CA]/40",
-      Interviewing: "bg-amber-50 text-amber-700 border-amber-200",
-      New: "bg-blue-50 text-blue-700 border-blue-200",
-      Closed: "bg-gray-100 text-gray-600 border-gray-200",
-    };
-    return styles[status] || styles.Active;
-  };
-
-  return (
-    <div className="min-h-screen bg-[#f5f7f7] p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1a3a38]">Recruitment Pipeline</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Track open requisitions, applicants, and hiring progress across all departments.
-        </p>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {kpiData.map((kpi) => (
-          <div
-            key={kpi.label}
-            className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex items-center gap-4"
-          >
-            <div
-              className="w-12 h-12 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: `${kpi.color}15` }}
-            >
-              <kpi.icon size={24} style={{ color: kpi.color }} />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-[#1a3a38]">{kpi.value}</p>
-              <p className="text-xs text-gray-500">{kpi.label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Toolbar */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4 flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <div className="flex gap-3 w-full sm:w-auto">
-          <div className="relative flex-1 sm:flex-none">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search positions, departments, managers..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7EC8CA] focus:border-transparent w-full sm:w-72"
-            />
-          </div>
-          <div className="relative">
-            <button
-              onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#7EC8CA]"
-            >
-              <Filter size={16} />
-              {statusFilter === "All" ? "Status" : statusFilter}
-              <ChevronDown size={14} />
-            </button>
-            {showStatusDropdown && (
-              <div className="absolute top-full left-0 mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                {statusOptions.map((opt) => (
-                  <button
-                    key={opt}
-                    onClick={() => {
-                      setStatusFilter(opt);
-                      setShowStatusDropdown(false);
-                    }}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg ${
-                      statusFilter === opt ? "bg-[#245C5A] text-white hover:bg-[#245C5A]" : "text-gray-700"
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="flex gap-3 w-full sm:w-auto">
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50">
-            <Download size={16} />
-            Export
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-white font-medium hover:opacity-90" style={{ backgroundColor: "#245C5A" }}>
-            <Plus size={16} />
-            New Requisition
-          </button>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-[#245C5A] text-white">
-                <th className="text-left px-4 py-3 font-semibold">Position</th>
-                <th className="text-left px-4 py-3 font-semibold">Department</th>
-                <th className="text-left px-4 py-3 font-semibold">Posted Date</th>
-                <th className="text-left px-4 py-3 font-semibold">Applicants</th>
-                <th className="text-left px-4 py-3 font-semibold">Status</th>
-                <th className="text-left px-4 py-3 font-semibold">Hiring Manager</th>
-                <th className="text-left px-4 py-3 font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => (
-                <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-[#1a3a38]">{row.position}</td>
-                  <td className="px-4 py-3">
-                    <span className="px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700">
-                      {row.department}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{row.postedDate}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1">
-                      <UserPlus size={14} className="text-[#245C5A]" />
-                      {row.applicants}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusBadge(row.status)}`}>
-                      {row.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{row.hiringManager}</td>
-                  <td className="px-4 py-3">
-                    <button className="text-[#245C5A] hover:text-[#1a3a38] text-xs font-medium underline">
-                      View Details
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                    No requisitions found matching your criteria.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="px-4 py-3 border-t border-gray-200 text-xs text-gray-500 flex justify-between items-center">
-          <span>Showing {filtered.length} of {demoRequisitions.length} requisitions</span>
-          <span>Last updated: {new Date().toLocaleString()}</span>
-        </div>
-      </div>
-    </div>
-  );
+const blankDraft: RequisitionDraft = {
+  reference: "", position: "", department: "", supervisor: "", hiringOwner: "", approvedHeadcount: "",
 };
 
-export default RecruitmentPage;
+const fields = [
+  ["reference", "Approved requisition reference"],
+  ["position", "Position"],
+  ["department", "Department"],
+  ["supervisor", "Supervisor"],
+  ["hiringOwner", "Hiring owner"],
+  ["approvedHeadcount", "Approved headcount"],
+] as const;
+
+export default function RecruitmentPage() {
+  const { user } = useAuth();
+  const utils = trpc.useUtils();
+  const requisitions = trpc.hr.listRequisitions.useQuery();
+  const create = trpc.hr.createRequisition.useMutation();
+  const update = trpc.hr.updateRequisition.useMutation();
+  const [search, setSearch] = useState("");
+  const [draft, setDraft] = useState<RequisitionDraft | null>(null);
+  const [notice, setNotice] = useState("");
+  const [saveError, setSaveError] = useState("");
+
+  function canWrite(procedure: "createRequisition" | "updateRequisition") {
+    const resource = procedureAccessResource(`hr.${procedure}`, "mutation");
+    return !!user && !!resource && authorizeAccess({
+      userId: user.id, role: user.role, department: user.department ?? undefined,
+    }, resource).allowed;
+  }
+
+  const rows = requisitions.data ?? [];
+  const term = search.trim().toLowerCase();
+  const visibleRows = rows.filter((row) =>
+    [row.reference, row.position, row.department, row.supervisor, row.hiringOwner]
+      .some((value) => value.toLowerCase().includes(term)),
+  );
+  const isSaving = create.isPending || update.isPending;
+
+  function openDraft(next: RequisitionDraft) {
+    setNotice("");
+    setSaveError("");
+    setDraft(next);
+  }
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!draft || isSaving) return;
+    setSaveError("");
+    const { reference, revision, approvedHeadcount, ...details } = draft;
+    const values = { ...details, approvedHeadcount: Number(approvedHeadcount) };
+    try {
+      const saved = revision === undefined
+        ? await create.mutateAsync({ reference, fields: values })
+        : await update.mutateAsync({ reference, revision, fields: values });
+      setSearch(saved.reference);
+      setNotice(`Saved requisition ${saved.reference}.`);
+      setDraft(null);
+      await utils.hr.listRequisitions.invalidate();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Unable to save the requisition.");
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-[#f5f7f7] p-4 sm:p-6">
+      <h1 className="text-2xl font-bold text-[#1a3a38]">Recruitment Pipeline</h1>
+      <p className="mt-1 text-sm text-slate-600">
+        View and record approved requisitions. Use the restricted workforce process for applicant and hiring records.
+      </p>
+      <section className="mt-5 rounded-lg border bg-white p-4" aria-label="Requisitions">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <Label htmlFor="requisition-search">Find requisitions</Label>
+            <div className="relative mt-1">
+              <Search aria-hidden="true" className="absolute left-3 top-2.5 size-4 text-slate-500" />
+              <Input id="requisition-search" className="pl-9 sm:w-72" value={search}
+                onChange={(event) => setSearch(event.target.value)} />
+            </div>
+          </div>
+          {canWrite("createRequisition") && (
+            <Button onClick={() => openDraft(blankDraft)}><Plus aria-hidden="true" />New Requisition</Button>
+          )}
+        </div>
+        {notice && <p role="status" className="mt-3 text-sm text-[#245C5A]">{notice}</p>}
+        {requisitions.isLoading && <p role="status" className="mt-4">Loading requisitions…</p>}
+        {requisitions.isError && (
+          <div className="mt-4">
+            <p role="alert">Unable to load requisitions.</p>
+            <Button variant="outline" onClick={() => void requisitions.refetch()}>Retry</Button>
+          </div>
+        )}
+        {requisitions.isSuccess && (
+          <>
+            <p className="my-4 text-sm text-slate-600">
+              {rows.length} approved requisitions · {rows.reduce((sum, row) => sum + row.approvedHeadcount, 0)} approved positions
+            </p>
+            {visibleRows.length === 0
+              ? <p className="text-sm text-slate-600">{term ? "No matching requisitions." : "No requisitions recorded."}</p>
+              : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-[#245C5A] text-white">
+                      <tr>
+                        {fields.map(([key, label]) => <th key={key} scope="col" className="p-3">{label}</th>)}
+                        {canWrite("updateRequisition") && <th scope="col" className="p-3">Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleRows.map((row) => (
+                        <tr key={row.reference} className="border-b">
+                          {fields.map(([key]) => <td key={key} className="p-3">{row[key]}</td>)}
+                          {canWrite("updateRequisition") && (
+                            <td className="p-3">
+                              <Button variant="outline" aria-label={`Edit ${row.reference}`}
+                                onClick={() => openDraft({ ...row, approvedHeadcount: String(row.approvedHeadcount) })}>
+                                Edit
+                              </Button>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+          </>
+        )}
+      </section>
+      <Dialog open={draft !== null} onOpenChange={(open) => { if (!open && !isSaving) setDraft(null); }}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{draft?.revision === undefined ? "New requisition" : "Edit requisition"}</DialogTitle>
+            <DialogDescription>Use the approved position record to complete these fields.</DialogDescription>
+          </DialogHeader>
+          {draft && (
+            <form className="grid gap-3" onSubmit={(event) => void save(event)}>
+              {fields.map(([key, label]) => {
+                const isCount = key === "approvedHeadcount";
+                return (
+                  <div key={key}>
+                    <Label htmlFor={`requisition-${key}`}>{label}</Label>
+                    <Input id={`requisition-${key}`} className="mt-1" required value={draft[key]}
+                      type={isCount ? "number" : "text"}
+                      min={isCount ? 1 : undefined} max={isCount ? 999 : undefined}
+                      step={isCount ? 1 : undefined}
+                      maxLength={isCount ? undefined : key === "reference" ? 120 : 200}
+                      readOnly={key === "reference" && draft.revision !== undefined}
+                      disabled={isSaving}
+                      onChange={(event) => setDraft({ ...draft, [key]: event.target.value })} />
+                  </div>
+                );
+              })}
+              {saveError && <p role="alert" className="text-sm text-red-700">{saveError}</p>}
+              <DialogFooter>
+                <Button type="button" variant="outline" disabled={isSaving} onClick={() => setDraft(null)}>Cancel</Button>
+                <Button type="submit" disabled={isSaving}>{isSaving ? "Saving…" : "Save requisition"}</Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+    </main>
+  );
+}

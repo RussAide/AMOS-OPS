@@ -1164,6 +1164,17 @@ CREATE TABLE `hr_people` (
 	`created_at` text
 );
 
+CREATE TABLE `hr_requisitions` (
+	`reference` text COLLATE NOCASE PRIMARY KEY NOT NULL,
+	`position` text NOT NULL,
+	`department` text NOT NULL,
+	`supervisor` text NOT NULL,
+	`hiring_owner` text NOT NULL,
+	`approved_headcount` integer NOT NULL,
+	`revision` integer DEFAULT 1 NOT NULL,
+	CONSTRAINT "hr_requisitions_headcount" CHECK(typeof("hr_requisitions"."approved_headcount") = 'integer' AND "hr_requisitions"."approved_headcount" BETWEEN 1 AND 999)
+);
+
 CREATE TABLE `identity_access_profile_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,

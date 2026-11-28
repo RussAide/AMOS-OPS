@@ -1,7 +1,8 @@
 // AMOS-OPS Database Schema
 // SQLite with Drizzle ORM
 
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { check, customType, sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 
 // ─── Users & Authentication ──────────────────────────────────
 
@@ -210,6 +211,22 @@ export const hrPeople = sqliteTable("hr_people", {
   supervisor: text("supervisor"),
   createdAt: text("created_at").$defaultFn(() => new Date().toISOString()),
 });
+
+const caseInsensitiveText = customType<{ data: string }>({
+  dataType: () => "text COLLATE NOCASE",
+});
+
+export const hrRequisitions = sqliteTable("hr_requisitions", {
+  reference: caseInsensitiveText("reference").primaryKey().notNull(),
+  position: text("position").notNull(),
+  department: text("department").notNull(),
+  supervisor: text("supervisor").notNull(),
+  hiringOwner: text("hiring_owner").notNull(),
+  approvedHeadcount: integer("approved_headcount").notNull(),
+  revision: integer("revision").notNull().default(1),
+}, (table) => [
+  check("hr_requisitions_headcount", sql`typeof(${table.approvedHeadcount}) = 'integer' AND ${table.approvedHeadcount} BETWEEN 1 AND 999`),
+]);
 
 // ─── Module Statuses ─────────────────────────────────────────
 
